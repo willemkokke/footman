@@ -537,6 +537,52 @@ def test_playground_dynamic_completion_answers_fresh(tmp_path: Path):
     assert handoff == [], handoff
 
 
+def test_playground_editor_completion_carries_docstrings(tmp_path: Path):
+    """The editor's completion asks jedi over the buffer with footman and
+    toolroom importable — so a toolroom handle completes its real methods
+    and carries their docstrings, which is the whole point."""
+    probe = tmp_path / "editor_probe.py"
+    probe.write_text(
+        _js_bootstrap()
+        + "\nimport sys\n"
+        + "a = sys.argv\n"
+        + "print(_fm_editor_complete(a[1], a[2], a[3], a[4]))\n",
+        encoding="utf-8",
+    )
+    source = "import json\njson.du"
+    work = Path(tempfile.mkdtemp(dir=tmp_path))
+    out = subprocess.run(
+        [sys.executable, str(probe), "{}", source, "2", "7"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=work,
+        env={**os.environ, "_FM_PLAYGROUND_SIM": "1"},
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    got = json.loads(out.stdout)
+    labels = [c["label"] for c in got]
+    assert "dump" in labels and "dumps" in labels, labels
+    dump = next(c for c in got if c["label"] == "dump")
+    assert "info" in dump and "obj" in dump["info"], dump
+
+    source = "from toolroom import ruff\nruff.che"
+    out = subprocess.run(
+        [sys.executable, str(probe), "{}", source, "2", "8"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=work,
+        env={**os.environ, "_FM_PLAYGROUND_SIM": "1"},
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    got = json.loads(out.stdout)
+    labels = [c["label"] for c in got]
+    assert "check" in labels, labels
+
+
 def test_example_markers_are_spent():
     """Every example marker sits directly above a ```python fence — a
     marker that drifted away from its fence would silently stop exempting

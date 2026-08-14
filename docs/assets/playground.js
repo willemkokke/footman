@@ -467,6 +467,49 @@ def _fm_invoke(files_json, line, columns=80):
             if file and str(Path(file).resolve()) in written:
                 del sys.modules[mod_name]
 
+def _fm_editor_complete(files_json, source, line, column):
+    # Editor completion, asked of the interpreter: jedi over the buffer,
+    # with footman and toolroom importable -- so ruff.che<Tab> completes
+    # from the actual typed stubs and carries their docstrings. The other
+    # tabs are written first, so a sibling module import resolves. jedi
+    # is installed by the page on first use (like pytest); if it is not
+    # importable yet, the answer is simply empty.
+    try:
+        import jedi
+    except Exception:
+        return json.dumps([])
+    files = json.loads(files_json)
+    files.pop("stdin", None)
+    for name, content in files.items():
+        Path(name).write_text(content, encoding="utf-8")
+    try:
+        # InterpreterEnvironment: jedi's in-process world. The default
+        # environment inference shells out to a python subprocess to learn
+        # sys.path -- the simulated child would feed it garbage here, and
+        # the browser has no subprocesses at all.
+        script = jedi.Script(
+            code=source,
+            path=str(Path("editing.py").resolve()),
+            environment=jedi.InterpreterEnvironment(),
+        )
+        found = script.complete(int(line), int(column))
+    except Exception:
+        return json.dumps([])
+    out = []
+    for c in found[:50]:
+        entry = {"label": c.name, "type": c.type}
+        if len(out) < 25:
+            try:
+                doc = c.docstring()
+            except Exception:
+                doc = ""
+            if doc:
+                head = doc.split(chr(10) + chr(10))[0]
+                lines = head.split(chr(10))
+                entry["info"] = chr(10).join(lines[:6])
+        out.append(entry)
+    return json.dumps(out)
+
 _fm_manifest = {"code": None, "tree": None, "root": None}
 
 def _fm_dynamic(root, partial, prefix, param, seg_path):
@@ -883,10 +926,53 @@ function initPlayground() {
   /* CodeMirror, if it arrives. `syncFiles` reads through `editor`, so a
    * mid-session upgrade keeps the same files; the textarea stays in the
    * DOM as the fallback and simply hides. */
+  /* Editor completion, asked of the interpreter: fires by itself only
+   * right after a `.` (member access — where the toolroom stubs shine)
+   * and on Ctrl-Space anywhere, so typing never waits on Python. jedi
+   * installs on first use, like pytest; until the runtime is loaded the
+   * editor simply doesn't offer. */
+  async function editorCompletions(context) {
+    const word = context.matchBefore(/[\w]*/);
+    const before = context.state.sliceDoc(0, word ? word.from : context.pos);
+    if (!context.explicit && !before.endsWith(".")) return null;
+    // A typed `.` never *starts* the runtime download — only an explicit
+    // Ctrl-Space may pay that cost; after that, dots complete freely.
+    if (!context.explicit && !pyodideReady) return null;
+    const pyodide = await loadRuntime(setStatus);
+    await ensurePackages(pyodide, ["jedi"], setStatus);
+    setStatus("ready");
+    syncFiles();
+    const pos = context.pos;
+    const doc = context.state.doc;
+    const lineObj = doc.lineAt(pos);
+    const fn = pyodide.globals.get("_fm_editor_complete");
+    const raw = fn(
+      JSON.stringify(files),
+      doc.toString(),
+      lineObj.number,
+      pos - lineObj.from,
+    );
+    fn.destroy?.();
+    const options = JSON.parse(raw).map((c) => ({
+      label: c.label,
+      type: c.type,
+      ...(c.info ? { info: c.info } : {}),
+    }));
+    if (!options.length) return null;
+    return { from: word ? word.from : pos, options };
+  }
+
   (async () => {
     try {
-      const { footmanSetup, EditorView, python, footmanTheme } =
-        await import(CM_URL.href);
+      const {
+        footmanSetup,
+        EditorView,
+        python,
+        footmanTheme,
+        autocompletion,
+        completionKeymap,
+        keymap,
+      } = await import(CM_URL.href);
       const host = document.createElement("div");
       host.className = "fmp-cm";
       code.after(host);
@@ -896,6 +982,8 @@ function initPlayground() {
         extensions: [
           footmanSetup,
           python(),
+          autocompletion({ override: [editorCompletions] }),
+          keymap.of(completionKeymap),
           // The bundle's theme colours via the site's --md-code-hl-*
           // variables: the editor matches every Pygments block on the
           // site and follows the palette toggle live, no re-mount.
