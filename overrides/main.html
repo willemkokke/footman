@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{#
+  Link-preview tags. Zensical has no social-card plugin — its whole mkdocs
+  compatibility surface is one shim, for mkdocstrings — so these are written
+  by hand, into the theme's own `extrahead` block.
+
+  Without them every URL posted to Hacker News, Bluesky, Slack or X renders
+  as a bare link. The image is a committed PNG (docs/assets/og-card.png,
+  drawn in og-card.svg beside it): the platforms want a raster, and several
+  will not fetch an SVG at all.
+
+  Absolute URLs throughout. A preview is fetched by someone else's server,
+  which has no page to resolve a relative path against.
+#}
+{% block extrahead %}
+  {#
+    The card's title line. The brand leads on the home page, because that is
+    the URL that gets posted and a feed truncates from the right; elsewhere
+    the page leads, because "Footman" is not what someone sharing the
+    completion page is sharing.
+
+    `page.is_homepage` reads falsy here, so the home page is found by its
+    canonical URL instead — verified against the built site, not assumed.
+  #}
+  {% set page_title = page.meta.title if page.meta and page.meta.title
+                      else (page.title | striptags if page.title else config.site_name) %}
+  {% set title = (config.site_name ~ " — " ~ page_title)
+                 if page.canonical_url == config.site_url
+                 else (page_title ~ " — " ~ config.site_name) %}
+  {% set description = page.meta.description if page.meta and page.meta.description
+                       else config.site_description %}
+  {% set image = config.site_url ~ "assets/og-card.png" %}
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ title }}">
+  <meta property="og:description" content="{{ description }}">
+  <meta property="og:url" content="{{ page.canonical_url if page.canonical_url else config.site_url }}">
+  <meta property="og:image" content="{{ image }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="footman — typed Python functions become a real CLI, with shell completion answering in about 30 milliseconds">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ title }}">
+  <meta name="twitter:description" content="{{ description }}">
+  <meta name="twitter:image" content="{{ image }}">
+{% endblock %}

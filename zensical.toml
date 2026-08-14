@@ -83,7 +83,12 @@ nav = [
 
 # The playground: Pyodide-backed live editor + per-example "run it there"
 # links. One module script on every page; it no-ops where nothing applies.
-extra_css = ["assets/playground.css", "assets/casts.css"]
+extra_css = [
+  "assets/palette.css",
+  "assets/type.css",
+  "assets/playground.css",
+  "assets/casts.css",
+]
 extra_javascript = [
   { path = "assets/playground.js", type = "module", defer = true },
   # Inlines each animated cast and hangs play/pause/scrub off it, so a
@@ -115,6 +120,14 @@ heading_level = 2
 
 [project.theme]
 language = "en"
+# Fira Code for code, with ligatures in fenced blocks only — see
+# assets/type.css. Inline code in prose keeps the theme's plain glyphs.
+font.text = "Inter"
+font.code = "Fira Code"
+# One template override, `overrides/main.html`: the link-preview meta tags.
+# Zensical ships no social-card plugin, so a posted URL renders as a bare
+# link without them.
+custom_dir = "overrides"
 # The concierge bell: you ring, the footman runs the errand. Same lucide
 # family as the palette toggles; the favicon is the identical glyph.
 icon.logo = "lucide/concierge-bell"
