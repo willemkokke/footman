@@ -5,6 +5,13 @@ build the lane. Willem's constraint, verbatim in spirit: **no
 playground-only behaviour** — the feature exists only if at least one
 real shell delivers it; the playground then mirrors the same signal.
 
+**2026-08-14, later the same day: every per-shell mechanism below is now
+MEASURED** (real interactive shells on a pty, minimal completers mirroring
+the hooks' shapes — zsh 5.9, bash 5.3, fish 4.8, nushell 0.114, pwsh 7.5).
+The measurements rewrote the itch — two of the five shells never had it —
+and a full design is proposed below ("The design (proposed)"). Awaiting
+Willem's ruling on the opens at the bottom; nothing is built.
+
 ## The itch
 
 Completing an element of a comma-splitting value ends the token:
@@ -14,6 +21,10 @@ behaves this way today, and so does the playground prompt. The
 completer itself already *knows* the value can continue — mid-list it
 filters items already typed (`_choice_tokens`, the `given` filter) and
 answers with the remainder.
+
+(Measurement corrected the "every shell" claim: bash, zsh and fish
+insert the trailing space; pwsh and nushell never did — see the
+per-shell section.)
 
 A page-only fix was built and **reverted** (2026-08-14, this session):
 the playground probed the completer with `candidate + ","` — non-empty
@@ -44,29 +55,56 @@ the shells will.
   literal (no backticks / `${` in that literal — a guard test enforces
   it).
 
-## Per-shell mechanisms (to verify, not trusted)
+## Per-shell mechanisms — MEASURED 2026-08-14
 
-- **zsh**: the star. `compadd -q -S ','` appends the comma as an
-  auto-removable suffix — accept `eu`, get `--regions=eu,` with the
-  comma vanishing on space/Enter. Strictly better UX than no-space.
-  Check how the zsh hook currently feeds candidates (compadd vs
-  _describe) and whether the suffix can be applied per-reply.
-- **bash**: `compopt -o nospace` — per-reply, not per-candidate. Fine:
-  a value menu is uniform (all candidates are elements of one option).
-  Cost: after a *final* element the user has no space either; zsh's
-  removable suffix avoids this, bash cannot. Decide whether that trade
-  is acceptable or whether bash keeps today's behaviour.
-- **fish**: no per-candidate suffix control known; fish itself decides
-  spacing. Likely unchanged. Verify.
-- **pwsh / nushell**: their completers return structured results;
-  investigate whether a completion can suppress the trailing space
-  (pwsh `CompletionResult` — probably not; nushell custom completers —
-  possibly via `options.completion_algorithm`/record fields). Likely
-  unchanged at first.
+Method: each shell interactive on a pty (pyte-rendered screens; the
+fish/pwsh/nushell runs rode `footman.tasks.docs`' cast machinery, which
+answers the terminal queries fish 4.x blocks on), with a minimal
+completer mirroring the hook's exact feeding idiom — zsh through
+`_describe` with items carrying descriptions, bash through a
+COMPREPLY-building function, the others through their native registration.
 
-"At least one actual shell" = zsh (+ bash if the trade reads well).
+- **zsh — the star, confirmed on every count.**
+  `_describe -t probe 'probe' items -q -S ','` forwards the compadd
+  options through (the hook's own `_describe` call takes them appended,
+  no restructuring): accepting `--regions=e⇥` inserts `--regions=eu,`
+  **and immediately lists the remaining elements**; a following space
+  removes the comma (`--regions=eu ␣`); **Enter removes it too** — the
+  executed argv was measured as `--regions=eu`, not `eu,`; typing `,`
+  over it does not double it; `⇥u⇥` chains to `--regions=eu,us,`.
+  Per-reply application is trivial: append `-q -S ','` only when the
+  resolver marked the reply.
+- **bash — confirmed, and the trade is smaller than feared.**
+  Per-reply `compopt -o nospace` (already the hook's idiom in the
+  100/101 branches): unique match inserts `--regions=eu` with the
+  cursor glued (typed `X` landed as `euX`), mid-list continuation
+  works through the `=`-split word, and the final element indeed gets
+  no space either — `--regions=eu,us,apX`. The trade reads fine
+  because pwsh and nushell already behave exactly this way for *every*
+  completion (below), and nobody calls those shells broken.
+- **fish — wrong on both guesses: there IS a mechanism.**
+  fish appends a space after a unique match (`--regions=eu ␣`) —
+  *unless the candidate itself ends with a comma*: `complete -a
+  '--regions=eu,'` inserted `--regions=eu,` with the cursor glued
+  (`eu,X`). So fish's spelling of the feature is candidate-side: the
+  hook appends `,` to each value when the reply is marked. Costs: the
+  pager displays the comma, and accepting a *final* element leaves a
+  trailing comma in the line — which the grammar already forgives
+  (`_split._values` drops empty parts: `eu,us,` → `["eu","us"]`,
+  measured at `_split.py:1386`), so the line still runs.
+- **pwsh — the itch never existed here.** PSReadLine inserts a
+  completion with no trailing space at all (`--regions=euX`). Nothing
+  to change; the user types the comma and tabs again, which already
+  works (whole-token candidates). Hook untouched.
+- **nushell — same: no trailing space** on unique-match insertion
+  (`--regions=euX`, nushell 0.114). Hook untouched. (The menu-selection
+  path was not driven; irrelevant while the hook is unchanged.)
 
-## Protocol sketch (a starting point, not a decision)
+"At least one actual shell" is satisfied three times over: zsh
+(suffix), bash (nospace), fish (candidate-side comma) — and the
+remaining two already behave as bash would after the change.
+
+## Protocol sketch (the starting point, kept for the record)
 
 The hot path's answer for an attached comma-splitting value with
 remaining items grows a marker the hooks can read — options:
@@ -79,6 +117,115 @@ remaining items grows a marker the hooks can read — options:
 
 (1) or (2) keep candidates clean and let each hook apply its native
 mechanism. The playground reads the same marker for its `glue`.
+
+Where measurement moved this: (2) won outright, and (3) turned out to
+be exactly right *for fish alone* — as the hook's local spelling of the
+per-reply marker, never as the wire format.
+
+## The design (proposed, awaiting ruling)
+
+**Wire protocol: exit code 102** — "the candidates on stdout are
+elements of a comma-continuable value" — next in the 100/101 family.
+Candidates stay clean; each hook applies its native mechanism; a hook
+that doesn't know 102 falls through to its normal stdout parse, which
+is byte-for-byte today's behaviour (verified by reading all five hooks:
+every one checks 100/101 explicitly and otherwise parses stdout). An
+old resolver never exits 102, so a new hook against an old footman is
+also unchanged. Both skews degrade to the status quo.
+
+**Inside `complete()`: a leading sentinel element**, in the `_FILES`/
+`_DYNAMIC` family — say `_MORE = "\x00more"` (name open) — prepended to
+an otherwise-normal candidate reply. `complete_cli` strips it, emits
+the rest, and returns `_EXIT_MORE = 102` (after `_maybe_refresh`, as
+the other paths do). The playground reads the *same* sentinel from the
+same function for its `glue` — no page-only probe, no second protocol;
+its current `out[0].startswith(chr(0))` guard must learn the new
+sentinel before the generic bail (same repo, same PR, and self-gating
+besides: the page runs the released wheel, so the marker cannot reach
+the page before the release that carries it).
+
+**When the reply is marked** — on shape, not on remainder: the
+candidates are elements of a `multiple and not nosplit` value. Not "an
+item remains after accepting", which the reverted page probe computed:
+duplicates are legal by design (a list holds what you put in it), so
+"remainder" was never the right question, and zsh's auto-remove makes
+over-marking cost nothing anyway. Concretely:
+
+- the attached-value branch (`_attached_value`, choices arm): marked
+  from the first element — the reply is pure there (only choice
+  tokens). Covers task options and mounted plugin globals alike, and
+  both bash-split and whole-token emissions.
+- the dynamic arm: the `_DYNAMIC` payload learns the same fact (the
+  manifest entry it already holds knows `multiple`/`nosplit`), spelled
+  as `[_MORE, _DYNAMIC, ...]` so the two compose; the fresh emission
+  then exits 102. Dynamic suggestions are presentation-only (never
+  validation), so continuation is always possible — the shape rule is
+  exactly right for them.
+- the positional/variadic mixed menu: marked only mid-list (a comma
+  already typed) — there the reply is provably pure, because option
+  names can never prefix-match a partial that contains a comma. The
+  first element of a positional stays unmarked (its menu mixes in
+  option rows, and a per-reply mechanism must not glue those). The
+  asymmetry is deliberate and documented: the `=`-attached spelling is
+  the grammar's own value position and gets the full feature.
+- never for `nosplit`, scalars, path values (100/101 own those), or
+  empty replies.
+
+**Per-shell hook changes** (three edited, two untouched):
+
+- zsh: capture `ret`; `(( ret == 102 ))` appends `-q -S ','` to the
+  `_describe` call (an empty array expands to nothing in the normal
+  case). Accept inserts the comma, space/Enter remove it.
+- bash: `(( ret == 102 )) && compopt -o nospace 2>/dev/null` beside the
+  existing per-reply compopt calls. Accept glues the cursor; the user
+  types the comma or the space, exactly as pwsh/nushell already read.
+- fish: on `test $ret -eq 102`, append `,` to the value half of each
+  `value\tdescription` line before printing. Accept inserts the comma
+  glued; a final-element comma is forgiven by the grammar (measured).
+- pwsh, nushell: no edit — 102 falls through to the normal parse, and
+  their insertion is already space-free.
+
+**Playground**: `insertCompletion`'s `glue` becomes `""` when the reply
+carried the sentinel (mirroring bash/pwsh/nushell — insert glued, the
+user types the comma). Mirroring zsh instead (insert the comma,
+auto-remove on space/Enter) is more JS for a nicety the real shells
+don't all deliver; default no.
+
+**Tests** (per the conventions section):
+
+- `test_complete.py`: the marked-reply shape from `complete()` —
+  attached first element, mid-list, `nosplit` unmarked, scalar
+  unmarked, positional first-element unmarked vs mid-list marked,
+  dynamic payload composition; `complete_cli` exits 102 with clean
+  candidates on stdout.
+- `test_shellcomp.py`: static assertions that each edited hook carries
+  its 102 idiom (the `_CSV_HANDOFF`-table pattern), plus functional
+  pty runs in the cast-machinery style for zsh (the comma lands and
+  Enter removes it — the session's probes are the recipe) and fish
+  (the comma-suffixed candidate inserts glued). bash's `compopt` is
+  a no-op outside a live completion, so its functional proof rides
+  the existing cast-style test shape rather than the scripted
+  COMP_WORDS harness.
+- The docs Completion example advertises the behaviour only after the
+  release that carries it (the released-wheel rule).
+
+## Open for Willem's ruling
+
+1. **Ship bash the nospace trade?** Recommend yes: measured cost is
+   "final element leaves the cursor glued", which is pwsh's and
+   nushell's permanent, uncomplained-about behaviour.
+2. **Ship fish the candidate-side comma?** Recommend yes, with eyes
+   open on the two cosmetic costs: the pager shows the trailing comma
+   on every element, and a final accept leaves `--regions=eu,us,` in
+   the line (runs fine; the splitter drops the empty part). If the
+   pager comma reads as noise, fish can ship later or never — zsh and
+   bash alone satisfy the constraint.
+3. **Dynamic values in v1?** Recommend yes (near-free: the emission
+   site already holds the manifest entry); choices-only-first is the
+   fallback if the payload composition reads as scope creep.
+4. **Naming**: `_MORE`/`\x00more`/`_EXIT_MORE = 102` — "more items may
+   follow" — vs `_CSV_ITEMS`/similar. Willem's call; nothing hangs on
+   it.
 
 ## Constraints and tests
 
