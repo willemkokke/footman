@@ -421,6 +421,42 @@
       ]
     },
     {
+      "id": "input/ask",
+      "title": "Asked, only when unanswered",
+      "category": "Input",
+      "blurb": "ask() prompts for what nothing supplied — a browser prompt stands in for the terminal. Supply the value and nobody is asked.",
+      "files": {
+        "tasks.py": [
+          "from typing import Annotated",
+          "from footman import task",
+          "from footman.params import ask",
+          "",
+          "@task",
+          "def release(",
+          "    version: Annotated[str, ask(prompt=\"Which version ships? \")],",
+          "    channel: Annotated[str, ask()] = \"stable\",",
+          "):",
+          "    \"Run bare and the page asks; Enter accepts an offered default.\"",
+          "    print(f\"shipping {version} to {channel}\")"
+        ]
+      },
+      "commands": [
+        {
+          "line": "release",
+          "note": "nothing supplied either value — answer, then Enter for stable",
+          "exit": 0,
+          "shows": ["shipping 1.2.3 to stable"],
+          "prompts": ["1.2.3", ""]
+        },
+        {
+          "line": "release --version=2.0.0 --channel=beta",
+          "note": "everything supplied — nobody is asked",
+          "exit": 0,
+          "shows": ["shipping 2.0.0 to beta"]
+        }
+      ]
+    },
+    {
       "id": "completion/grammar",
       "title": "Completion knows the grammar",
       "category": "Completion",

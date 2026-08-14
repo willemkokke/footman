@@ -276,7 +276,10 @@ def _js_default_files() -> dict[str, str]:
 
 
 def _playground_invoke(
-    tmp_path: Path, line: str, files: dict[str, str] | None = None
+    tmp_path: Path,
+    line: str,
+    files: dict[str, str] | None = None,
+    prompts: list[str] | None = None,
 ) -> tuple[int, str]:
     """Drive the shipped browser driver — over the shipped default files, or
     over *files* when a rehearsal needs an editor state of its own.
@@ -298,13 +301,18 @@ def _playground_invoke(
         encoding="utf-8",
     )
     work = Path(tempfile.mkdtemp(dir=tmp_path))  # a fresh cwd per invocation
+    env = {**os.environ, "_FM_PLAYGROUND_SIM": "1", "PYTHONPATH": str(work)}
+    if prompts is not None:
+        # The sandbox's canned answers for the page's prompt seam — what a
+        # person would type into the browser dialogs, in order.
+        env["_FM_PLAYGROUND_PROMPTS"] = json.dumps(prompts)
     out = subprocess.run(
         [sys.executable, str(probe), json.dumps(files), line],
         capture_output=True,
         text=True,
         timeout=120,
         cwd=work,
-        env={**os.environ, "_FM_PLAYGROUND_SIM": "1", "PYTHONPATH": str(work)},
+        env=env,
         check=False,
     )
     assert out.returncode == 0, out.stderr
@@ -413,6 +421,7 @@ GALLERY_FEATURES = {
     "the config cascade": "config/cascade",
     "include() mounts shared tasks": "compose/include",
     "grammar-aware completion": "completion/grammar",
+    "ask() prompts in the page": "input/ask",
 }
 
 
@@ -435,6 +444,9 @@ def test_gallery_entries_are_wellformed():
             assert command["line"] and command["note"], (example["id"], command)
             assert isinstance(command["exit"], int), (example["id"], command)
             assert command["shows"], (example["id"], command)
+            prompts = command.get("prompts", [])
+            assert isinstance(prompts, list), (example["id"], command)
+            assert all(isinstance(p, str) for p in prompts), (example["id"], command)
 
 
 def test_gallery_features_have_examples():
@@ -464,7 +476,12 @@ def test_gallery_command_lines_run_as_promised(tmp_path, example, command):
     """Every command chip of every entry, driven exactly as the page runs
     it (the leading `-s` mirrors the sandbox's own injection)."""
     files = {n: "\n".join(lines) + "\n" for n, lines in example["files"].items()}
-    code, output = _playground_invoke(tmp_path, "-s " + command["line"], files=files)
+    code, output = _playground_invoke(
+        tmp_path,
+        "-s " + command["line"],
+        files=files,
+        prompts=command.get("prompts"),
+    )
     assert code == command["exit"], output
     for marker in command["shows"]:
         assert marker in output, (marker, output)
