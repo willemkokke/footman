@@ -280,6 +280,15 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
         def kill(self):
             pass
 
+        # A real Popen is a context manager; code that spells
+        # "with subprocess.Popen(...)" must not crash on the stand-in.
+        # (jedi's import does exactly that on py3.11 + Windows.)
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
     subprocess.Popen = _SimulatedPopen
 
     # One thread is all the browser has: parallel() runs its callables

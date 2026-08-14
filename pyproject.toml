@@ -100,12 +100,7 @@ dev = [
     # real server in the suite — footman never imports them itself.
     "httpx>=0.27",
     "requests>=2.31",
-    # jedi 0.20.0 answers empty completions on py3.11 + Windows (found by
-    # the playground rehearsal, no exception — just nothing); 0.19.2 is
-    # the long-stable release and answers there. The browser's Pyodide
-    # runs a modern python, so the page always gets 0.20 semantics.
-    "jedi>=0.20.0; python_version >= '3.12'",
-    "jedi>=0.19.2,<0.20; python_version < '3.12'",
+    "jedi>=0.20.0",
 ]
 # rich renders the terminal screenshots `fm footman docs shots` embeds;
 # pyte replays interactive captures (completion menus move the cursor —
