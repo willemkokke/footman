@@ -53,7 +53,9 @@ versions may include breaking changes.
   itself learned manners: private and dunder names stay out unless the
   underscore was typed, the list caps at twenty, and the tooltips are
   finally styled through the site's own variables — they matched neither
-  palette before, dark mode least of all.
+  palette before, dark mode least of all. **Python itself loads as soon
+  as the page does**: the first Run, Tab, or hover no longer pays the
+  download, and jedi rides along so the editor helps immediately.
 - **The playground's simulated world answers a few reads with data.**
   The homepage's `suggest(branches)` parses `git branch` output — and the
   simulated child answered with its own echo line, which the completer

@@ -518,19 +518,22 @@ def _fm_editor_help(files_json, source, line, column):
             environment=jedi.InterpreterEnvironment(),
         )
         signatures = script.get_signatures(int(line), int(column))
-        names = signatures or script.help(int(line), int(column))
-        if not names:
-            return json.dumps(None)
-        head = names[0]
-        label = ""
-        try:
+        if signatures:
+            head = signatures[0]
             label = head.to_string()
-        except Exception:
-            label = head.name or ""
-        try:
             doc = head.docstring(raw=True) or ""
-        except Exception:
-            doc = ""
+        else:
+            names = script.help(int(line), int(column))
+            if not names:
+                return json.dumps(None)
+            head = names[0]
+            # A Name's docstring() leads with the signature line -- for a
+            # toolroom stub that line IS the story (raw=True strips it,
+            # which is how the tooltip once showed a bare "check").
+            full = head.docstring() or ""
+            lines = full.split(chr(10))
+            label = lines[0].strip() if lines and lines[0].strip() else (head.name or "")
+            doc = chr(10).join(lines[1:]).strip()
         paragraphs = [p for p in doc.split(chr(10) + chr(10)) if p.strip()]
         doc = (chr(10) + chr(10)).join(paragraphs[:2])
         lines = doc.split(chr(10))
@@ -866,6 +869,15 @@ function initPlayground() {
   }
   args.value = hash.get("cmd") || DEFAULT_ARGS;
   runBtn.disabled = false;
+
+  // Python loads as soon as the page does — the first Run, Tab, or hover
+  // should not pay the download (Willem's call). jedi rides along so the
+  // editor helps immediately; the status line narrates, and a failed
+  // load may be retried by the next Run exactly as before.
+  loadRuntime(setStatus)
+    .then((pyodide) => ensurePackages(pyodide, ["jedi"], setStatus))
+    .then(() => setStatus("ready"))
+    .catch(() => {});
 
   function syncFiles() {
     files[currentFile] = editor.get();

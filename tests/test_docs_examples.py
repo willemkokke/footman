@@ -681,7 +681,11 @@ def test_playground_hover_help_answers_signatures(tmp_path: Path):
     on_name = "from toolroom import ruff\nruff.check"
     help_, err = _editor_help(tmp_path, on_name, 2, 7)
     assert help_ is not None, err
-    assert help_["label"] or help_["doc"], help_
+    # The stub's signature line, not a bare name — a Name's docstring()
+    # leads with it, and dropping to `label or doc` once let a bare
+    # "check" slide (Willem's screenshot).
+    assert help_["label"].startswith("Check("), help_
+    assert "fix" in help_["label"] or "fix" in help_["doc"], help_
 
 
 def test_example_markers_are_spent():

@@ -8,7 +8,7 @@ hide:
 
 A real footman, in your browser. The editor below is a `tasks.py`; the
 prompt is `fm`. Python (and footman itself) load into the page via
-[Pyodide](https://pyodide.org) on first use — nothing is installed on your
+[Pyodide](https://pyodide.org) as soon as you arrive — nothing is installed on your
 machine, and nothing you type leaves it.
 
 The browser sandbox, said plainly: it has no processes and one thread, so
@@ -80,7 +80,7 @@ not just the words: type `deploy prod --regions=eu,` and press
     </div>
     <div id="fmp-complete" hidden></div>
     <div id="fmp-out" aria-live="polite"></div>
-    <div class="fmp-status" id="fmp-status">Python loads when you first run —
+    <div class="fmp-status" id="fmp-status">Python is loading —
       a few seconds and ~15&nbsp;MB, once per visit.</div>
   </div>
 </div>
