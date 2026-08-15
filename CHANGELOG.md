@@ -45,6 +45,15 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground's editor helps on hover, and its menus behave.**
+  Rest the pointer on a name — or inside a call's parens — and a tooltip
+  answers from the interpreter: the signature line in code face, the
+  docstring's opening beneath it, the toolroom stubs' documentation one
+  hover away instead of a completion-menu hunt. The completion menu
+  itself learned manners: private and dunder names stay out unless the
+  underscore was typed, the list caps at twenty, and the tooltips are
+  finally styled through the site's own variables — they matched neither
+  palette before, dark mode least of all.
 - **The playground's simulated world answers a few reads with data.**
   The homepage's `suggest(branches)` parses `git branch` output — and the
   simulated child answered with its own echo line, which the completer

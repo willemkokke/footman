@@ -614,6 +614,68 @@ def test_playground_editor_completion_carries_docstrings(tmp_path: Path):
     assert "check" in labels, (labels, err)
 
 
+def test_playground_editor_completion_is_relevant(tmp_path: Path):
+    """Willem's critique, pinned: no hunting through a big list. Private
+    and dunder names stay out unless nothing else answers, and the list
+    caps at 20 — every kept entry a real candidate."""
+    got, err = _editor_complete(tmp_path, "import json\njson.", 2, 5)
+    labels = [c["label"] for c in got]
+    assert labels, err
+    assert len(labels) <= 20, labels
+    assert not any(name.startswith("_") for name in labels), labels
+
+    # Typing the underscore is asking for the private names.
+    got, err = _editor_complete(tmp_path, "import json\njson._", 2, 6)
+    labels = [c["label"] for c in got]
+    assert labels and all(name.startswith("_") for name in labels), (labels, err)
+
+
+def _editor_help(
+    tmp_path: Path, source: str, line: int, column: int
+) -> tuple[dict[str, Any] | None, str]:
+    """Drive the shipped hover-help function in CPython — source by file,
+    for the same Windows argv-newline reason as `_editor_complete`."""
+    probe = tmp_path / "help_probe.py"
+    probe.write_text(
+        _js_bootstrap()
+        + "\nimport sys\nfrom pathlib import Path as _P\n"
+        + "a = sys.argv\n"
+        + "src = _P(a[2]).read_text(encoding='utf-8')\n"
+        + "print(_fm_editor_help(a[1], src, a[3], a[4]))\n",
+        encoding="utf-8",
+    )
+    src = tmp_path / "buffer.py"
+    src.write_text(source, encoding="utf-8")
+    work = Path(tempfile.mkdtemp(dir=tmp_path))
+    out = subprocess.run(
+        [sys.executable, str(probe), "{}", str(src), str(line), str(column)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=work,
+        env={**os.environ, "_FM_PLAYGROUND_SIM": "1"},
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    answer: dict[str, Any] | None = json.loads(out.stdout)
+    return answer, out.stderr
+
+
+def test_playground_hover_help_answers_signatures(tmp_path: Path):
+    """Signature help over the same jedi world: inside a call's parens the
+    label is the signature; on a bare name the docstring still answers.
+    The toolroom case is the point — hover ruff.check and read its stub."""
+    inside_call = "import json\njson.dumps("
+    help_, err = _editor_help(tmp_path, inside_call, 2, 11)
+    assert help_ is not None, err
+    assert "dumps(" in help_["label"], help_
+
+    on_name = "from toolroom import ruff\nruff.check"
+    help_, err = _editor_help(tmp_path, on_name, 2, 7)
+    assert help_ is not None, err
+    assert help_["label"] or help_["doc"], help_
+
+
 def test_example_markers_are_spent():
     """Every example marker sits directly above a ```python fence — a
     marker that drifted away from its fence would silently stop exempting

@@ -96,6 +96,49 @@ const chrome = EditorView.theme({
   ".cm-activeLineGutter": {
     backgroundColor: "var(--md-code-hl-color--light, transparent)",
   },
+  // The completion and hover tooltips, in the site's own variables —
+  // CM's stock tooltip styling is light-mode-only and never matched the
+  // page (Willem: "no concept of dark mode perhaps?").
+  ".cm-tooltip": {
+    backgroundColor: "var(--md-code-bg-color)",
+    color: "var(--md-code-fg-color)",
+    border: "0.05rem solid var(--md-default-fg-color--lightest)",
+    borderRadius: "0.2rem",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+    fontFamily: '"Fira Code", var(--md-code-font-family)',
+    fontSize: "0.64rem",
+    maxHeight: "14em",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "var(--md-default-fg-color--lightest)",
+    color: "var(--md-code-fg-color)",
+  },
+  ".cm-completionMatchedText": {
+    textDecoration: "none",
+    fontWeight: "700",
+    color: "var(--md-accent-fg-color)",
+  },
+  ".cm-tooltip.cm-completionInfo": {
+    backgroundColor: "var(--md-code-bg-color)",
+    border: "0.05rem solid var(--md-default-fg-color--lightest)",
+    color: "var(--md-default-fg-color--light)",
+    fontSize: "0.64rem",
+    maxWidth: "28rem",
+    whiteSpace: "pre-wrap",
+  },
+  ".fmp-signature": {
+    padding: "0.4rem 0.6rem",
+    fontFamily: '"Fira Code", var(--md-code-font-family)',
+    fontSize: "0.64rem",
+    maxWidth: "34rem",
+    whiteSpace: "pre-wrap",
+  },
+  ".fmp-signature-doc": {
+    color: "var(--md-default-fg-color--light)",
+    fontFamily: "var(--md-text-font-family, inherit)",
+    marginTop: "0.2rem",
+  },
 });
 
 const colours = HighlightStyle.define([
@@ -154,4 +197,4 @@ export const footmanTheme = [chrome, syntaxHighlighting(colours)];
 
 export { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 export { python } from "@codemirror/lang-python";
-export { EditorView, keymap } from "@codemirror/view";
+export { EditorView, hoverTooltip, keymap } from "@codemirror/view";

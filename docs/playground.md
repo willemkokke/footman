@@ -40,7 +40,8 @@ the dialog text, Cancel reads as end-of-input, and a secret is typed
 unmasked (this is a playground, not a vault). The **editor** completes
 too: type `.` after a toolroom handle (or press <kbd>Ctrl-Space</kbd>
 anywhere) and the menu comes from the interpreter — real methods from
-the typed stubs, docstrings included.
+the typed stubs, docstrings included — and **rest the pointer on a
+name** for its signature and docstring, no menu required.
 
 The output pane is a session transcript: every run appends its prompt
 line and output, in footman's own colours, and **Clear** starts over.

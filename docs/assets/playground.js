@@ -498,6 +498,52 @@ def _fm_invoke(files_json, line, columns=80):
             if file and str(Path(file).resolve()) in written:
                 del sys.modules[mod_name]
 
+def _fm_editor_help(files_json, source, line, column):
+    # Hover help, asked of the interpreter: the signature first (jedi
+    # get_signatures answers inside a call; help() answers on the name
+    # itself), the docstring's opening beneath it. The same in-process
+    # jedi world the completer uses; any miss answers nothing.
+    try:
+        import jedi
+    except Exception:
+        return json.dumps(None)
+    files = json.loads(files_json)
+    files.pop("stdin", None)
+    for name, content in files.items():
+        Path(name).write_text(content, encoding="utf-8")
+    try:
+        script = jedi.Script(
+            code=source,
+            path=str(Path("editing.py").resolve()),
+            environment=jedi.InterpreterEnvironment(),
+        )
+        signatures = script.get_signatures(int(line), int(column))
+        names = signatures or script.help(int(line), int(column))
+        if not names:
+            return json.dumps(None)
+        head = names[0]
+        label = ""
+        try:
+            label = head.to_string()
+        except Exception:
+            label = head.name or ""
+        try:
+            doc = head.docstring(raw=True) or ""
+        except Exception:
+            doc = ""
+        paragraphs = [p for p in doc.split(chr(10) + chr(10)) if p.strip()]
+        doc = (chr(10) + chr(10)).join(paragraphs[:2])
+        lines = doc.split(chr(10))
+        if len(lines) > 12:
+            doc = chr(10).join(lines[:12]) + chr(10) + "…"
+        if not label and not doc:
+            return json.dumps(None)
+        return json.dumps({"label": label, "doc": doc})
+    except Exception:
+        if os.environ.get("_FM_PLAYGROUND_SIM"):
+            traceback.print_exc(file=sys.stderr)
+        return json.dumps(None)
+
 def _fm_editor_complete(files_json, source, line, column):
     # Editor completion, asked of the interpreter: jedi over the buffer,
     # with footman and toolroom importable -- so ruff.che<Tab> completes
@@ -535,8 +581,15 @@ def _fm_editor_complete(files_json, source, line, column):
         if os.environ.get("_FM_PLAYGROUND_SIM"):
             traceback.print_exc(file=sys.stderr)
         return json.dumps([])
+    # Relevance over bulk: private and dunder names go (unless nothing
+    # else answered -- the user typed the underscore, so keep them), and
+    # the list caps at 20 with every kept entry carrying its docstring.
+    # A hunt through fifty names was noise, not help.
+    public = [c for c in found if not c.name.startswith("_")]
+    if public:
+        found = public
     out = []
-    for c in found[:50]:
+    for c in found[:20]:
         entry = {"label": c.name, "type": c.type}
         if len(out) < 25:
             try:
@@ -1035,7 +1088,49 @@ function initPlayground() {
         autocompletion,
         completionKeymap,
         keymap,
+        hoverTooltip,
       } = await import(CM_URL.href);
+
+      /* Signature help on hover: rest the pointer on a name (or inside a
+       * call's parens) and the interpreter answers — the signature line
+       * in code face, the docstring's opening beneath it. Hovering never
+       * starts the runtime download; once it is loaded, help is free. */
+      const signatureHelp = hoverTooltip(async (view, pos) => {
+        if (!pyodideReady) return null;
+        const pyodide = await loadRuntime(setStatus);
+        await ensurePackages(pyodide, ["jedi"], setStatus);
+        syncFiles();
+        const doc = view.state.doc;
+        const lineObj = doc.lineAt(pos);
+        const fn = pyodide.globals.get("_fm_editor_help");
+        const raw = fn(
+          JSON.stringify(files),
+          doc.toString(),
+          lineObj.number,
+          pos - lineObj.from,
+        );
+        fn.destroy?.();
+        const help = JSON.parse(raw);
+        if (!help) return null;
+        return {
+          pos,
+          create: () => {
+            const dom = document.createElement("div");
+            dom.className = "fmp-signature";
+            const sig = document.createElement("div");
+            sig.textContent = help.label;
+            dom.appendChild(sig);
+            if (help.doc) {
+              const docEl = document.createElement("div");
+              docEl.className = "fmp-signature-doc";
+              docEl.textContent = help.doc;
+              dom.appendChild(docEl);
+            }
+            return { dom };
+          },
+        };
+      });
+
       const host = document.createElement("div");
       host.className = "fmp-cm";
       code.after(host);
@@ -1047,6 +1142,7 @@ function initPlayground() {
           python(),
           autocompletion({ override: [editorCompletions] }),
           keymap.of(completionKeymap),
+          signatureHelp,
           // The bundle's theme colours via the site's --md-code-hl-*
           // variables: the editor matches every Pygments block on the
           // site and follows the palette toggle live, no re-mount.
