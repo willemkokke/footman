@@ -1183,11 +1183,16 @@ function initPlayground() {
           create: () => {
             const dom = document.createElement("div");
             dom.className = "fmp-signature";
-            const sig = document.createElement("div");
             // The signature in the editor's own colours — the same
-            // HighlightStyle, via the bundle's highlighter helper.
-            sig.appendChild(highlightPython(help.label));
-            dom.appendChild(sig);
+            // HighlightStyle, via the bundle's highlighter helper. One
+            // block per line, so a soft-wrapped parameter hangs at its
+            // indent instead of snapping back to column zero.
+            for (const lineText of help.label.split("\n")) {
+              const lineEl = document.createElement("div");
+              lineEl.className = "fmp-sig-line";
+              lineEl.appendChild(highlightPython(lineText));
+              dom.appendChild(lineEl);
+            }
             if (help.doc) {
               const docEl = document.createElement("div");
               docEl.className = "fmp-signature-doc";

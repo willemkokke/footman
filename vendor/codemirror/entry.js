@@ -132,8 +132,17 @@ const chrome = EditorView.theme({
     padding: "0.4rem 0.6rem",
     fontFamily: '"Fira Code", var(--md-code-font-family)',
     fontSize: "0.64rem",
-    maxWidth: "34rem",
+    minWidth: "min(26rem, 80vw)",
+    maxWidth: "min(42rem, 90vw)",
+    maxHeight: "min(50vh, 22rem)",
+    overflow: "auto",
+  },
+  // One block per signature line: a soft-wrapped long parameter hangs
+  // at its own indent instead of snapping back to column zero.
+  ".fmp-sig-line": {
     whiteSpace: "pre-wrap",
+    paddingLeft: "8ch",
+    textIndent: "-8ch",
   },
   ".fmp-signature-doc": {
     color: "var(--md-default-fg-color--light)",
