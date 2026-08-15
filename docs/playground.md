@@ -80,8 +80,8 @@ not just the words: type `deploy prod --regions=eu,` and press
     </div>
     <div id="fmp-complete" hidden></div>
     <div id="fmp-out" aria-live="polite"></div>
-    <div class="fmp-status" id="fmp-status">Python is loading —
-      a few seconds and ~15&nbsp;MB, once per visit.</div>
+    <div class="fmp-status" id="fmp-status">Python is loading — a few
+      seconds; ~15&nbsp;MB on your first visit, cached after.</div>
   </div>
 </div>
 
