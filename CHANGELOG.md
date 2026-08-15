@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground's simulated world answers a few reads with data.**
+  The homepage's `suggest(branches)` parses `git branch` output — and the
+  simulated child answered with its own echo line, which the completer
+  chopped into "candidates" (`--branch=[simulated]`, `--branch=git`, …).
+  A small canned table now gives well-known reads plausible output —
+  `git branch` answers branch names, `git tag` answers tags — so
+  completers that parse a child's stdout offer something real. The table
+  is deliberately tiny: reads that docs examples parse, nothing that
+  pretends the write side happened; everything else keeps the
+  `[simulated]` echo, and the page discloses the canned reads beside the
+  other sandbox facts.
 - **The playground's editor completes from the interpreter.** Type `.`
   after a toolroom handle — or press Ctrl-Space anywhere — and the menu
   comes from jedi over the buffer, with footman and toolroom importable:

@@ -252,6 +252,17 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
     if not hasattr(threading, "get_native_id"):
         threading.get_native_id = threading.get_ident
 
+    # A few well-known read commands answer with plausible canned output
+    # instead of the [simulated] echo. A dynamic completer that parses a
+    # child's stdout -- the homepage's git-branch example -- should offer
+    # branch names, not the echo line chopped into words. The table is
+    # small on purpose: reads that docs examples parse, nothing that
+    # pretends the write side happened.
+    _FM_CANNED = (
+        ("git branch", "main;develop;feature/checkout-flow".replace(";", chr(10))),
+        ("git tag", "v1.0.0;v1.1.0;v2.0.0".replace(";", chr(10))),
+    )
+
     class _SimulatedPopen:
         # The browser cannot spawn processes; every child succeeds and says
         # what it would have been. In-process tools bypass this entirely.
@@ -260,7 +271,18 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
             self.pid = 4242
             self.returncode = 0
             cmd = argv if isinstance(argv, str) else " ".join(argv)
+            probe = cmd
+            if (
+                not isinstance(argv, str)
+                and len(argv) >= 3
+                and argv[1] in ("-c", "-Command")
+            ):
+                probe = argv[2]  # a shell wrapper: match the line it runs
             self._out = "[simulated] " + cmd + chr(10)
+            for prefix, canned in _FM_CANNED:
+                if probe.startswith(prefix):
+                    self._out = canned + chr(10)
+                    break
 
         # Keyword-for-keyword what run() calls: it always passes input=
         # (None unless the task feeds the child), so a positional-only

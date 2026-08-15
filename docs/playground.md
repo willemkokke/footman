@@ -13,7 +13,9 @@ machine, and nothing you type leaves it.
 
 The browser sandbox, said plainly: it has no processes and one thread, so
 every `run("…")` child is **simulated** — it succeeds and its output says
-`[simulated]` — and runs are sequential. `run(shell=True)` resolves to a
+`[simulated]` — and runs are sequential. A few well-known reads
+(`git branch`, `git tag`) answer with plausible canned output instead, so
+a completer that parses a child's stdout has real names to offer. `run(shell=True)` resolves to a
 stand-in shell, since the simulated child never executes it. The page's
 filesystem holds only the editor's files, so a path requirement
 (`exists`/`isfile`/`isdir`) **passes without looking** — nothing it could
