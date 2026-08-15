@@ -498,6 +498,38 @@ def _fm_invoke(files_json, line, columns=80):
             if file and str(Path(file).resolve()) in written:
                 del sys.modules[mod_name]
 
+def _fm_wrap_signature(sig):
+    # One parameter per line once a signature outgrows one: split at the
+    # outermost parens' depth-zero commas. String-level on purpose -- the
+    # name branch only ever has the stub's rendered line to work with.
+    if len(sig) <= 60:
+        return sig
+    open_i = sig.find("(")
+    close_i = sig.rfind(")")
+    if open_i < 0 or close_i <= open_i:
+        return sig
+    inner = sig[open_i + 1 : close_i]
+    parts = []
+    depth = 0
+    cur = ""
+    for ch in inner:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        parts.append(cur.strip())
+    if len(parts) < 2:
+        return sig
+    nl = chr(10)
+    body = "".join("    " + p + "," + nl for p in parts)
+    return sig[: open_i + 1] + nl + body + sig[close_i:]
+
 def _fm_editor_help(files_json, source, line, column):
     # Hover help, asked of the interpreter: the signature first (jedi
     # get_signatures answers inside a call; help() answers on the name
@@ -527,13 +559,33 @@ def _fm_editor_help(files_json, source, line, column):
             if not names:
                 return json.dumps(None)
             head = names[0]
-            # A Name's docstring() leads with the signature line -- for a
-            # toolroom stub that line IS the story (raw=True strips it,
-            # which is how the tooltip once showed a bare "check").
+            # A Name's docstring() leads with the signature -- for a
+            # toolroom stub that IS the story (raw=True strips it, which
+            # is how the tooltip once showed a bare "check"). The
+            # signature may wrap over several physical lines, so take
+            # the paren-balanced head, not just the first line.
             full = head.docstring() or ""
             lines = full.split(chr(10))
-            label = lines[0].strip() if lines and lines[0].strip() else (head.name or "")
-            doc = chr(10).join(lines[1:]).strip()
+            sig_lines = []
+            depth = 0
+            seen = False
+            for ln in lines:
+                sig_lines.append(ln)
+                for ch in ln:
+                    if ch in "([{":
+                        depth += 1
+                        seen = True
+                    elif ch in ")]}":
+                        depth -= 1
+                if seen and depth <= 0:
+                    break
+            if seen and depth <= 0:
+                label = " ".join(ln.strip() for ln in sig_lines).strip()
+                doc = chr(10).join(lines[len(sig_lines):]).strip()
+            else:
+                first = lines[0].strip() if lines else ""
+                label = first if first else (head.name or "")
+                doc = chr(10).join(lines[1:]).strip()
         paragraphs = [p for p in doc.split(chr(10) + chr(10)) if p.strip()]
         doc = (chr(10) + chr(10)).join(paragraphs[:2])
         lines = doc.split(chr(10))
@@ -541,7 +593,7 @@ def _fm_editor_help(files_json, source, line, column):
             doc = chr(10).join(lines[:12]) + chr(10) + "…"
         if not label and not doc:
             return json.dumps(None)
-        return json.dumps({"label": label, "doc": doc})
+        return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
     except Exception:
         if os.environ.get("_FM_PLAYGROUND_SIM"):
             traceback.print_exc(file=sys.stderr)
@@ -1101,6 +1153,8 @@ function initPlayground() {
         completionKeymap,
         keymap,
         hoverTooltip,
+        tooltips,
+        highlightPython,
       } = await import(CM_URL.href);
 
       /* Signature help on hover: rest the pointer on a name (or inside a
@@ -1130,7 +1184,9 @@ function initPlayground() {
             const dom = document.createElement("div");
             dom.className = "fmp-signature";
             const sig = document.createElement("div");
-            sig.textContent = help.label;
+            // The signature in the editor's own colours — the same
+            // HighlightStyle, via the bundle's highlighter helper.
+            sig.appendChild(highlightPython(help.label));
             dom.appendChild(sig);
             if (help.doc) {
               const docEl = document.createElement("div");
@@ -1155,6 +1211,10 @@ function initPlayground() {
           autocompletion({ override: [editorCompletions] }),
           keymap.of(completionKeymap),
           signatureHelp,
+          // Fixed positioning lifts tooltips out of the pane's
+          // overflow:hidden — a tall signature was clipped at the
+          // editor's edge instead of floating over the page.
+          tooltips({ position: "fixed" }),
           // The bundle's theme colours via the site's --md-code-hl-*
           // variables: the editor matches every Pygments block on the
           // site and follows the palette toggle live, no re-mount.

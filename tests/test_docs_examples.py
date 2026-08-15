@@ -683,9 +683,11 @@ def test_playground_hover_help_answers_signatures(tmp_path: Path):
     assert help_ is not None, err
     # The stub's signature line, not a bare name — a Name's docstring()
     # leads with it, and dropping to `label or doc` once let a bare
-    # "check" slide (Willem's screenshot).
+    # "check" slide (Willem's screenshot). Long signatures wrap to one
+    # parameter per line, so the tooltip reads instead of scrolling.
     assert help_["label"].startswith("Check("), help_
     assert "fix" in help_["label"] or "fix" in help_["doc"], help_
+    assert "\n    " in help_["label"], help_
 
 
 def test_example_markers_are_spent():
