@@ -512,6 +512,33 @@ def _playground_complete(tmp_path: Path, files: dict[str, str], line: str) -> li
     return [c.split("\t")[0] for c in answer]
 
 
+def test_playground_completes_the_homepages_git_branches(tmp_path: Path):
+    """The homepage's suggest(branches) parses `git branch` output — in the
+    page that child is simulated, and the canned world answers with branch
+    names, so Tab offers branches instead of the echo line chopped into
+    words (Willem's screenshot: --branch=[simulated], --branch=git, …)."""
+    files = {
+        "tasks.py": (
+            "from typing import Annotated\n"
+            "from footman import suggest, task\n"
+            "from toolroom import git\n"
+            "\n"
+            "def branches() -> list[str]:\n"
+            '    return git.branch(format="%(refname:short)").stdout.split()\n'
+            "\n"
+            "@task\n"
+            "def deploy(branch: Annotated[str, suggest(branches)] = 'main'):\n"
+            '    "Ship a branch."\n'
+        )
+    }
+    got = _playground_complete(tmp_path, files, "deploy --branch=")
+    assert got == [
+        "--branch=main",
+        "--branch=develop",
+        "--branch=feature/checkout-flow",
+    ], got
+
+
 def test_playground_dynamic_completion_answers_fresh(tmp_path: Path):
     """A suggest() completer runs in the page — the stand-in for the
     _suggest child a real shell respawns — and reads the editor's files
