@@ -575,6 +575,11 @@ def _editor_complete(
     probe.write_text(
         _js_bootstrap()
         + "\nimport sys\nfrom pathlib import Path as _P\n"
+        # A private parso cache per probe: concurrent probes sharing the
+        # default cache dir race its non-atomic pickle writes (EOFError on
+        # Windows CI). The page is one process and keeps the default.
+        + "import jedi.settings\n"
+        + "jedi.settings.cache_directory = str(_P.cwd() / 'jedi-cache')\n"
         + "a = sys.argv\n"
         + "src = _P(a[2]).read_text(encoding='utf-8')\n"
         + "print(_fm_editor_complete(a[1], src, a[3], a[4]))\n",
@@ -639,6 +644,9 @@ def _editor_help(
     probe.write_text(
         _js_bootstrap()
         + "\nimport sys\nfrom pathlib import Path as _P\n"
+        # Same private parso cache as `_editor_complete`, same race.
+        + "import jedi.settings\n"
+        + "jedi.settings.cache_directory = str(_P.cwd() / 'jedi-cache')\n"
         + "a = sys.argv\n"
         + "src = _P(a[2]).read_text(encoding='utf-8')\n"
         + "print(_fm_editor_help(a[1], src, a[3], a[4]))\n",
