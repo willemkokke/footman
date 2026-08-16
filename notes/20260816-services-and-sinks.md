@@ -3,8 +3,9 @@
 Status: EXPLORATORY — 2026-08-16, opened by Willem while the signal fixes
 (#455–#458) were still landing. Everything below was measured against
 `origin/main` at `913a59b`, in throwaway worktrees, with the reproductions
-kept in the appendix. **Nothing here is built.** Five questions at the bottom
-are Willem's to call, and two of them gate the rest.
+kept in the appendix. **Nothing here is built.** One ruling has been made —
+`infinite=True` goes, see Part 1 — and four questions at the bottom are still
+Willem's to call, of which two gate the builds.
 
 ## The idea (Willem)
 
@@ -203,13 +204,62 @@ def consume() -> Iterator[None]:
     stop.set()
 ```
 
-`infinite=True` survives as the deliberately **lossy** one-liner: a body that
-just blocks, run on a daemon thread footman never joins and abandons at exit,
-children killed by the registry on the way out. No teardown, no readiness, no
-clean stop — and documented as exactly that, so the generator form is visibly
-the better path rather than a second way to do the same thing. It keeps
-`run("zensical serve")` a single line for the trivial case. (Whether it survives
-at all is open question 4.)
+### `infinite=True` goes — RULED 2026-08-16 (Willem)
+
+> I'm tempted to remove `infinite=true`. I have a long standing rule of only
+> having one way to do things.
+
+The rule is enough on its own, but there is a sharper reason. **The flag is a
+claim *about* a body; a generator *is* the body's shape.** Claims can lie, and
+footman prints the lie:
+
+```python
+@task(infinite=True)
+def quick(): print("quick ran")      # returns instantly
+```
+
+```console
+$ fm --list
+  quick  ...  (runs until Ctrl-C)    ← in the help text, and untrue
+$ fm quick lint build
+ok   quick  (0.0s)                   ← it just returns
+```
+
+Measured. That is `design.md:520` — *"No API mints a receipt without work
+behind it"* — broken by a declaration rather than an API, but the same failure.
+A shape cannot lie: a function either has a `yield` or it does not. Detection is
+`inspect.isgeneratorfunction(fn)`, so it does not even depend on the author
+writing `Iterator[T]`; it works on unannotated bodies.
+
+An earlier draft of this note kept the flag as a "lossy one-liner" — a blocking
+body on an abandoned daemon thread, no teardown, no readiness. That hedge does
+not survive the lying-help-text argument. A two-line saving is not worth a
+second spelling that is worse in every dimension *and* can misrepresent itself
+in `--help`.
+
+**What has to move.** The flag drives three things today — the "runs until
+Ctrl-C" note in help and listings (`_describe.py:422`, `_app.py:572`), progress
+and timing suppression (`_schedule.py:745`), and the body-call refusal
+(`_futures.py:654`). All three re-key off `isgeneratorfunction`, which is
+mechanical and strictly better, since a shape cannot disagree with itself.
+Callers to migrate: `reference.md:49`, `index.md:175`, `execution-model.md:63`,
+`orchestration.md:181`, and the repo's own `tasks.py:567`. Pre-1.0, so no
+deprecation cycle.
+
+**The dependency that sequences the work.** `run()` is blocking-only — the
+signature at `context.py:2799` has no background or detach parameter and returns
+`Result` after the child exits. So `with run.background(...)` does not exist,
+and until it does the generator form is not writable and `docs.serve` has
+nothing to migrate *to*. One API, not a redesign, but it fixes the order:
+background spawn → migrate `docs.serve` → delete the flag.
+
+**The one case removal costs something**, and it is not enough to keep it: a
+third-party blocking call with no background variant (`app.run()`,
+`serve_forever()`) makes the author thread it themselves, as in the `consume`
+example above — four lines instead of two, and they have to know about the
+daemon flag. But that ceremony *buys* something. It makes visible that nothing
+will stop that thread cleanly, which is exactly what `infinite=True` does
+silently. The harder spelling is the honest one.
 
 ### Scope is a ladder, not a choice
 
@@ -388,7 +438,7 @@ user discovers chaining by pressing TAB instead of by reading docs.
 
 `--` then has one job — *"stop reading this as grammar"* — instead of three
 narrow ones. And being load-bearing, it should get a `+` exit:
-`fm test -- build + lint`. (Open question 5.)
+`fm test -- build + lint`. (Open question 4.)
 
 `--` on a task with no sink should **refuse**, not evaporate. There the words go
 nowhere at all; that is a hole, not an ambiguity.
@@ -406,6 +456,10 @@ nowhere at all; that is a hole, not an ambiguity.
   weakness today for non-path values.
 - **Keep `infinite=True` and patch the exceptions.** That is how it got here —
   seven local rules, each individually defensible.
+- **Keep `infinite=True` as a lossy one-liner beside the generator form.** This
+  note's own first draft. Rejected 2026-08-16: a declaration can disagree with
+  its body and footman prints the disagreement in `--help`; a generator cannot.
+  See the ruling above.
 - **Ban in-process long-lived work.** Unnecessary. The author can own the
   cooperation; footman only needs the body to return.
 - **Attach to the editor's language server.** LSP servers are single-client over
@@ -427,15 +481,20 @@ nowhere at all; that is a hole, not an ambiguity.
 3. **Does `--jobs` bound services?** If they do not count, `--jobs` means
    "concurrent jobs" and services are unbounded. Probably right, but
    `fm a.serve + b.serve + c.serve` with no limit is a thing someone will do.
-4. **Does `infinite=True` survive** as the lossy one-liner, or is a blocking
-   body simply refused and the generator form made the only spelling?
-5. **Note or refuse for the swallowed token, and does `--` get a `+` exit?**
+4. **Note or refuse for the swallowed token, and does `--` get a `+` exit?**
    These are coupled: whether "note" is defensible depends on whether `--` is a
    complete escape hatch, and today it is not.
 
-Questions 1 and 4 gate the service build. Question 5 gates the sink build. The
-two builds do not touch each other and can land in either order — the sink half
-is smaller, is mostly deleting an exception, and has a visible payoff in TAB.
+*(A fifth — whether `infinite=True` survives — was ruled on 2026-08-16: it
+goes. See the ruling in Part 1.)*
+
+Question 1 gates the service build. Question 4 gates the sink build. The two
+builds do not touch each other and can land in either order — the sink half is
+smaller, is mostly deleting an exception, and has a visible payoff in TAB.
+
+The service half now has a fixed internal order, set by the ruling:
+`run.background()` → migrate `docs.serve` → services as a node kind →
+delete `infinite=True`.
 
 ## Appendix — reproductions
 
