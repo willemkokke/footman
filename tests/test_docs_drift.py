@@ -39,6 +39,80 @@ def _handwritten_docs() -> list[Path]:
     ]
 
 
+def _assignment_docstrings() -> set[str]:
+    """Names documented by the source convention IDEs read: an assignment
+    (`isfile = …`, `Stdin = Annotated[…]`) followed by a bare string
+    literal. Runtime-invisible, hover-visible — jedi and every editor
+    surface them, so they count as documented."""
+    import ast
+
+    names: set[str] = set()
+    for path in (ROOT / "src" / "footman").glob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover - the gate would be red first
+            continue
+        body = tree.body
+        for i, node in enumerate(body[:-1]):
+            targets: list[str] = []
+            if isinstance(node, ast.Assign):
+                targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                targets = [node.target.id]
+            follower = body[i + 1]
+            if (
+                targets
+                and isinstance(follower, ast.Expr)
+                and isinstance(follower.value, ast.Constant)
+                and isinstance(follower.value.value, str)
+                and follower.value.value.strip()
+            ):
+                names.update(targets)
+    return names
+
+
+def test_every_public_symbol_carries_hover_documentation():
+    """The docstring sibling of the docs-mention guard below: hover help is
+    a public surface (editors, and the playground's tooltip), so every
+    name footman exports must answer it — a runtime docstring, or the
+    source-level assignment docstring the aliases and marker instances
+    use. Public members that exported classes define in footman are held
+    to the same bar."""
+    import inspect
+
+    source_documented = _assignment_docstrings()
+    exported = [n for n in footman.__all__ if not n.startswith("__")]
+    missing: list[str] = []
+    for name in exported:
+        obj = getattr(footman, name)
+        runtime_doc = (inspect.getdoc(obj) or "").strip()
+        if runtime_doc and not (inspect.isclass(obj) or inspect.isroutine(obj)):
+            # An alias or instance inherits its type's docstring — typing
+            # boilerplate for an `Annotated` alias — which is not this
+            # name's documentation unless the type is footman's own.
+            type_doc = (inspect.getdoc(type(obj)) or "").strip()
+            type_module = getattr(type(obj), "__module__", "") or ""
+            if runtime_doc == type_doc and not type_module.startswith("footman"):
+                runtime_doc = ""
+        documented = bool(runtime_doc) or name in source_documented
+        if not documented:
+            missing.append(name)
+            continue
+        if inspect.isclass(obj):
+            for attr, member in vars(obj).items():
+                if attr.startswith("_"):
+                    continue
+                fn = inspect.unwrap(getattr(member, "fget", member))
+                module = getattr(fn, "__module__", "") or ""
+                if not module.startswith("footman"):
+                    continue
+                if not callable(fn) and not isinstance(member, property):
+                    continue
+                if not (inspect.getdoc(member) or "").strip():
+                    missing.append(f"{name}.{attr}")
+    assert not missing, f"public symbols without hover documentation: {missing}"
+
+
 def test_every_public_symbol_is_documented():
     """Every name re-exported from `footman` appears somewhere in the docs.
     Catches a new public export that shipped undocumented — the drift the

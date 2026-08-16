@@ -42,7 +42,8 @@ import {
   lineNumbers,
   rectangularSelection,
 } from "@codemirror/view";
-import { tags as t } from "@lezer/highlight";
+import { pythonLanguage } from "@codemirror/lang-python";
+import { highlightCode, tags as t } from "@lezer/highlight";
 
 /* codemirror's basicSetup minus autocompletion: the stock completer
  * offers every keyword, builtin, and buffer word — noise, not help.
@@ -96,6 +97,11 @@ const chrome = EditorView.theme({
   ".cm-activeLineGutter": {
     backgroundColor: "var(--md-code-hl-color--light, transparent)",
   },
+  // Tooltip styling lives in docs/assets/playground.css, not here:
+  // the tooltips are parented to document.body (the only reliable
+  // escape from ancestor clipping), which puts them outside this
+  // theme's scope. The highlighter's generated classes are
+  // document-global, so signature colouring survives the move.
 });
 
 const colours = HighlightStyle.define([
@@ -152,6 +158,34 @@ const colours = HighlightStyle.define([
 
 export const footmanTheme = [chrome, syntaxHighlighting(colours)];
 
+/* Python source → highlighted DOM, through the SAME HighlightStyle the
+ * editor uses — for tooltip content (hover signatures) that should read
+ * like the code beside it. Lezer's parser is error-tolerant, so a bare
+ * signature line highlights fine without being a whole valid module. */
+export function highlightPython(code) {
+  const frag = document.createDocumentFragment();
+  const tree = pythonLanguage.parser.parse(code);
+  highlightCode(
+    code,
+    tree,
+    colours,
+    (text, classes) => {
+      if (classes) {
+        const span = document.createElement("span");
+        span.className = classes;
+        span.textContent = text;
+        frag.appendChild(span);
+      } else {
+        frag.appendChild(document.createTextNode(text));
+      }
+    },
+    () => {
+      frag.appendChild(document.createTextNode("\n"));
+    },
+  );
+  return frag;
+}
+
 export { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 export { python } from "@codemirror/lang-python";
-export { EditorView, keymap } from "@codemirror/view";
+export { EditorView, hoverTooltip, keymap, tooltips } from "@codemirror/view";

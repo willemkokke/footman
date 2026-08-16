@@ -196,7 +196,7 @@ the yield runs, claims are released, nothing is left half-converted,
 and the worst case costs one trip around the loop. Between checkpoints
 the step cannot be interrupted, and that is not timidity but Python's
 own rule, since a running generator refuses to be closed from outside, by
-design. Footman's contract says the same thing plainly: yield where it
+design. Footman's contract is the same rule: yield where it
 is safe to stop, and footman will only ever stop you there.
 
 ## Nothing runs anonymously

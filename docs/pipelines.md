@@ -38,7 +38,7 @@ annotation decides how the bytes are interpreted:
 A **record** is a dataclass, a `NamedTuple`, a `TypedDict`, or a class with an
 annotated `__init__`, and all four bind from a JSON object the same way.
 
-The last row is the ordinary case and worth stating plainly: `Stdin[int]` fed
+The last row is the ordinary case: `Stdin[int]` fed
 `42` is the **`int` 42**, `Stdin[Colour]` fed `red` is `Colour.RED`. The value
 goes through the same coercion, choices, bounds and `check(fn)` validators a
 command-line token would, and one trailing newline is ignored: `echo 42 |` is

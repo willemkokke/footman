@@ -575,6 +575,11 @@ def _editor_complete(
     probe.write_text(
         _js_bootstrap()
         + "\nimport sys\nfrom pathlib import Path as _P\n"
+        # A private parso cache per probe: concurrent probes sharing the
+        # default cache dir race its non-atomic pickle writes (EOFError on
+        # Windows CI). The page is one process and keeps the default.
+        + "import jedi.settings\n"
+        + "jedi.settings.cache_directory = str(_P.cwd() / 'jedi-cache')\n"
         + "a = sys.argv\n"
         + "src = _P(a[2]).read_text(encoding='utf-8')\n"
         + "print(_fm_editor_complete(a[1], src, a[3], a[4]))\n",
@@ -612,6 +617,91 @@ def test_playground_editor_completion_carries_docstrings(tmp_path: Path):
     got, err = _editor_complete(tmp_path, "from toolroom import ruff\nruff.che", 2, 8)
     labels = [c["label"] for c in got]
     assert "check" in labels, (labels, err)
+
+
+def test_playground_editor_completion_is_relevant(tmp_path: Path):
+    """Willem's critique, pinned: no hunting through a big list. Private
+    and dunder names stay out unless nothing else answers, and the list
+    caps at 20 — every kept entry a real candidate."""
+    got, err = _editor_complete(tmp_path, "import json\njson.", 2, 5)
+    labels = [c["label"] for c in got]
+    assert labels, err
+    assert len(labels) <= 20, labels
+    assert not any(name.startswith("_") for name in labels), labels
+
+    # Typing the underscore is asking for the private names.
+    got, err = _editor_complete(tmp_path, "import json\njson._", 2, 6)
+    labels = [c["label"] for c in got]
+    assert labels and all(name.startswith("_") for name in labels), (labels, err)
+
+
+def _editor_help(
+    tmp_path: Path, source: str, line: int, column: int
+) -> tuple[dict[str, Any] | None, str]:
+    """Drive the shipped hover-help function in CPython — source by file,
+    for the same Windows argv-newline reason as `_editor_complete`."""
+    probe = tmp_path / "help_probe.py"
+    probe.write_text(
+        _js_bootstrap()
+        + "\nimport sys\nfrom pathlib import Path as _P\n"
+        # Same private parso cache as `_editor_complete`, same race.
+        + "import jedi.settings\n"
+        + "jedi.settings.cache_directory = str(_P.cwd() / 'jedi-cache')\n"
+        + "a = sys.argv\n"
+        + "src = _P(a[2]).read_text(encoding='utf-8')\n"
+        + "print(_fm_editor_help(a[1], src, a[3], a[4]))\n",
+        encoding="utf-8",
+    )
+    src = tmp_path / "buffer.py"
+    src.write_text(source, encoding="utf-8")
+    work = Path(tempfile.mkdtemp(dir=tmp_path))
+    out = subprocess.run(
+        [sys.executable, str(probe), "{}", str(src), str(line), str(column)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=work,
+        env={**os.environ, "_FM_PLAYGROUND_SIM": "1"},
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    answer: dict[str, Any] | None = json.loads(out.stdout)
+    return answer, out.stderr
+
+
+def test_playground_hover_help_answers_signatures(tmp_path: Path):
+    """Signature help over the same jedi world: inside a call's parens the
+    label is the signature; on a bare name the docstring still answers.
+    The toolroom case is the point — hover ruff.check and read its stub."""
+    inside_call = "import json\njson.dumps("
+    help_, err = _editor_help(tmp_path, inside_call, 2, 11)
+    assert help_ is not None, err
+    assert "dumps(" in help_["label"], help_
+
+    on_name = "from toolroom import ruff\nruff.check"
+    help_, err = _editor_help(tmp_path, on_name, 2, 7)
+    assert help_ is not None, err
+    # The stub's signature line, not a bare name — a Name's docstring()
+    # leads with it, and dropping to `label or doc` once let a bare
+    # "check" slide (Willem's screenshot). Long signatures wrap to one
+    # parameter per line, so the tooltip reads instead of scrolling.
+    assert help_["label"].startswith("Check("), help_
+    assert "\n    " in help_["label"], help_
+    # The stub's __call__ docstring rides along: the summary line and the
+    # Args section documenting every flag — the whole reason to hover.
+    assert "Args:" in help_["doc"], help_
+    assert "diff:" in help_["doc"], help_
+
+    # Hovering a keyword ARGUMENT answers about that argument — its
+    # declaration as the label, its Args entry as the doc — never the
+    # whole signature (Willem: "the documentation for fix").
+    on_keyword = "from toolroom import ruff\nruff.check('src', fix=True)"
+    col = on_keyword.split("\n")[1].index("fix=") + 1
+    help_, err = _editor_help(tmp_path, on_keyword, 2, col)
+    assert help_ is not None, err
+    assert help_["label"].startswith("fix"), help_
+    assert "Check(" not in help_["label"], help_
+    assert "Apply fixes" in help_["doc"], help_
 
 
 def test_example_markers_are_spent():

@@ -8,10 +8,10 @@ hide:
 
 A real footman, in your browser. The editor below is a `tasks.py`; the
 prompt is `fm`. Python (and footman itself) load into the page via
-[Pyodide](https://pyodide.org) on first use — nothing is installed on your
+[Pyodide](https://pyodide.org) as soon as you arrive — nothing is installed on your
 machine, and nothing you type leaves it.
 
-The browser sandbox, said plainly: it has no processes and one thread, so
+The browser has no processes and one thread, so
 every `run("…")` child is **simulated** — it succeeds and its output says
 `[simulated]` — and runs are sequential. A few well-known reads
 (`git branch`, `git tag`) answer with plausible canned output instead, so
@@ -40,7 +40,8 @@ the dialog text, Cancel reads as end-of-input, and a secret is typed
 unmasked (this is a playground, not a vault). The **editor** completes
 too: type `.` after a toolroom handle (or press <kbd>Ctrl-Space</kbd>
 anywhere) and the menu comes from the interpreter — real methods from
-the typed stubs, docstrings included.
+the typed stubs, docstrings included — and **rest the pointer on a
+name** for its signature and docstring, no menu required.
 
 The output pane is a session transcript: every run appends its prompt
 line and output, in footman's own colours, and **Clear** starts over.
@@ -79,8 +80,8 @@ not just the words: type `deploy prod --regions=eu,` and press
     </div>
     <div id="fmp-complete" hidden></div>
     <div id="fmp-out" aria-live="polite"></div>
-    <div class="fmp-status" id="fmp-status">Python loads when you first run —
-      a few seconds and ~15&nbsp;MB, once per visit.</div>
+    <div class="fmp-status" id="fmp-status">Python is loading — a few
+      seconds; ~15&nbsp;MB on your first visit, cached after.</div>
   </div>
 </div>
 

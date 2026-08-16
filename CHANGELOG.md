@@ -45,6 +45,24 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground's editor helps on hover, and its menus behave.**
+  Rest the pointer on a name — or inside a call's parens — and a tooltip
+  answers from the interpreter: the signature line in code face, the
+  docstring's opening beneath it, the toolroom stubs' documentation one
+  hover away instead of a completion-menu hunt. The completion menu
+  itself learned manners: private and dunder names stay out unless the
+  underscore was typed, the list caps at twenty, and the tooltips are
+  finally styled through the site's own variables — they matched neither
+  palette before, dark mode least of all. **Python itself loads as soon
+  as the page does**: the first Run, Tab, or hover no longer pays the
+  download, and jedi rides along so the editor helps immediately.
+  Hover reaches everything: a long signature wraps to one parameter per
+  line in the editor's own colours, a keyword argument answers with its
+  own `Args:` entry rather than the whole signature, a parameter answers
+  with its declaration and owner, literals and keywords stay silent, a
+  Google-style `Args:` section renders as bold names with prose, and
+  the tooltips float over the page and scroll — parented to the body,
+  because fixed positioning alone still clipped at the pane's edges.
 - **The playground's simulated world answers a few reads with data.**
   The homepage's `suggest(branches)` parses `git branch` output — and the
   simulated child answered with its own echo line, which the completer
@@ -56,6 +74,16 @@ versions may include breaking changes.
   pretends the write side happened; everything else keeps the
   `[simulated]` echo, and the page discloses the canned reads beside the
   other sandbox facts.
+- **`@task` documents itself on hover.** The `TaskDecorator` protocol —
+  the static shape every editor reads for the module-level `task` — said
+  only that it was a static shape; it now says what `@task` does, and
+  its options overload documents every option Google-style, so
+  `serial=`, `confirm=`, `cwd=` and the rest answer keyword hover in
+  editors and the playground alike. A drift guard holds the whole
+  public surface to that bar: every export, and every public member an
+  exported class defines, must carry hover documentation — with an
+  `Annotated` alias's inherited typing boilerplate deliberately not
+  counting as documentation.
 - **The playground's editor completes from the interpreter.** Type `.`
   after a toolroom handle — or press Ctrl-Space anywhere — and the menu
   comes from jedi over the buffer, with footman and toolroom importable:
