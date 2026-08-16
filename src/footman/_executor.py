@@ -2311,6 +2311,22 @@ def run_bound(
         if error is None:
             # The body finished and had every chance to read what it declared.
             _advise_unread_uses(ctx, fn)
+    except BaseException as exc:
+        # Not an ordinary failure — `_call` turns those into `error` and the
+        # run carries on to `resolve` below. This is the class it deliberately
+        # does not catch, KeyboardInterrupt above all, and letting it leave by
+        # the front door skipped the one line that answers anyone waiting on
+        # this task's cell. `resolve`'s own contract says it is "always called
+        # for a claimed cell, on every path out"; this was the path out that
+        # did not.
+        #
+        # A sharer then blocked on a cell nobody would ever fill — for the rest
+        # of the run, and past a second Ctrl-C, since the wait is not
+        # interruptible. Answering it costs nothing and the exception carries
+        # on unchanged: the waiter is failed by the same thing that failed the
+        # claimant, which is the truth of what happened to it.
+        _futures.resolve(cell, None, exc)
+        raise
     finally:
         _current.reset(token)
         worker.name = born
