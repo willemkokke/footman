@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Stack dumps for a run that has stopped moving.** `Ctrl-\` (`SIGQUIT`)
+  writes every thread's stack to stderr and lets the run carry on, so
+  pressing it twice and watching whether the frames moved is how you tell a
+  deadlock from slow progress. Nobody is at a keyboard when CI hangs, and
+  Windows has no `SIGQUIT`, so `FOOTMAN_STACKS_AFTER=30` arms the same dump
+  on a timer that repeats every 30 seconds. Both write to stderr, so a
+  `--json` run keeps its document.
+
 ### Fixed
 
 - **The cache collector sweeps downloads abandoned mid-flight.** It globbed

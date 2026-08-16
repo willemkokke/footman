@@ -96,6 +96,30 @@ it's malformed, unreadable, or missing. You asked for that file on purpose,
 so a typo like `--config=prod.tmol` is reported (`--config: prod.tmol: no such
 file`), never silently ignored.
 
+## When a run stops moving
+
+A hang says nothing on its own, so footman hands you the one thing that does:
+every thread's stack, live.
+
+Press `Ctrl-\` (`SIGQUIT`) and they go to stderr — one block per thread,
+innermost frame first — and **the run carries on**. That is the point: press it
+again a few seconds later and compare. Frames that moved are slow progress;
+frames that did not are a deadlock, and the top of each block names the file
+and line to look at.
+
+Nobody is at a keyboard when CI hangs, and Windows has no `SIGQUIT`, so the
+same dump is reachable on a timer:
+
+```sh
+FOOTMAN_STACKS_AFTER=30 fm check
+```
+
+That run dumps its stacks every 30 seconds and carries on each time. The timer
+counts wall-clock, not stuckness, so pick a number comfortably longer than a
+healthy run and the log stays quiet until something genuinely wedges.
+
+Both forms write to stderr, so `--json` keeps stdout a clean document.
+
 ## Timing estimates
 
 The progress bar's estimates come from `*.times.json` files beside the

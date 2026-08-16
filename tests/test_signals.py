@@ -1,4 +1,4 @@
-"""Signals: what a supervisor's stop does to a run."""
+"""Signals: a supervisor's stop, and the stack dump that is not one."""
 
 from __future__ import annotations
 
@@ -178,3 +178,91 @@ def test_sigterm_reaps_the_child_a_task_was_waiting_on(tmp_path):
     finally:
         if runner.poll() is None:  # pragma: no cover - only on a regression
             runner.kill()
+
+
+# --- the dump, which is diagnostic and not a stop -----------------------------
+
+
+DUMPEE = """
+import time
+from pathlib import Path
+
+from footman import task
+
+@task
+def wait():
+    Path({ready!r}).write_text("here")
+    deadline = time.time() + 30
+    while time.time() < deadline and not Path({go!r}).exists():
+        time.sleep(0.05)
+    Path({done!r}).write_text("finished")
+"""
+
+
+def test_sigquit_dumps_every_thread_and_the_run_carries_on(tmp_path):
+    # Hitting it twice and watching whether the frames moved is how a hang
+    # tells itself apart from slow progress, so the dump must not shut
+    # anything down.
+    if sys.platform == "win32":
+        pytest.skip("SIGQUIT is POSIX")
+
+    ready, go, done = (tmp_path / n for n in ("ready", "go", "done"))
+    (tmp_path / "tasks.py").write_text(
+        DUMPEE.format(ready=str(ready), go=str(go), done=str(done))
+    )
+    err_file = tmp_path / "stderr.txt"
+    with err_file.open("w") as sink:
+        runner = _runner(tmp_path, "wait", stderr=sink)
+        try:
+            _await(ready.exists, "the task started")
+            os.kill(runner.pid, signal.SIGQUIT)
+            _await(
+                lambda: "Current thread" in err_file.read_text(),
+                "the stacks were dumped",
+            )
+            dump = err_file.read_text()
+            assert "in wait" in dump  # the task's own frame, not just footman's
+            go.write_text("go")
+            assert runner.wait(timeout=30) == 0
+        finally:
+            if runner.poll() is None:  # pragma: no cover - only on a regression
+                runner.kill()
+    assert done.exists()  # it kept running after the dump, and finished
+
+
+def test_the_timer_dumps_where_there_is_no_key_to_press(tmp_path):
+    # Nobody is at a keyboard when CI hangs, and Windows has no SIGQUIT, so
+    # the same dump is reachable without a signal at all.
+    ready, go, done = (tmp_path / n for n in ("ready", "go", "done"))
+    (tmp_path / "tasks.py").write_text(
+        DUMPEE.format(ready=str(ready), go=str(go), done=str(done))
+    )
+    err_file = tmp_path / "stderr.txt"
+    with err_file.open("w") as sink:
+        runner = _runner(
+            tmp_path, "wait", stderr=sink, env={"FOOTMAN_STACKS_AFTER": "0.25"}
+        )
+        try:
+            _await(lambda: "Timeout" in err_file.read_text(), "the timer dumped stacks")
+            assert "in wait" in err_file.read_text()
+            go.write_text("go")
+            assert runner.wait(timeout=30) == 0
+        finally:
+            if runner.poll() is None:  # pragma: no cover - only on a regression
+                runner.kill()
+    assert done.exists()
+
+
+def test_a_typo_in_the_stacks_variable_says_so(monkeypatch, capsys):
+    name = _paths.env_var(_signals.STACKS_AFTER)
+    monkeypatch.setenv(name, "30")
+    assert _signals._seconds_from_env() == 30.0
+    monkeypatch.setenv(name, "soon")
+    assert _signals._seconds_from_env() is None
+    assert f"{name}=soon" in capsys.readouterr().err
+    monkeypatch.setenv(name, "0")
+    assert _signals._seconds_from_env() is None
+    assert f"{name}=0" in capsys.readouterr().err
+    monkeypatch.delenv(name)
+    assert _signals._seconds_from_env() is None
+    assert capsys.readouterr().err == ""
