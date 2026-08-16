@@ -202,6 +202,26 @@ def test_a_secret_title_is_shown_redacted_and_recorded_whole():
         assert "hunter2" in record.command  # the record, untouched
 
 
+def test_an_amended_record_keeps_the_shown_line():
+    """An observer's veto replaces the committed record, and a copy that
+    dropped the shown line would put the secret back on every surface that
+    reads the amended one."""
+    from footman.params import Secret
+
+    lifted = step(sorted, title=Secret("sort hunter2"))
+
+    @lifted.post_step
+    def budget(result):
+        fail("not buying it", code=5)
+
+    ctx = Context()
+    with use_context(ctx), pytest.raises(Exception, match="not buying it"):
+        lifted([3, 1, 2])()
+    record = ctx.steps[-1]
+    assert record.code == 5 and record.shown == "***"
+    assert "hunter2" in record.command
+
+
 def test_a_failing_item_raises_like_run_does():
     @step
     def broken():
