@@ -663,6 +663,33 @@ def test_playground_editor_completion_is_relevant(tmp_path: Path):
     assert labels and all(name.startswith("_") for name in labels), (labels, err)
 
 
+def test_playground_editor_completion_ranks_like_an_ide(tmp_path: Path):
+    """Willem's screenshot, pinned: Ctrl-Space inside a call answered an
+    alphabetical soup starting at `abs`. The IDE order instead: the call's
+    own keyword parameters lead (boosted, each carrying its declaration and
+    its Args prose through the __call__ reprobe — jedi drops native param
+    completions for a stub handle's synthesized __call__), a name defined
+    in the user's own buffer outranks an import, and builtins sink."""
+    prefix = 'ruff.check("src", '
+    got, err = _editor_complete(
+        tmp_path, "from toolroom import ruff\n" + prefix, 2, len(prefix)
+    )
+    labels = [c["label"] for c in got]
+    assert "fix=" in labels, (labels, err)
+    fix = next(c for c in got if c["label"] == "fix=")
+    assert fix.get("boost") == 2 and "fix" in fix.get("info", ""), fix
+    params = [c for c in got if c["label"].endswith("=")]
+    assert any("\n\n" in c.get("info", "") for c in params), params
+    rest = [c for c in got if not c["label"].endswith("=")]
+    assert any(c.get("boost") == -1 for c in rest), rest
+
+    src = "from footman import task\n\n@task\ndef build_wheels():\n    pass\n\nbui\n"
+    got, err = _editor_complete(tmp_path, src, 7, 3)
+    own = next((c for c in got if c["label"] == "build_wheels"), None)
+    assert own is not None, (got, err)
+    assert own.get("boost") == 1, own
+
+
 def _editor_help(
     tmp_path: Path, source: str, line: int, column: int
 ) -> tuple[dict[str, Any] | None, str]:

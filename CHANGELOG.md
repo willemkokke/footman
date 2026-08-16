@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground completes in IDE order.** Ctrl-Space inside a call
+  used to answer an alphabetical soup starting at `abs`: jedi drops its
+  native parameter completions when the callee is a tool handle's
+  synthesized `__call__`, and with no typed prefix the raw list won.
+  The completer now asks the signature directly and leads with the
+  call's own keyword parameters — each carrying its declaration and its
+  Args prose, reaching through `__call__` the same way hover help does —
+  then ranks names from the editor's own tabs above imports and sinks
+  builtins below both. Hovering a decorated task in your own buffer also
+  answers with its real `def` header and docstring instead of the
+  decorator's inferred `TaskFn` shape.
 - **The page's jedi matches the rehearsals'.** Pyodide bundles jedi
   0.19.2 and micropip prefers bundled wheels over PyPI, so the browser
   ran a different jedi than every CPython rehearsal — and 0.19.2

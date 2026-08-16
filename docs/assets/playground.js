@@ -607,35 +607,7 @@ def _fm_editor_help(files_json, source, line, column):
             head = signatures[0]
 
             def call_doc():
-                # The call's docstring, reaching through to __call__ when
-                # the synthesized signature dropped it: rewrite the
-                # callee at its bracket and ask again.
-                d = head.docstring(raw=True) or ""
-                if d:
-                    return d
-                try:
-                    bline, bcol = head.bracket_start
-                except Exception:
-                    return ""
-                src_lines = source.split(chr(10))
-                li = bline - 1
-                if not (0 <= li < len(src_lines)):
-                    return ""
-                text = src_lines[li]
-                probed = text[:bcol] + ".__call__" + text[bcol:]
-                probe_src = chr(10).join(
-                    src_lines[:li] + [probed] + src_lines[li + 1 :]
-                )
-                try:
-                    calls = jedi.Script(
-                        code=probe_src,
-                        environment=jedi.InterpreterEnvironment(),
-                    ).help(bline, bcol + 5)
-                    if calls:
-                        return calls[0].docstring(raw=True) or ""
-                except Exception:
-                    pass
-                return ""
+                return _fm_call_doc(source, head)
 
             # A keyword argument under the pointer answers with ITS
             # documentation, not the whole signature: the hovered word,
@@ -862,6 +834,36 @@ def _fm_editor_help(files_json, source, line, column):
             traceback.print_exc(file=sys.stderr)
         return json.dumps(None)
 
+def _fm_call_doc(source, head):
+    # The call's docstring, reaching through to __call__ when the
+    # synthesized signature dropped it: rewrite the callee at its
+    # bracket and ask again. Shared by hover help and completion.
+    import jedi
+    d = head.docstring(raw=True) or ""
+    if d:
+        return d
+    try:
+        bline, bcol = head.bracket_start
+    except Exception:
+        return ""
+    src_lines = source.split(chr(10))
+    li = bline - 1
+    if not (0 <= li < len(src_lines)):
+        return ""
+    text = src_lines[li]
+    probed = text[:bcol] + ".__call__" + text[bcol:]
+    probe_src = chr(10).join(src_lines[:li] + [probed] + src_lines[li + 1 :])
+    try:
+        calls = jedi.Script(
+            code=probe_src,
+            environment=jedi.InterpreterEnvironment(),
+        ).help(bline, bcol + 5)
+        if calls:
+            return calls[0].docstring(raw=True) or ""
+    except Exception:
+        pass
+    return ""
+
 def _fm_editor_complete(files_json, source, line, column):
     # Editor completion, asked of the interpreter: jedi over the buffer,
     # with footman and toolroom importable -- so ruff.che<Tab> completes
@@ -907,8 +909,50 @@ def _fm_editor_complete(files_json, source, line, column):
     if public:
         found = public
     out = []
+    # Inside a call, the call's own keyword parameters lead the list --
+    # boosted above everything, each carrying its declaration and its
+    # Args entry. An alphabetical soup of builtins was the old answer.
+    try:
+        sigs = script.get_signatures(int(line), int(column))
+    except Exception:
+        sigs = []
+    if sigs:
+        sig_doc = _fm_call_doc(source, sigs[0])
+        seen_params = set()
+        for prm in sigs[0].params:
+            pname = prm.name or ""
+            decl = ""
+            try:
+                decl = prm.to_string()
+            except Exception:
+                decl = pname
+            if not pname or pname in seen_params or decl.startswith("*"):
+                continue
+            seen_params.add(pname)
+            entry = {"label": pname + "=", "type": "keyword", "boost": 2}
+            info = decl
+            extra = _fm_arg_doc(sig_doc, pname)
+            if extra:
+                info = decl + chr(10) + chr(10) + extra
+            entry["info"] = info
+            out.append(entry)
+    taken = {e["label"] for e in out}
+    found = [
+        c for c in found if c.name not in taken and c.name + "=" not in taken
+    ]
+    # Scope-aware ranking: a name defined in the user's own tabs beats
+    # an import, and builtins sink below both -- the Pylance order.
+    here_dir = str(Path(".").resolve())
     for c in found[:20]:
         entry = {"label": c.name, "type": c.type}
+        try:
+            mp = str(c.module_path or "")
+            if mp.startswith(here_dir):
+                entry["boost"] = 1
+            elif c.in_builtin_module():
+                entry["boost"] = -1
+        except Exception:
+            pass
         if len(out) < 25:
             try:
                 doc = c.docstring()
@@ -1400,6 +1444,7 @@ function initPlayground() {
       label: c.label,
       type: c.type,
       ...(c.info ? { info: c.info } : {}),
+      ...(c.boost ? { boost: c.boost } : {}),
     }));
     if (!options.length) return null;
     return { from: word ? word.from : pos, options };
