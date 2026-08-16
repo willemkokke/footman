@@ -2221,6 +2221,12 @@ def run_bound(
         except ValueError as exc:  # e.g. rel= under an unmanaged config default
             _futures.resolve(cell, None, exc)  # never leave a waiter blocked
             return _result(seg, EX_USAGE, None, exc, 0.0)
+    # Here rather than at the run boundary, and here rather than after the
+    # line below: the cwd is finally known, `in_task` is still unset so the
+    # getcwd guard reads unguarded, and `unmanaged` is the token that means
+    # footman stays out — so nothing would be noted and nothing needs warming.
+    if not ctx.cwd_unmanaged:
+        _globals.warm_tempdir(ctx.cwd)
 
     # The arbiter lane is a *scheduling* declaration, acquired here at the
     # task boundary — never mid-body, which is what keeps it deadlock-free.

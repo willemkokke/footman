@@ -335,6 +335,54 @@ def _restore_popen() -> None:
 _guard_saved: dict[str, Any] = {}
 
 
+_tempdir_warmed = False
+# Set while footman itself is the one asking a guarded question. Thread-local
+# on purpose: a sibling task reading the cwd for real, in its own thread, still
+# earns its note while this one is resolving.
+_internal = threading.local()
+
+
+def _is_internal() -> bool:
+    return bool(getattr(_internal, "on", False))
+
+
+def warm_tempdir(cwd: Any) -> None:
+    """Resolve `tempfile`'s temp directory before a task whose cwd has shifted.
+
+    `tempfile.gettempdir()` builds its candidate list by appending
+    `os.getcwd()` — eagerly, despite the stdlib comment calling it a last
+    resort — so the *first* `mkdtemp()` in a run reads the process cwd. The
+    getcwd guard would then attribute that read to the task, which never made
+    it: "task X reads the process cwd" about a line the author did not write.
+
+    Resolving it here rather than at `install()` is the whole point. The note
+    only fires when the task's directory differs from the process directory,
+    so a run started where the tasks file lives — the common case — has
+    nothing to prevent and should not pay ~3 ms to prevent it.
+
+    Called with `ctx.cwd` known and `ctx.in_task` still False, so `_managed_task`
+    reads unguarded and this resolution cannot trip the very note it exists to
+    avoid. Idempotent: `tempfile` caches its answer for the process, so the
+    flag only spares the repeat call.
+    """
+    global _tempdir_warmed
+    if _tempdir_warmed or cwd is None:
+        return
+    if str(cwd) == real_getcwd():
+        return  # the answer would have been right anyway
+    _tempdir_warmed = True
+    import tempfile
+
+    # `run_task` sets `in_task` before the cwd is even resolved, so this
+    # resolution is guarded like a body's. It is not a body's: mark it as
+    # footman's own, or the warm earns the note it exists to prevent.
+    _internal.on = True
+    try:
+        tempfile.gettempdir()
+    finally:
+        _internal.on = False
+
+
 def _install_os_guards() -> None:
     _guard_saved["chdir"] = os.chdir
     _guard_saved["getcwd"] = os.getcwd
@@ -387,6 +435,8 @@ def _install_os_guards() -> None:
 
     def getcwd() -> str:
         here = orig_getcwd()
+        if _is_internal():
+            return here  # footman resolving something on the task's behalf
         ctx, guarded = _managed_task()
         # Only when the answer is actually misleading. A task whose directory
         # *is* the process directory — the common case, the runner started
@@ -1075,6 +1125,46 @@ def parked() -> Any:
     return _parked_cm()
 
 
+_gc_deferred = False
+
+
+def defer_gc() -> None:
+    """Stop collecting until the run reaches task bodies.
+
+    Startup allocates a great deal and discards almost none of it: the
+    framework's own modules, then the user's tasks file. Left alone, CPython
+    runs about eleven collections getting there, each one walking objects that
+    are all still live. Only the console-script entry calls this, because only
+    it owns the whole process; `Runner` drives a run inside somebody else's
+    process and must not touch a global switch.
+    """
+    global _gc_deferred
+    import gc
+
+    gc.disable()
+    _gc_deferred = True
+
+
+def _resume_gc() -> None:
+    """Hand startup's objects to the permanent generation, then collect again.
+
+    Paired with `defer_gc`, and a no-op without it. The freeze is what makes
+    re-enabling cheap: everything allocated up to here is live and will stay
+    live for the few milliseconds this process has left, so it should never be
+    traversed again — while a task body that makes real garbage still gets a
+    real collector. Forcing a collection here instead measured *slower* than
+    plain: the traversal costs more than the garbage is worth.
+    """
+    global _gc_deferred
+    if not _gc_deferred:
+        return
+    import gc
+
+    gc.freeze()
+    gc.enable()
+    _gc_deferred = False
+
+
 def install() -> None:
     """Arm the routers for a run. Refcounted; the first install pins the
     environment snapshot (so anything published at the run boundary —
@@ -1084,13 +1174,9 @@ def install() -> None:
         _installs += 1
         if _installs > 1:
             return
-        # Warm stdlib caches that lazily read process globals on first use
-        # (tempfile.gettempdir walks candidates with a getcwd fallback), so a
-        # task's first mkdtemp doesn't trip the getcwd note for a read the
-        # task never made.
-        import tempfile
-
-        tempfile.gettempdir()
+        # The last thing before task bodies run, and the reason `install` is
+        # where this lives: everything the run needed to get here is loaded.
+        _resume_gc()
         _snapshot.clear()
         _snapshot.update(os.environ)
         _noted.clear()

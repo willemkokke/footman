@@ -838,8 +838,14 @@ def _task_node(
     lane = registry.task_lane(fn)
     ctx_name = context_param_name(sig)  # the injected ctx param is not a CLI arg
     # Imported here, not at module scope: the module compiles eleven regexes
-    # on the way in (~0.24 ms of its 0.65 ms), and only manifest *building*
-    # reads docstrings — a run answering from a warm manifest never does.
+    # on the way in (~0.24 ms of its 0.65 ms) and only manifest *building*
+    # reads a docstring.
+    #
+    # Worth being honest about what that buys today: `sync_manifest` builds
+    # unconditionally, so every run reaches this line anyway and only
+    # `--version` is spared. It pays properly once building is skipped when
+    # nothing changed — see notes/20260816-startup-perf.md, which measures
+    # that rebuild at ~70 us per task on every run.
     from footman import docstrings
 
     parsed = docstrings.parse(inspect.getdoc(fn))
