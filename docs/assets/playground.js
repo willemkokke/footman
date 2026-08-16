@@ -261,6 +261,11 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
     _FM_CANNED = (
         ("git branch", "main;develop;feature/checkout-flow".replace(";", chr(10))),
         ("git tag", "v1.0.0;v1.1.0;v2.0.0".replace(";", chr(10))),
+        # platform's generic branch shells out uname -p for the processor;
+        # a real browser spawn would fail and yield the empty processor,
+        # but the simulated echo leaked into platform.platform() as
+        # "...wasm32-[simulated]_uname_-p-32bit". Empty is the honest answer.
+        ("uname", ""),
     )
 
     class _SimulatedPopen:
@@ -278,17 +283,28 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
                 and argv[1] in ("-c", "-Command")
             ):
                 probe = argv[2]  # a shell wrapper: match the line it runs
-            self._out = "[simulated] " + cmd + chr(10)
+            out = "[simulated] " + cmd + chr(10)
             for prefix, canned in _FM_CANNED:
                 if probe.startswith(prefix):
-                    self._out = canned + chr(10)
+                    out = canned + chr(10)
                     break
+            # A real Popen answers in BYTES unless text mode was asked for
+            # -- platform._syscmd_file taught this the hard way, calling
+            # .decode on our string and taking platform.platform() down
+            # with it. Honour the contract, not just the happy path.
+            self._text = bool(
+                kwargs.get("text")
+                or kwargs.get("universal_newlines")
+                or kwargs.get("encoding")
+                or kwargs.get("errors")
+            )
+            self._out = out if self._text else out.encode("utf-8")
 
         # Keyword-for-keyword what run() calls: it always passes input=
         # (None unless the task feeds the child), so a positional-only
         # signature here breaks every run() in the page.
         def communicate(self, input=None, timeout=None):
-            return self._out, ""
+            return self._out, ("" if self._text else b"")
 
         def poll(self):
             return self.returncode

@@ -174,6 +174,18 @@ with the stdin tab and `Stdout[T]`/`--json`). Not worth chasing: mypy
 (wasm-slow), numpy/pandas (heavy, off-topic), anything Rust/binary
 with no Pyodide build (ruff, uv).
 
+## The emscripten gap (learned 2026-08-16)
+
+The CPython rehearsals share the sandbox but not the PLATFORM: the
+simulated Popen answered str unconditionally, and platform.platform()
+only calls the .decode()-ing _syscmd_file on emscripten's generic
+branch — green everywhere CI runs, dead in the page. The proof rig
+that named it lives in the day's session scratch: **Pyodide in Node**
+(npm i pyodide, load the shipped BOOTSTRAP, call _fm_invoke) — real
+emscripten, real micropip installs, scriptable. Candidate follow-up: a
+browser-parity CI rung on that rig (weigh the pyodide download against
+what only it can catch).
+
 ## The released-wheel gap (learned 2026-08-14)
 
 The page installs footman FROM PYPI; the rehearsals run the SOURCE
