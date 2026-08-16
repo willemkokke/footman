@@ -943,19 +943,27 @@ def flat_addresses(tree: dict[str, Any]) -> list[str]:
     return out
 
 
-def _children(node: dict[str, Any], prefix: str) -> list[str]:
+def _children(node: dict[str, Any], prefix: str) -> str:
     """A node's children as addresses for a "know:" listing — groups keep a
     trailing dot (`docs.`), the `ls -F` idiom, so descend-vs-run is visible;
     tasks are bare and copy-paste-runnable.
 
     What needs a project is left out where there is none, for the same reason
     the listings leave it out: this is the set of things you could type here,
-    and those are not among them."""
-    return [f"{prefix}{name}." for name in node["groups"]] + [
+    and those are not among them.
+
+    Rendered here rather than at each caller, so the empty answer is written
+    once: an empty group, a tasks file with no tasks, and a tree whose tasks
+    all need a project seen from a directory without one all reach a listing
+    with nothing in it, and `(know: )` reads as a bug in footman rather than
+    an answer. `nothing` is the word the markdown exporter already uses.
+    """
+    names = [f"{prefix}{name}." for name in node["groups"]] + [
         f"{prefix}{name}"
         for name, spec in node["tasks"].items()
         if not spec.get("needs_project")
     ]
+    return ", ".join(names) or "nothing"
 
 
 def _resolve_head(
@@ -986,7 +994,7 @@ def _resolve_head(
                 node = node["groups"][part]
                 path.append(part)
             else:
-                known = ", ".join(_children(node, f"{'.'.join(path)}."))
+                known = _children(node, f"{'.'.join(path)}.")
                 raise ChainError(f"{token!r} is an incomplete address (know: {known})")
         raise ChainError(
             f"{token!r} is not a task address — addresses are dot-separated "
@@ -1050,7 +1058,7 @@ def _resolve_head(
         bad = ".".join([*path, part])
         hint = _did_you_mean(token, flat_addresses(tree))
         scope = f"{'.'.join(path)} has" if path else "know"
-        known = ", ".join(_children(node, f"{'.'.join(path)}." if path else ""))
+        known = _children(node, f"{'.'.join(path)}." if path else "")
         # One lead for both branches. They used to differ — "no task at" for a
         # dotted address, "expected a task name, got" at the root — but the
         # scope clause after already carries that distinction (`docs has:` vs
@@ -1110,7 +1118,7 @@ def _resolve_head(
             f"nested tasks use dots: '{'.'.join(walk_path)}', not '{spaced}'"
         )
     dotted = ".".join(walk_path)
-    known = ", ".join(_children(walk_node, f"{dotted}."))
+    known = _children(walk_node, f"{dotted}.")
     raise ChainError(
         f"{dotted!r} is a group, not a task — name one of its tasks (know: {known})"
     )
