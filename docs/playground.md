@@ -11,7 +11,7 @@ prompt is `fm`. Python (and footman itself) load into the page via
 [Pyodide](https://pyodide.org) as soon as you arrive — nothing is installed on your
 machine, and nothing you type leaves it.
 
-The browser sandbox, said plainly: it has no processes and one thread, so
+The browser has no processes and one thread, so
 every `run("…")` child is **simulated** — it succeeds and its output says
 `[simulated]` — and runs are sequential. A few well-known reads
 (`git branch`, `git tag`) answer with plausible canned output instead, so

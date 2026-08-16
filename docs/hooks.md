@@ -171,7 +171,7 @@ lifecycle (`pre_bind → bind → pre_task → body → post_task`), so state se
 `pre_bind` is there at `post_task`. A body call binds like a segment, and its
 binding sees the same injected environment.
 
-One boundary fact, stated plainly: **a bind failure still fires the posts**,
+One boundary fact: **a bind failure still fires the posts**,
 with the refusal as the result. The attempt concluded, and a bind-time span
 needs closing. Everything else follows the one rule above: the lifecycle is per
 request, only the body is shared.
