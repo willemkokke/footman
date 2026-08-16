@@ -66,7 +66,7 @@ Two halves of the same idea: how a value is *collected*, and how it is
 
 ```python
 from typing import Annotated
-from footman import Secret, Stdout, ask, task
+from footman import Secret, Stdout, ask, run, task
 
 @task
 def login(token: Annotated[str, ask(secret=True)]): ...
@@ -81,6 +81,21 @@ redacts wherever footman *shows* it. Its repr is `Secret('***')`, so
 tracebacks, logs and debuggers can't leak it, and structured surfaces
 serialise it as `***`: the `--json` envelope, a `Stdout[…]` document, baked
 manifest defaults.
+
+A secret handed to `run()` as an argument of its own is a shown value too —
+footman does the joining there, so it does the hiding:
+
+```python
+@task
+def upload(token: Secret):
+    run(["twine", "upload", "--password", token])   # shows `… --password ***`
+```
+
+The step line, the `--verbose` announce, the `--json` step row, a profile
+span and the `RunFailed` message all read the redacted line. The record
+underneath keeps the real one, so `recording()` assertions and
+`result.command` see what the task actually ran; `result.shown` is the
+printable form if you want it.
 
 ### What redaction does not cover, on purpose
 

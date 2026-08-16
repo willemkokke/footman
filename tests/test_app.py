@@ -1058,6 +1058,30 @@ def test_json_version(project, capsys):
     assert payload == {"schema": 1, "name": "footman", "version": __version__}
 
 
+def test_json_step_rows_redact_a_secret_argument(tmp_path):
+    """SECURITY.md puts `--json` output in scope by name. A document that
+    leaves the process is a display: the command, the name footman minted
+    for it, and the audit's actor all show `***`, while the record inside
+    the run keeps the real line for `recording()` and dependents."""
+    from footman.testing import Runner
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import run, task\n"
+        "from footman.params import Secret\n"
+        "\n"
+        "@task\n"
+        "def login():\n"
+        "    run(['python', '-c', 'pass', Secret('hunter2')])\n"
+    )
+    result = Runner().invoke("--json login", cwd=tmp_path)
+    assert result.ok, result.stderr
+    assert "hunter2" not in result.stdout
+    (step_row,) = [i for i in json.loads(result.stdout)["items"] if "command" in i]
+    assert step_row["command"] == "python -c pass ***"
+    assert step_row["address"] == "login/python"
+    assert step_row["audit"] == [["body", "python -c pass ***", 0]]
+
+
 def test_json_list_emits_tree(project, capsys):
     assert _app.run(["--json", "--list"]) == 0
     payload = json.loads(capsys.readouterr().out)

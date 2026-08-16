@@ -157,6 +157,7 @@ class Result(int):
     _stderr: str
     _duration: float
     _raw: str
+    _shown: str
     _timed_out: bool
     _address: str
     _audit: tuple[AuditEntry, ...]
@@ -172,6 +173,7 @@ class Result(int):
         stderr: str = "",
         duration: float = 0.0,
         raw: str = "",
+        shown: str = "",
         timed_out: bool = False,
         address: str = "",
         audit: tuple[AuditEntry, ...] = (),
@@ -187,6 +189,11 @@ class Result(int):
         object.__setattr__(self, "_stderr", stderr)
         object.__setattr__(self, "_duration", duration)
         object.__setattr__(self, "_raw", raw or command)
+        # What every surface that *prints* this call reads, so the record can
+        # keep the value the caller passed while nothing shows it. Falls back
+        # to the command itself, which is what it is for a call with no
+        # `Secret` in it — the overwhelming majority.
+        object.__setattr__(self, "_shown", shown or command)
         object.__setattr__(self, "_audit", audit)
         # The argv as separate tokens, kept so `to_argv()` can re-quote for a
         # shell the caller names. `_raw` cannot stand in: it is quoted for the
@@ -217,7 +224,7 @@ class Result(int):
         """
         if not self._tokens:
             raise ValueError(
-                f"to_argv(): no argv was recorded for `{self._command}`. Only a "
+                f"to_argv(): no argv was recorded for `{self._shown}`. Only a "
                 f"spawned command has separable tokens — an in-process call, a "
                 f"Python callable, or a `run()` given a command *string* never "
                 f"had them apart. Pass a list (`run(['git', 'push'])`) or use "
@@ -229,8 +236,22 @@ class Result(int):
     def command(self) -> str:
         """The command line that ran, normalised for reading — options in
         separated form, values shell-quoted. What `recording()` asserts
-        against, and what the terminal shows."""
+        against, and what a dependent reads back."""
         return self._command
+
+    @property
+    def shown(self) -> str:
+        """`command` as it is safe to **print** — every argument that arrived
+        as a `Secret` replaced by `***`, everything else identical.
+
+        Equal to `command` unless the call carried a secret, so a record is
+        the same string on both sides in the ordinary case. Every surface
+        footman shows a command line on reads this one: the step line, the
+        `--verbose` announce, `--json`, a profile span, the message a
+        `RunFailed` carries. The record keeps the real value, because a
+        dependent, `recording()`, and the caller who passed it all read
+        `command` and none of them are a display."""
+        return self._shown
 
     @property
     def stdout(self) -> str:
@@ -1175,11 +1196,17 @@ def inherited() -> Callable[..., Any]:
 
 
 class RunFailed(Exception):
-    """A `run()` command exited non-zero (and `nofail` was not set)."""
+    """A `run()` command exited non-zero (and `nofail` was not set).
+
+    The message names the command the way every other surface does — with
+    any `Secret` argument redacted — because a failure line is a display,
+    and the one place it most reliably lands is somebody's CI log. The
+    record it carries, `.result`, is untouched: `.result.command` is the
+    real command line, for the handler that reads rather than prints."""
 
     def __init__(self, result: Result) -> None:
         self.result = result
-        super().__init__(f"`{result.command}` exited with code {result.code}")
+        super().__init__(f"`{result.shown}` exited with code {result.code}")
 
 
 class RunTimeout(RunFailed):
@@ -1193,7 +1220,7 @@ class RunTimeout(RunFailed):
         self.result = result
         self.timeout = timeout
         Exception.__init__(
-            self, f"`{result.command}` timed out after {timeout:g}s and was killed"
+            self, f"`{result.shown}` timed out after {timeout:g}s and was killed"
         )
 
 
@@ -1820,7 +1847,16 @@ class Invocation:
     def text(self, *, exact: bool) -> str:
         """The plain command line — the width-measured, non-colour form."""
         if exact:
-            return " ".join(_shell_quote(a) for a in self.exact)
+            # `exact` is the literal argv, and the bridge keeps a `Secret`
+            # whole in it on purpose — the child needs the real value. That
+            # makes this the one rendering path where the marker is still
+            # here to act on, and `--verbose` is a showing like any other: a
+            # secret must not appear just because the reader asked for the
+            # paste-able spelling. `parts` was redacted upstream by the
+            # bridge; this is the same rule reaching the other form.
+            from footman._describe import redact
+
+            return " ".join(_shell_quote(str(redact(a))) for a in self.exact)
         return " ".join(text for _, text in self.parts)
 
     def painted(self, *, color: bool, exact: bool) -> str:
@@ -1924,6 +1960,30 @@ def _label(cmd: Any, args: tuple[Any, ...]) -> str:
         name = getattr(cmd, "__qualname__", getattr(cmd, "__name__", repr(cmd)))
         return " ".join([f"{name}()", *map(str, args)]).strip()
     return cmd if isinstance(cmd, str) else " ".join(argv_tokens(cmd))
+
+
+def _shown(
+    cmd: Any, args: tuple[Any, ...], title: str | None
+) -> tuple[str, str | None]:
+    """The label and title this call is *shown* by: the same renderer, run
+    over a command whose `Secret` arguments have become `***`.
+
+    The one place a command line is prepared for showing — the announce line,
+    the step receipt, `--json`, a profile span and a `RunFailed` message all
+    read what this produced. Redaction belongs here and not at the record's
+    birth: a record scrubbed on the way in loses the value for `recording()`,
+    for a dependent reading `.command`, and for the caller who passed it,
+    which is a great deal more than a display gets to decide.
+
+    A secret the task *interpolated* is untouched, because a `str` operation
+    on a `Secret` already yielded a plain `str` — `run(f"login {token}")`
+    prints in the clear on purpose, and `reveal()` is that same intent said
+    out loud.
+    """
+    from footman._describe import redact
+
+    safe_title = None if title is None else str(redact(title))
+    return safe_title or _label(redact(cmd), redact(args)), safe_title
 
 
 def _exit_code(exc: SystemExit) -> int:
@@ -2892,6 +2952,10 @@ def run(
         # the exact spelling under --verbose; .raw always carries it.
         label = _show.text(exact=False)
         raw = _show.text(exact=True)
+        # A bridged call arrives already rendered to strings, so no `Secret`
+        # survives the crossing for `_shown` to find — the tool library owns
+        # that half of the redaction.
+        show_label, show_title = label, None
         shown = _show.painted(color=paint, exact=ctx.verbose)
         shown_plain = _show.text(exact=ctx.verbose)
         # The bridge already separated the argv; keep it for `to_argv()`.
@@ -2899,8 +2963,9 @@ def run(
     else:
         label = title or _label(cmd, args)
         raw = _exact(cmd, args)
-        shown = _dim(label, paint)
-        shown_plain = label
+        show_label, show_title = _shown(cmd, args, title)
+        shown = _dim(show_label, paint)
+        shown_plain = show_label
         # A list `run()` has its tokens apart; a command *string* does not,
         # and splitting one back is platform-dependent guesswork — `to_argv()`
         # teaches that rather than guessing.
@@ -2921,7 +2986,8 @@ def run(
             0,
             command=label,
             raw=raw,
-            address=_child_address(ctx, _addr_leaf(title, label)),
+            shown=show_label,
+            address=_child_address(ctx, _addr_leaf(show_title, show_label)),
             tokens=tokens,
         )
         ctx.steps.append(result)
@@ -2937,8 +3003,8 @@ def run(
 
         _pg_note._note(
             "recorded-title",
-            f"title= is ignored on a recorded=False call ({label}): there is no "
-            f"receipt to label.",
+            f"title= is ignored on a recorded=False call ({show_label}): there is "
+            f"no receipt to label.",
         )
 
     if pre_record is not None and not recorded:
@@ -2949,8 +3015,8 @@ def run(
 
         _pg_note2._note(
             "pre-record-recorded",
-            f"pre_record is ignored on a recorded=False call ({label}): there "
-            f"is no record to review.",
+            f"pre_record is ignored on a recorded=False call ({show_label}): "
+            f"there is no record to review.",
         )
 
     show = recorded and not ctx.quiet and (ctx.verbose or not capture)
@@ -3070,11 +3136,16 @@ def run(
         # its exit code, so this is chosen here, not assigned afterwards.
         code = 124
     # The address label is the stable identity — a title names the record,
-    # the address names the node (`_addr_leaf` for the naming rule).
-    addr = _child_address(ctx, _addr_leaf(title, label))
+    # the address names the node (`_addr_leaf` for the naming rule). Minted
+    # from the *shown* label: an address is a name, printed wherever the
+    # record is, and a name has no business carrying a secret.
+    addr = _child_address(ctx, _addr_leaf(show_title, show_label))
     # The audit: the verdict's provenance. The body entry is always present
-    # and carries what the work itself produced; review entries follow.
-    audit: tuple[AuditEntry, ...] = (_audit_entry("body", label, code),)
+    # and carries what the work itself produced; review entries follow. The
+    # body actor names the work, which is the command line — so it is the
+    # shown one, for the same reason the address is: a name is printed
+    # wherever the record travels.
+    audit: tuple[AuditEntry, ...] = (_audit_entry("body", show_label, code),)
     if pre_record is not None and recorded:
         # The review window: the work ran and the record is still a draft.
         # The reviewer reads what was captured and may amend the verdict —
@@ -3104,6 +3175,7 @@ def run(
                     stderr=err_s,
                     duration=duration,
                     raw=raw,
+                    shown=show_label,
                     timed_out=timed_out,
                     address=addr,
                     audit=(*audit, _audit_entry("review", hook, None)),
@@ -3112,7 +3184,7 @@ def run(
                 )
             )
             raise RuntimeError(
-                f"pre_record hook {hook!r} failed reviewing {label!r}: "
+                f"pre_record hook {hook!r} failed reviewing {show_label!r}: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         audit = (
@@ -3122,6 +3194,10 @@ def run(
             ),
         )
         code = view.code
+        if view.title != label:
+            # A reviewer may rename the record; the name it goes out under is
+            # shown by the same rule the original was.
+            show_label = _shown(cmd, args, view.title)[0]
         label = view.title
     result = Result(
         code,
@@ -3130,6 +3206,7 @@ def run(
         stderr=err_s,
         duration=duration,
         raw=raw,
+        shown=show_label,
         timed_out=timed_out,
         address=addr,
         audit=audit,
@@ -3151,7 +3228,7 @@ def run(
     ):
         ok = code == 0
         prefix = "\r\033[K" if ctx.tty and live else ""
-        out.write(f"{prefix}{_step_line(ctx, ok, label, duration)}")
+        out.write(f"{prefix}{_step_line(ctx, ok, show_label, duration)}")
         # Join the two streams only to *display* them (stdout then stderr);
         # nothing merged is stored — the Result keeps them apart.
         combined = out_s + err_s

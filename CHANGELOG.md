@@ -44,6 +44,19 @@ versions may include breaking changes.
   reads the status and the validators off the response now, the way `urllib`,
   `httpx` and `requests` do. Which backend you name picks a socket, not a
   behaviour.
+- **A `Secret` passed straight into `run()` no longer prints in the clear.**
+  Handing a token to a command as an argument of its own —
+  `run(["twine", "upload", "--password", token])` — put it verbatim on the
+  step line, the `--verbose` announce, the `--json` step row and its
+  address, a `--profile` span, and the `RunFailed` message that lands in a
+  CI log. `SECURITY.md` names those surfaces, so the promise was
+  half-kept, which is worse than either extreme. Every one of them now
+  renders through a single display step that replaces a `Secret` element
+  with `***`; the record underneath is untouched, so `recording()`,
+  `result.command`, `.raw` and `to_argv()` still hold what actually ran.
+  Interpolation is unchanged and still deliberate: a `str` operation on a
+  `Secret` yields a plain `str`, so `run(f"login {token}")` and `reveal()`
+  emit the real value with no switch to disarm.
 - **Ctrl-C during an in-body `parallel()` stops the run instead of waiting
   it out.** The fan-out entered its pool with no abort arm, so the interrupt
   unwound in the main thread and then blocked joining workers that were

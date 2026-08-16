@@ -179,7 +179,9 @@ def _events(results: tuple[Any, ...]) -> tuple[list[dict[str, Any]], float]:
             {
                 "ph": "X",
                 "cat": "step",
-                "name": s.command,
+                # A trace is a file that gets attached to tickets and dropped
+                # into ui.perfetto.dev — the shown line, never the record's.
+                "name": s.shown,
                 "pid": _PID,
                 "tid": tid,
                 "ts": us(s.started),

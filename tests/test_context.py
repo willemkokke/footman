@@ -2255,6 +2255,158 @@ def test_reveal_is_the_unwrap_said_out_loud():
     assert f"export TOKEN={token}" == "export TOKEN=hunter2"
 
 
+# --- a Secret handed straight to run(): shown redacted, recorded whole ---------
+
+
+def _login(token: str) -> list[str]:
+    """A portable command that takes the token as its own argv element —
+    the case where footman does the joining and so owns the display."""
+    return [sys.executable, "-c", "pass", token]
+
+
+def test_a_secret_argument_never_reaches_a_shown_command_line(capsys):
+    """The caller never unwrapped it, so footman must not print it: the
+    announce line and the step receipt both name the call `***`."""
+    token = Secret("hunter2")
+
+    def tasks(reg):
+        @reg.task
+        def login():
+            run(_login(token))
+
+    _, _, results = drive(tasks, "login", verbose=True)
+    assert results[0].ok, results[0].error
+    out = capsys.readouterr().out
+    assert "hunter2" not in out
+    assert out.count(f"{sys.executable} -c pass ***") == 2  # announce, receipt
+
+
+def test_the_exact_spelling_redacts_like_the_readable_one():
+    """`--verbose` shows a bridged call in its exact, paste-able form, and the
+    bridge keeps a `Secret` whole in that argv on purpose — the child needs the
+    real value. So `exact` is the one rendering path where the marker is still
+    present to act on, and it went out unredacted: a toolroom call under `-v`
+    printed the token while its own receipt, built from `parts`, said `***`.
+    Asking for the paste-able spelling is not asking to be shown a secret."""
+    inv = Invocation(
+        parts=(("prog", "git"), ("opt", "--author"), ("value", "***")),
+        exact=("git", Secret("hunter2")),
+    )
+    assert "hunter2" not in inv.text(exact=True)
+    assert "hunter2" not in inv.painted(color=False, exact=True)
+    assert "hunter2" not in inv.painted(color=True, exact=True)
+    assert inv.exact[1] == "hunter2"  # the record still carries it
+
+
+def test_the_record_keeps_the_secret_the_display_hid(capsys):
+    """Redaction is display policy over a committed record, not a rewrite of
+    it: what `recording()`, a dependent, and the caller read is the value
+    that was passed."""
+    token = Secret("hunter2")
+
+    def tasks(reg):
+        @reg.task
+        def login():
+            run(_login(token))
+
+    _, _, results = drive(tasks, "login")
+    step = results[0].steps[0]
+    assert step.command == f"{sys.executable} -c pass hunter2"
+    assert step.raw.endswith("hunter2")
+    assert step.to_argv()[-1] == "hunter2"
+    assert step.shown == f"{sys.executable} -c pass ***"
+    # The name footman mints for the record is printed wherever the record
+    # goes, so it is minted from the shown line.
+    assert "hunter2" not in step.address
+    assert "hunter2" not in step.audit[0].actor
+
+
+def test_a_secret_argument_is_out_of_the_failure_message(capsys):
+    """The place a failed command line most reliably lands is somebody's CI
+    log. The exception still carries the record, for a handler that reads
+    rather than prints."""
+    token = Secret("hunter2")
+
+    def tasks(reg):
+        @reg.task
+        def login():
+            run([sys.executable, "-c", "raise SystemExit(1)", token])
+
+    _, _, results = drive(tasks, "login")
+    err = results[0].error
+    assert isinstance(err, RunFailed)
+    assert "hunter2" not in str(err)
+    assert "***` exited with code 1" in str(err)
+    assert err.result.command.endswith("hunter2")  # the record, untouched
+    assert "hunter2" not in capsys.readouterr().out  # nor the FAIL receipt
+
+
+def test_a_timed_out_secret_command_redacts_too():
+    from footman.context import RunTimeout
+
+    token = Secret("hunter2")
+
+    def tasks(reg):
+        @reg.task
+        def login():
+            run(
+                [sys.executable, "-c", "import time; time.sleep(30)", token],
+                timeout=0.1,
+            )
+
+    _, _, results = drive(tasks, "login")
+    err = results[0].error
+    assert isinstance(err, RunTimeout)
+    assert "hunter2" not in str(err) and "***" in str(err)
+    assert err.result.command.endswith("hunter2")
+
+
+def test_an_interpolated_secret_still_prints_in_the_clear(capsys):
+    """A `str` operation on a `Secret` yields a plain `str`, deliberately —
+    which is what makes a task that must emit one work without a switch to
+    disarm. There is nothing left for the display to recognise, and that is
+    the documented answer, not an oversight."""
+    token = Secret("hunter2")
+
+    def tasks(reg):
+        @reg.task
+        def login():
+            run(f'"{sys.executable}" -c "pass" {token}')
+            run([sys.executable, "-c", "pass", token.reveal()])
+
+    _, _, results = drive(tasks, "login", verbose=True)
+    assert results[0].ok, results[0].error
+    assert all("hunter2" in s.shown for s in results[0].steps)
+    assert "hunter2" in capsys.readouterr().out
+
+
+def test_a_secret_title_redacts_like_the_command_would(capsys):
+    """`title=` renames the record, and is shown in the command's place — so
+    it answers to the same rule. A title built *from* a secret is a plain
+    `str` by then, and prints, exactly as an interpolated command does."""
+
+    def plain_title(reg):
+        @reg.task
+        def login():
+            run(_login("x"), title=f"login {Secret('hunter2').reveal()}")
+
+    _, _, results = drive(plain_title, "login", verbose=True)
+    step = results[0].steps[0]
+    assert step.command == "login hunter2"  # the record keeps the title given
+    assert step.shown == "login hunter2"  # a str title is a str, not a Secret
+    assert "hunter2" in capsys.readouterr().out
+
+    def secret_title(reg):
+        @reg.task
+        def login():
+            run(_login("x"), title=Secret("login hunter2"))
+
+    _, _, results = drive(secret_title, "login", verbose=True)
+    step = results[0].steps[0]
+    assert step.shown == "***" and str(step.command) == "login hunter2"
+    assert "hunter2" not in capsys.readouterr().out
+
+
 # --- recorded=False: a call that is not part of the task's story ------------------
 
 

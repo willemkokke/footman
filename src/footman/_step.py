@@ -209,12 +209,14 @@ class _StepBlock:
         if exc_type is not None and "code" not in view._touched:
             code = 1  # the block failed; a self-review that already ruled wins
         ctx = _context.current()
+        shown = str(_describe.redact(view.title))
         result = Result(
             code,
             command=view.title,
+            shown=shown,
             duration=duration,
-            address=_context._child_address(ctx, view.title),
-            audit=(_audit_entry("body", view.title, code),),
+            address=_context._child_address(ctx, shown),
+            audit=(_audit_entry("body", shown, code),),
         )
         ctx.steps.append(result)
         return False  # an exception propagates; the record sealed first
@@ -284,11 +286,15 @@ def _pump(item: WorkItem[Any]) -> Any:
             "a step-level console hold waits for a payload that needs one."
         )
 
-    addr = _context._child_address(ctx, label)
+    # A title is a plain string the author wrote, so it redacts by the same
+    # rule a command line does: the record keeps it, everything printed —
+    # the receipt, the address, the audit — reads the shown form.
+    shown = str(_describe.redact(label))
+    addr = _context._child_address(ctx, shown)
     if ctx.dry_run and recorded:
         # Dry-run fakes what footman owns and records: a deferred maker is
         # exactly that. Declared, not executed — an empty audit says so.
-        result = Result(0, command=label, address=addr)
+        result = Result(0, command=label, shown=shown, address=addr)
         ctx.steps.append(result)
         return None
 
@@ -420,7 +426,7 @@ def _pump(item: WorkItem[Any]) -> Any:
     view.code = code
     view._touched.discard("code")  # machinery write, not a review verdict
 
-    audit: tuple[AuditEntry, ...] = (_audit_entry("body", label, code),)
+    audit: tuple[AuditEntry, ...] = (_audit_entry("body", shown, code),)
     reviewers = list(maker._reviewers)
     if o.get("pre_record") is not None:
         reviewers.append(o["pre_record"])  # the use site keeps the final word
@@ -434,6 +440,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                     Result(
                         code,
                         command=label,
+                        shown=shown,
                         stdout=out_buf.getvalue(),
                         stderr=err_buf.getvalue(),
                         duration=duration,
@@ -443,7 +450,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                     )
                 )
                 raise RuntimeError(
-                    f"pre_record hook {name!r} failed reviewing {label!r}: "
+                    f"pre_record hook {name!r} failed reviewing {shown!r}: "
                     f"{type(exc).__name__}: {exc}"
                 ) from exc
             audit = (
@@ -453,9 +460,14 @@ def _pump(item: WorkItem[Any]) -> Any:
                 ),
             )
 
+    # A reviewer may rename the record; the name it goes out under is shown
+    # by the same rule the original was.
+    if view.title != label:
+        shown = str(_describe.redact(view.title))
     result = Result(
         view.code,
         command=view.title,
+        shown=shown,
         stdout=out_buf.getvalue(),
         stderr=err_buf.getvalue(),
         duration=duration,
@@ -478,7 +490,9 @@ def _pump(item: WorkItem[Any]) -> Any:
             import sys as _sys
 
             out = _sys.stdout
-            out.write(_context._step_line(ctx, result.code == 0, view.title, duration))
+            out.write(
+                _context._step_line(ctx, result.code == 0, result.shown, duration)
+            )
             combined = result.stdout + result.stderr
             if stack_text:
                 # The stack stays in the record — `--json` and `recording()`
@@ -507,6 +521,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                 amended = Result(
                     exc.code,
                     command=result.command,
+                    shown=result.shown,
                     stdout=result.stdout,
                     stderr=result.stderr,
                     duration=result.duration,
@@ -520,6 +535,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                 amended = Result(
                     result.code if result.code != 0 else 1,
                     command=result.command,
+                    shown=result.shown,
                     stdout=result.stdout,
                     stderr=result.stderr,
                     duration=result.duration,
@@ -529,7 +545,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                 )
                 ctx.steps[-1] = amended
                 raise RuntimeError(
-                    f"post_step hook {name!r} failed observing {label!r}: "
+                    f"post_step hook {name!r} failed observing {result.shown!r}: "
                     f"{type(exc).__name__}: {exc}"
                 ) from exc
 

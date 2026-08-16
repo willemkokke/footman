@@ -1350,7 +1350,10 @@ def _print_json(
         for s in r.steps:
             payload.append(
                 {
-                    "command": s.command,
+                    # `shown`, not `command`: a document that leaves the
+                    # process is a display, and a `Secret` argument has no
+                    # business in a CI log. The record keeps the real line.
+                    "command": s.shown,
                     "address": s.address,
                     "code": s.code,
                     "duration_ms": round(s.duration * 1000, 3),
