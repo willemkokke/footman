@@ -162,6 +162,33 @@ def test_a_bare_mention_does_not_disturb_the_tokens_around_it(tree):
     assert second.task == "lint"
 
 
+def test_the_attachment_hint_is_said_once_when_a_task_option_shadows_a_global():
+    # `--jobs` is deploy's own option here and a value-taking global too, so
+    # the resolver's refusal for the stranded `4` is already the attachment
+    # teaching — the wrapper used to append the same sentence a second time.
+    def tasks(reg):
+        @reg.task
+        def deploy(jobs: str = "one"): ...
+
+        @reg.task
+        def ship(mode: str = "fast"): ...
+
+    _, tree = build_tree(tasks)
+
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["deploy", "--jobs", "4"])
+    message = str(excinfo.value)
+    assert "--jobs takes its value attached — did you mean --jobs=4?" in message
+    assert message.count("did you mean") == 1
+
+    # An option shadowing nothing still gets its one hint, appended as before.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["ship", "--mode", "quick"])
+    message = str(excinfo.value)
+    assert message.endswith("did you mean --mode=quick?")
+    assert message.count("did you mean") == 1
+
+
 def test_dash_leading_value_attaches(tree):
     # A value that starts with a dash parses trivially in attached form —
     # the case the space form could never express.

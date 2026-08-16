@@ -846,6 +846,11 @@ def _hint_attachment(bare: str | None, token: str) -> Generator[None]:
     next token goes on to fail, the failure also says what was probably meant.
     Never on a line that parses: a working invocation has nothing to
     second-guess, and guessing at one would be footman overruling the tokens.
+
+    Never twice, either. When a task option's name shadows a value-taking
+    global (`deploy --jobs 4` against the global `--jobs`), the failure the
+    token raises is already the attachment teaching, word for word — appending
+    it again would say the same sentence to the same person twice.
     """
     if bare is None:
         yield
@@ -853,7 +858,10 @@ def _hint_attachment(bare: str | None, token: str) -> Generator[None]:
     try:
         yield
     except ChainError as exc:
-        raise ChainError(f"{exc} — did you mean {bare}={token}?") from None
+        suggestion = f"did you mean {bare}={token}?"
+        if suggestion in str(exc):
+            raise
+        raise ChainError(f"{exc} — {suggestion}") from None
 
 
 def _parse_globals(
