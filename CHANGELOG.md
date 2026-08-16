@@ -9,6 +9,27 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A `fetch()` lands on its cache path whole, or not at all.** Every backend
+  downloaded straight onto the cached file, so two tasks fetching the same
+  cold URL truncated each other — one caller was handed a zero-byte file and
+  the run reported ok — and a transfer that died halfway left its stump in
+  the cache, where the next call mistook it for a good copy and served it.
+  With `sha256=` the report was worse than the bug: it blamed the server for
+  bytes a sibling task had corrupted after they arrived intact. A download
+  now streams into a `.part` file beside the body and is renamed into place
+  only once it is complete.
+- **A body that arrives short is refused, not cached.** With `urllib`, a
+  response that ended before its `Content-Length` was written to the cache
+  as a complete file and exited 0 — CPython reads a truncated body without a
+  word on purpose. The ETag off that same response then went in the sidecar,
+  the healthy origin answered `304` from then on, and the half file was
+  served as a hit until somebody deleted the cache by hand.
+- **A dead transfer no longer takes the cached copy with it.** A connection
+  that dropped mid-body raised the library's own exception straight past
+  `fetch()`, so the documented "a cached copy beats a failed refresh"
+  fallback never got its say — on `urllib`, `httpx` and `requests` alike.
+  Those arrive as `FetchError` now, and the good copy is still there to fall
+  back to.
 - **The `curl` fetch backend revalidates like every other one.** It threw
   its response headers away, so it stored no ETag, sent no `If-None-Match`,
   and could never receive a `304` — every call re-downloaded the whole file.

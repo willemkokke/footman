@@ -21,6 +21,13 @@ used only when explicitly named. Choose per call, or set
 `[fetch] backend` in any config file — a machine behind a proxy sets it
 once in `~/.config/footman/config.toml` and every project follows.
 
+Which one you name changes the socket, and nothing else. All four
+revalidate with the same headers, refuse a body that arrived short, and
+land the finished file with the same rename — a backend that behaved its
+own way would make the choice a behaviour change rather than a plumbing
+one, and the conformance table in `tests/test_fetch.py` runs one set of
+scenarios against every backend installed to keep it that way.
+
 Deliberately *not* automatic: a fetch that silently picks a different
 engine depending on what happens to be importable would change its TLS
 trust store and proxy semantics when an unrelated dependency appears.
@@ -36,9 +43,11 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import http.client
 import json
 import os
 import shutil
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -117,6 +126,18 @@ def _available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
+def _scratch(near: Path, suffix: str = ".part") -> Path:
+    """A unique scratch file beside *near*, for a download in flight.
+
+    Beside, so the finished body lands on its cache path with a rename on
+    the same filesystem. Named `.part`, so the collector can sweep one
+    whose process died before it got that far.
+    """
+    fd, name = tempfile.mkstemp(dir=near.parent, prefix=f"{near.stem}.", suffix=suffix)
+    os.close(fd)
+    return Path(name)
+
+
 def _download(
     backend: str, url: str, dest: Path, meta: dict[str, Any]
 ) -> tuple[bool, dict[str, Any]]:
@@ -126,7 +147,10 @@ def _download(
     (what the receipt reports), and the validators to persist for the next
     revalidation (what the sidecar stores). A revalidation that comes back
     `304` moves no bytes and keeps the validators it already had, which
-    under the shared value read as a fresh download of nothing."""
+    under the shared value read as a fresh download of nothing.
+
+    *dest* is a scratch path, never the cache path — `fetch()` renames it
+    into place, so every backend inherits the same atomic landing."""
     if backend == "curl":
         return _download_curl(url, dest, meta)
     if backend in ("httpx", "requests"):
@@ -159,6 +183,16 @@ def _download_urllib(
                         context.progress(received, total)
             if total:
                 context.progress(0, 0)  # done reporting: back to the estimate
+            if total and received != total:
+                # A short body reads as a small one to everyone upstream, and
+                # cached it is forever: the ETag off this same response goes
+                # in the sidecar, the healthy origin answers 304 from then
+                # on, and the half file is served as a hit. CPython won't
+                # raise here itself — HTTPResponse.read's own comment says it
+                # "might break compatibility" — so the check is ours to make.
+                raise FetchError(
+                    f"fetch: {url} — the body ended early: {received} of {total} bytes"
+                )
             return True, {
                 "etag": response.headers.get("ETag"),
                 "last_modified": response.headers.get("Last-Modified"),
@@ -174,6 +208,10 @@ def _download_urllib(
             f"under [fetch] — in this project, or once for every project in "
             f"{_paths.footman_config_file()}"
         ) from exc
+    except (OSError, http.client.HTTPException) as exc:
+        # A connection that dies mid-body, after the headers arrived. It has
+        # to read as a FetchError or the cached copy never gets its say.
+        raise FetchError(f"fetch: {url} — {exc}") from exc
 
 
 def _download_curl(
@@ -181,13 +219,15 @@ def _download_curl(
 ) -> tuple[bool, dict[str, Any]]:
     import subprocess
 
-    dump = dest.with_name(dest.name + ".headers")
+    dump = _scratch(dest, suffix=".headers.part")
     argv = ["curl", "-fsSL", "--retry", "2", "-D", str(dump), "-o", str(dest), url]
     for header, value in _conditional_headers(meta).items():
         argv += ["-H", f"{header}: {value}"]
     try:
         done = subprocess.run(argv, capture_output=True, text=True)
         if done.returncode != 0:
+            # Exit 18 lives here too: curl counts the body against
+            # Content-Length itself and calls a short one a failure.
             raise FetchError(f"fetch: {url} — curl: {done.stderr.strip()}")
         code, headers = _last_response(dump.read_text("utf-8", errors="replace"))
     finally:
@@ -226,16 +266,28 @@ def _download_lib(
     import importlib
 
     client = importlib.import_module(name)
-    response = (
-        client.get(url, headers=_conditional_headers(meta), follow_redirects=True)
-        if name == "httpx"
-        else client.get(url, headers=_conditional_headers(meta), allow_redirects=True)
-    )
-    if response.status_code == 304:
-        return False, {}
-    if response.status_code >= 400:
-        raise FetchError(f"fetch: {url} — HTTP {response.status_code}")
-    dest.write_bytes(response.content)
+    try:
+        response = (
+            client.get(url, headers=_conditional_headers(meta), follow_redirects=True)
+            if name == "httpx"
+            else client.get(
+                url, headers=_conditional_headers(meta), allow_redirects=True
+            )
+        )
+        if response.status_code == 304:
+            return False, {}
+        if response.status_code >= 400:
+            raise FetchError(f"fetch: {url} — HTTP {response.status_code}")
+        payload = response.content
+    except FetchError:
+        raise
+    except Exception as exc:
+        # Broad on purpose: httpx and requests each raise their own transport
+        # types, and naming them would mean importing the library up here —
+        # which is the one thing this file may not do. A dropped connection
+        # has to arrive as a FetchError or the cached copy never gets its say.
+        raise FetchError(f"fetch: {url} — {type(exc).__name__}: {exc}") from exc
+    dest.write_bytes(payload)
     return True, {
         "etag": response.headers.get("ETag"),
         "last_modified": response.headers.get("Last-Modified"),
@@ -288,14 +340,26 @@ def fetch(
     started = time.perf_counter()
     cache_dir().mkdir(parents=True, exist_ok=True)
     meta = {} if refresh else _load_meta(sidecar)
+    incoming = _scratch(body)
     try:
-        downloaded, fresh = _download(chosen, url, body, meta if body.exists() else {})
+        downloaded, fresh = _download(
+            chosen, url, incoming, meta if body.exists() else {}
+        )
+        if downloaded:
+            # The cache path is only ever replaced whole. Downloading onto it
+            # meant two tasks fetching the same cold URL truncated each other
+            # and a transfer that died halfway left its stump behind — and
+            # `sha256=` then blamed the server for bytes that arrived intact.
+            os.replace(incoming, body)
     except FetchError:
         if body.exists():  # a cached copy beats a failed refresh
             _touch(body, sidecar)
             _record(ctx, label, started, cached=True)
             return _deliver(body, destination, sha256, url)
         raise
+    finally:
+        with contextlib.suppress(OSError):
+            incoming.unlink(missing_ok=True)
     if fresh:
         sidecar.write_text(json.dumps(fresh), encoding="utf-8")
     if not downloaded:
