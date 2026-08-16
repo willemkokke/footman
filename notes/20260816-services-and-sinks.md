@@ -4,8 +4,12 @@ Status: EXPLORATORY — 2026-08-16, opened by Willem while the signal fixes
 (#455–#458) were still landing. Everything below was measured against
 `origin/main` at `913a59b`, in throwaway worktrees, with the reproductions
 kept in the appendix. **Nothing here is built.** One ruling has been made —
-`infinite=True` goes, see Part 1 — and four questions at the bottom are still
+`infinite=True` goes, see Part 1 — and five questions at the bottom are still
 Willem's to call, of which two gate the builds.
+
+Three parts: **services** (a node kind with an inverted contract), **sinks**
+(the splitter's one trailing-consumer concept is two), and **transports** (the
+frame the first two turn out to share).
 
 ## The idea (Willem)
 
@@ -284,15 +288,24 @@ memoisation and a wider lifetime.
 
 **The rung has a typing consequence.** A run-scoped service can yield anything,
 including a live object, because the consumer is in the same process. A
-project-scoped one cannot — the next `fm` is a different process, so its yield
-must be a serialisable descriptor (socket path, port, pid) that the client
-reconnects from.
+project-scoped one cannot — the next `fm` is a different process, so nothing
+live survives the gap.
 
 That is the same wall `20260727-incremental-caching.md` hit: *"a persistent
 cache hit generally cannot serve a body-call, because the caller wants the
 return object and most returns are not serialisable."* Same constraint, found
 twice, from two directions — decent evidence the ladder is carving at a real
-joint. And footman can enforce it, because it can see the annotation.
+joint. Part 3 gives it its proper name: it is not a rule about daemons, it is
+a property of the **transport**, and footman can enforce it because it can see
+the annotation.
+
+**And the rung needs a relay, which the first draft of this note missed.** The
+obvious design is that the generator yields a descriptor, footman caches it,
+and a later invocation hands it to the dependent task. That breaks on stdio: a
+language server started with `--stdio` is bound to *its* parent's pipes, so the
+next `fm` cannot reach it. Something has to sit in the daemon and serve
+requests — and once something must, it should be footman rather than every
+plugin reimplementing a socket server. Part 3 is what that something is.
 
 ### The project rung: resident analysers
 
@@ -445,6 +458,231 @@ nowhere at all; that is a hole, not an ambiguity.
 
 ---
 
+## Part 3 — transports
+
+### The frame (Willem)
+
+> This is really just another way of using typed function signatures as an RPC
+> mechanism. That is the generic core that footman itself is built upon.
+
+That is the right reading, and it is worth stating more strongly: footman is
+**already** an RPC framework whose interface definition language is Python's
+type annotations. The CLI is not the product; it is the most visible transport.
+One signature is already projected into all of these:
+
+| projection | where |
+|---|---|
+| argv — flags, positionals, coercion | `_split.py`, `_coerce.py` |
+| a JSON document over stdin / stdout | `_binder.py`, `Stdout[T]` |
+| the environment | `params.env` |
+| the completion manifest | `_manifest.py` |
+| what TAB offers | `_complete.py` |
+| help text and the docs exporter | `_describe.py`, `markdown.py` |
+| JSON Schema | `--describe` |
+| an in-process memoised call | `_futures.py` |
+
+A daemon socket is the ninth, and the closest of the lot: it is the
+stdin/stdout projection with a different file descriptor.
+
+### What each transport can carry
+
+Two axes, and they are not the same axis — capability does not order neatly
+(argv carries strings, a document carries typed JSON, neither carries a live
+object), but **trust does**, and it tightens monotonically going down:
+
+| transport | runs where | trust boundary | can carry |
+|---|---|---|---|
+| in-process call | this process | none | anything, including live objects |
+| argv | this process | none | scalars and containers, from strings |
+| document (stdin/stdout) | a child process | none | serialisable shapes |
+| unix socket (daemon) | another process, same user | filesystem permissions | serialisable shapes |
+| HTTP (remote) | another machine | delegated auth; **manifest is untrusted** | serialisable shapes |
+
+### The invariant nobody enforces
+
+If one signature drives every transport, the architecture has exactly one
+failure mode: **two transports disagreeing about one signature.** That is not
+hypothetical — two of the sixteen fixes in #454 were instances of it:
+
+- **M1** — `between()` and path checks were skipped on a piped document, so
+  `[1, 9]` passed bounds that `--flag=9` refused.
+- **M2** — a numeric enum could not survive its own round trip: `--json` wrote
+  `2`, piping it back was refused.
+
+Neither is a binder bug in isolation; both are transport drift. And nothing in
+the suite asserts against it, which is why they shipped.
+
+**Proposed gate item: the same task, called every way, answers the same.** Over
+footman's own task set — argv, document, in-process call, and socket once it
+exists. Run as a property test rather than a fixture list, so a new marker or a
+new coercion is covered without anyone remembering to add it. That test would
+have failed on M1 and M2 before release.
+
+This is the strongest argument for building the daemon transport at all —
+stronger than the timing numbers. A fourth transport *forces* the invariant to
+be written down.
+
+### The daemon as the fourth transport
+
+Because it is a transport and not a feature, **there is no new protocol to
+design.** A daemon call is bind typed args → run the body → return a typed
+value, which is exactly what `fm --json <task>` does across a process spawn
+today. The process-boundary work shipped in 0.21.0 is the contract; the socket
+is the transport. Stdlib throughout (`socketserver`, `json`).
+
+footman must never learn LSP, or nailgun, or any tool's protocol. The plugin's
+task body speaks the tool's language *inside* the daemon; footman moves typed
+calls across a boundary. Same division as everywhere else: footman owns the
+boundary, not the semantics.
+
+What footman owns comes to five verbs and no wire semantics:
+
+| verb | what it means |
+|---|---|
+| **spawn** | run the body in a detached child, up to the `yield` |
+| **rendezvous** | the child publishes its descriptor, pid and start-time; the parent waits with a timeout |
+| **liveness** | structural only — same key, process alive, same start-time (so pid reuse cannot fool it) |
+| **stop** | SIGTERM |
+| **reap** | `_gc.py`'s existing age sweep, plus eviction on key change |
+
+Health is deliberately *not* footman's. It guarantees "this is the process I
+started for this key and it is still running", nothing more. A daemon sick in a
+way that is not structurally visible fails the plugin's own client, and footman
+falls back to a cold run — the same fallback the freshness check needs anyway.
+
+Stop has a property that falls out of the generator shape rather than being
+designed: **SIGTERM resumes the generator.** The second half of the body *is*
+the shutdown handler.
+
+### Seven triggers, one stop
+
+Every cross-cutting daemon feature turns out to be a reason to stop one, and
+there must be exactly one stop path:
+
+| trigger | why |
+|---|---|
+| idle timeout | no interaction in the window |
+| key change | tool version, config hash or footman version moved — the daemon is now *wrong* |
+| crash breaker | died N times in M minutes; stop respawning, run cold, say so |
+| LRU eviction | the live-daemon ceiling was hit |
+| explicit | `fm --daemons stop <name>` |
+| gc sweep | its project is gone, or its cache entry was reaped |
+| SIGTERM | the ordinary one |
+
+One verb: unlink the socket, resume the generator, tear down, exit. A new
+reason to stop is a new trigger, not new machinery — the same discipline as this
+note's thesis.
+
+**Unlink before teardown.** A client connecting while pyright is being killed
+should get a refused connection and spawn fresh, not block on a dying daemon.
+Two daemons for a second, self-correcting; clients treat any connection failure
+as cold regardless.
+
+### Idle shutdown
+
+Willem's ask, and the mechanism is free: footman owns the socket, so it sees
+every request and owns the timer. The plugin never learns idleness exists. On
+timeout it does what SIGTERM does.
+
+Two details worth getting right rather than discovering:
+
+- **Idle counts open connections, not just completed requests.** A long e2e run
+  that connects once and streams for twenty minutes must not trip a
+  thirty-minute timer with a live client attached. Idle means no open
+  connections *and* no completed request in the window.
+- **The failure mode is a timeout too short, not too long.** At five minutes you
+  pay spawn cost constantly and never reuse — strictly worse than no daemon.
+  30 minutes is a sensible default; the dial belongs in the existing config
+  cascade (`[tool.footman]`, per-task override at declaration), with
+  `idle=None` for never.
+
+### The rest of the framework half
+
+Three more belong to footman because it owns the socket, the key and the cache:
+
+- **Single-flight spawn.** Two invocations racing with no warm daemon both
+  spawn, and one child is orphaned. Needs a lock in the cache dir so one spawns
+  and the other waits on the rendezvous. This is the same bug as `_fetch.py:154`
+  in the launch audit — *"two parallel cold fetches hand each other a 0-byte
+  file"* — so it should be the same primitive, fixed once.
+- **Observability**, which is the biggest operational risk here. A daemon has no
+  terminal, so its stderr goes to a per-key log in the cache dir, reaped by the
+  same sweep, plus `fm --daemons` showing key, pid, uptime, last request and
+  memory. Without it, "my checks got weird" has nowhere to look.
+- **The cold escape hatch.** `--no-daemon` is not a nicety. Part 1 says CI must
+  never use daemons; that needs a flag to be true.
+
+The plugin keeps what a request means, what the source set is, what the tool's
+protocol is, and what teardown actually does.
+
+### One implementation directive
+
+The socket's serve loop must dispatch into the same `_execute` path everything
+else uses — **not a parallel entry point.** Then lifecycle hooks, global-option
+binding, receipts, `--json` envelopes and refusals all behave identically by
+construction rather than by diligence. Cheap on day one, very expensive once a
+daemon path has grown its own quirks.
+
+### Transport-legality, named
+
+In-process calls can return live objects; documents and sockets cannot. That is
+not a daemon rule — it is a property of the transport, and footman already
+half-knows it (`Stdout[T]` exists; refusals exit 64). Naming it as a concept
+explains why the incremental-caching note hit the same wall from the other
+side: a persisted memo and a socket call are the same transport class.
+
+It also predicts a bug that does not exist yet. **Path-validating markers are
+transport-relative.** `exists` and `isfile` on a *local* task check the local
+filesystem, correctly. On a task that runs elsewhere they would validate the
+caller's disk against the callee's world, which is simply wrong. `between()` is
+fine — it is a property of the value. So transport-legality is not one bit per
+task; it is per marker, and the manifest can already see which markers a
+parameter carries.
+
+### The fifth transport: a remote server
+
+> I hate to say it, but I'd love to be able to run a central (API) server that
+> advertises its own tasks on a CLI via a plugin. — Willem, 2026-08-16
+
+Recorded as wanted, **not** designed and not scoped. It fits the frame better
+than it has any right to: the manifest is already a serialisable description of
+a task tree built to be fetched and cached, `plugin()`/`include()` already mount
+a tree under a prefix, `_fetch.py` already does cached downloads with ETag
+sidecars, and the completion architecture was built for exactly this cost
+profile — a cached remote manifest answers TAB in ~30 ms without touching the
+network, which is the same stale-while-revalidate trade `_refresh.py` already
+makes locally (and `M6` is what it looks like when it goes wrong).
+
+What changes is not the mechanism, it is the trust model. Preconditions before
+this could be built, none of which are footman features today:
+
+1. **Authorization is delegated, never implemented.** The plugin supplies
+   credentials and headers; footman never sees or stores them. Consistent with
+   owning the boundary and not the semantics.
+2. **`Secret` redaction must be complete first.** It still leaks in the profile
+   trace and on the failure line (launch audit, `H46`). Incomplete redaction is
+   a bug when the wire is a pipe and an incident when it is a network.
+3. **A remote manifest is untrusted input.** It drives footman's parser, its
+   completion and its help text. It cannot execute local code, but it can
+   *shadow names* — a mounted `deploy` that the user believes is theirs is a
+   phishing vector. Mounted remote trees must be prefixed and visibly marked as
+   remote in listings and help. `into=` already does the prefixing half.
+4. **The failure vocabulary must widen.** `Result`/`Failed` says "it failed"; it
+   does not distinguish "could not reach it" from "it ran and failed". For a
+   deploy that distinction is the whole ballgame.
+5. **Transport-relative markers must land first** (above), or a remote task with
+   `exists` on a parameter validates the wrong machine's disk.
+
+**The line, stated because the frame will not draw it for you.** Local
+transports are: same machine, same user, filesystem permissions as the entire
+authorization story. Everything in Parts 1–3 above lives inside that line. The
+remote rung crosses it, and crossing it turns footman from a task runner into
+something with an authentication story to defend. That is a product decision,
+not a design detail, and the launch audit already caught `SECURITY.md`
+classifying documented behaviour as a vulnerability once.
+
+---
+
 ## Rejected
 
 - **Refuse the swallowed token (exit 64).** `pytest build` is a legitimate line
@@ -467,6 +705,15 @@ nowhere at all; that is a hole, not an ambiguity.
 - **A resident pytest.** The suite's 15s is execution, not import (collect is
   0.46s). A warm process wins nothing. Test *selection* is the lever, and it is
   the incremental-caching note's problem.
+- **A descriptor and no protocol at all.** The appealing first cut for Part 3:
+  the generator yields a socket path, footman caches it, later invocations hand
+  it to the dependent task, and footman never runs a server. It breaks on stdio
+  — an LSP server started with `--stdio` is bound to *its* parent's pipes, so
+  the next `fm` cannot reach it, and something has to relay. Once something
+  must, it should be footman rather than every plugin writing a socket server.
+- **footman speaking the tool's protocol.** An LSP client in the core means
+  nailgun next, and protocol knowledge accumulating where it cannot be removed.
+  The plugin speaks LSP inside the daemon; footman moves typed calls.
 
 ## Open — Willem's call
 
@@ -484,6 +731,11 @@ nowhere at all; that is a hole, not an ambiguity.
 4. **Note or refuse for the swallowed token, and does `--` get a `+` exit?**
    These are coupled: whether "note" is defensible depends on whether `--` is a
    complete escape hatch, and today it is not.
+5. **Is the remote rung in scope for this design, or explicitly deferred?**
+   Wanted (Part 3), and it fits the frame — but it crosses the local-only line
+   and brings an authentication story with it. Deciding *now* costs nothing and
+   changes two things: whether transport-legality is built per-marker from the
+   start, and whether `SECURITY.md` needs rewriting before or after.
 
 *(A fifth — whether `infinite=True` survives — was ruled on 2026-08-16: it
 goes. See the ruling in Part 1.)*
