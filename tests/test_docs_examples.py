@@ -725,11 +725,11 @@ def _editor_help(
 
 
 def test_playground_hover_help_answers_signatures(tmp_path: Path):
-    """Signature help over the same jedi world: inside a call's parens the
-    label is the signature; on a bare name the docstring still answers.
-    The toolroom case is the point — hover ruff.check and read its stub."""
-    inside_call = "import json\njson.dumps("
-    help_, err = _editor_help(tmp_path, inside_call, 2, 11)
+    """Hover answers about the symbol under the pointer: a name renders
+    its signature and the docstring behind it. The toolroom case is the
+    point — hover ruff.check and read its stub."""
+    on_call = "import json\njson.dumps(1)"
+    help_, err = _editor_help(tmp_path, on_call, 2, 7)
     assert help_ is not None, err
     assert "dumps(" in help_["label"], help_
 
@@ -738,14 +738,18 @@ def test_playground_hover_help_answers_signatures(tmp_path: Path):
     assert help_ is not None, err
     # The stub's signature line, not a bare name — a Name's docstring()
     # leads with it, and dropping to `label or doc` once let a bare
-    # "check" slide (Willem's screenshot). Long signatures wrap to one
-    # parameter per line, so the tooltip reads instead of scrolling.
-    assert help_["label"].startswith("Check("), help_
-    assert "\n    " in help_["label"], help_
+    # "check" slide (Willem's screenshot). The label leads with the name
+    # the source spells: the handle's synthesized signature renders its
+    # CLASS, so an unfixed label said `Check(` where the code says check.
+    assert help_["label"].startswith("check("), help_
     # The stub's __call__ docstring rides along: the summary line and the
     # Args section documenting every flag — the whole reason to hover.
     assert "Args:" in help_["doc"], help_
     assert "diff:" in help_["doc"], help_
+    # A signature is the panel's footer and stays one line; the prose
+    # leads (Willem's layout).
+    assert help_["footer"] is True, help_
+    assert "\n" not in help_["label"], help_
 
     # Hovering a keyword ARGUMENT answers about that argument — its
     # declaration as the label, its Args entry as the doc — never the
@@ -773,6 +777,53 @@ def test_playground_hover_help_answers_signatures(tmp_path: Path):
     assert help_["label"].startswith("fix"), help_
     assert "Check(" not in help_["label"], help_
     assert "Apply fixes" in help_["doc"], help_
+    # A parameter's declaration is the subject, not a signature: it
+    # stays on top rather than becoming a footer.
+    assert help_["footer"] is False, help_
+
+    # What the call returns is read out of the Google-style Returns
+    # section — the docstring's own answer, previously never surfaced.
+    returning = (
+        "def build(target: str = 'app') -> str:\n"
+        '    """Compile one bundle.\n'
+        "\n"
+        "    Args:\n"
+        "        target: Which bundle to compile.\n"
+        "\n"
+        "    Returns:\n"
+        "        The artifact's path.\n"
+        '    """\n'
+        "    return target\n"
+    )
+    help_, err = _editor_help(tmp_path, returning, 1, 5)
+    assert help_ is not None, err
+    assert help_["returns"] == "The artifact's path.", help_
+
+
+def test_playground_hover_needs_a_symbol(tmp_path: Path):
+    """Willem's screenshot: resting the pointer just right of the comma
+    in `ruff.check("src", fix=fix)` recited the callee's whole signature.
+    Hover answers about a SYMBOL — no identifier under the pointer means
+    no tooltip, the way every IDE behaves. Which call the cursor sits in
+    is the parameter-hints panel's question now."""
+    src = "from toolroom import ruff\nfix = False\nruff.check('src', fix=fix)"
+    line = src.split("\n")[2]
+
+    # A position adjacent to an identifier still belongs to it — the
+    # editor reports the gap between two characters, so the right edge
+    # of a word must stay hoverable. These three touch no identifier.
+    for col, what in (
+        (line.index(",") + 1, "the gap right of the comma"),
+        (line.index(","), "the comma itself"),
+        (len(line), "past the closing bracket"),
+    ):
+        help_, err = _editor_help(tmp_path, src, 3, col)
+        assert help_ is None, (what, help_, err)
+
+    # The identifiers around those gaps still answer.
+    help_, err = _editor_help(tmp_path, src, 3, line.index("fix="))
+    assert help_ is not None, err
+    assert help_["label"].startswith("fix"), help_
 
 
 def _editor_sighelp(
