@@ -7,6 +7,18 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The simulated child honours Popen's bytes contract.** A real Popen
+  answers in bytes unless text mode was asked for; the playground's
+  stand-in answered `str` unconditionally, and `platform.platform()`
+  died on it in the page — `_syscmd_file` calls `.decode()` on what it
+  rightly expects to be bytes. macOS rehearsals never took that branch,
+  which is why CPython stayed green; a Node-Pyodide parity probe named
+  it in real emscripten, and a rehearsal now pins the contract directly.
+  The canned table also answers `uname` emptily — the simulated echo was
+  leaking into the platform string as its processor field.
+
 ## [0.41.0] - 2026-08-16
 
 ### Added

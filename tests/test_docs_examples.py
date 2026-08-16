@@ -512,6 +512,34 @@ def _playground_complete(tmp_path: Path, files: dict[str, str], line: str) -> li
     return [c.split("\t")[0] for c in answer]
 
 
+def test_playground_simulated_child_honours_the_bytes_contract(tmp_path: Path):
+    """A real Popen answers in bytes unless text mode was asked for. The
+    stand-in answered str unconditionally, and platform._syscmd_file's
+    `.decode()` took platform.platform() down with it in the page — a
+    branch macOS rehearsals never take, so this pins the contract
+    directly rather than through platform."""
+    files = {
+        "tasks.py": (
+            "import subprocess\n"
+            "from footman import task\n"
+            "\n"
+            "@task\n"
+            "def contract():\n"
+            '    "Both modes of the simulated child."\n'
+            '    b = subprocess.run(["file", "x"], capture_output=True)\n'
+            "    t = subprocess.run(\n"
+            '        ["file", "x"], capture_output=True, text=True\n'
+            "    )\n"
+            "    assert isinstance(b.stdout, bytes), type(b.stdout)\n"
+            "    assert isinstance(t.stdout, str), type(t.stdout)\n"
+            '    print("bytes and text both honoured")\n'
+        )
+    }
+    code, output = _playground_invoke(tmp_path, "-s contract", files=files)
+    assert code == 0, output
+    assert "bytes and text both honoured" in output, output
+
+
 def test_playground_completes_the_homepages_git_branches(tmp_path: Path):
     """The homepage's suggest(branches) parses `git branch` output — in the
     page that child is simulated, and the canned world answers with branch
