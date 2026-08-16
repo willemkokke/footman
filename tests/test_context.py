@@ -2723,6 +2723,26 @@ def test_the_json_row_carries_a_stack_only_for_a_real_bug(fm_project):
     assert "traceback" not in rows["command-failed"]  # a command's exit code
 
 
+def _await_pids(*files: Path, timeout: float = 30.0) -> list[int] | None:
+    """The pids in *files*, once every one holds a whole number.
+
+    Waiting on `exists()` is the tempting spelling and it is a race: the child
+    creates the file, then writes to it, so between those two syscalls the path
+    exists and reads back empty. `int("")` then fails the test for a reason
+    that has nothing to do with what it tests. Parsing IS the readiness check.
+    """
+    import time
+
+    deadline = time.time() + timeout
+    while True:
+        try:
+            return [int(f.read_text()) for f in files]
+        except (OSError, ValueError):
+            if time.time() >= deadline:
+                return None
+            time.sleep(0.05)
+
+
 def test_ctrl_c_reaps_the_child_a_task_was_waiting_on(tmp_path):
     """`fm` exited 130 while the thing it started kept running.
 
@@ -2771,11 +2791,9 @@ def test_ctrl_c_reaps_the_child_a_task_was_waiting_on(tmp_path):
         start_new_session=True,
     )
     try:
-        deadline = time.time() + 30
-        while time.time() < deadline and not pid_file.exists():
-            time.sleep(0.05)
-        assert pid_file.exists(), "the child never started; the test proves nothing"
-        child = int(pid_file.read_text())
+        pids = _await_pids(pid_file)
+        assert pids is not None, "the child never started; the test proves nothing"
+        (child,) = pids
 
         os.killpg(runner.pid, signal.SIGINT)  # what a terminal does
         runner.wait(timeout=30)
@@ -2850,13 +2868,11 @@ def test_ctrl_c_does_not_wait_out_an_in_body_parallel(tmp_path):
     pid_files = [tmp_path / "child-1.pid", tmp_path / "child-2.pid"]
     children: list[int] = []
     try:
-        deadline = time.time() + 30
-        while time.time() < deadline and not all(p.exists() for p in pid_files):
-            time.sleep(0.05)
-        assert all(p.exists() for p in pid_files), (
+        waited = _await_pids(*pid_files)
+        assert waited is not None, (
             "both children never started; the test proves nothing"
         )
-        children = [int(p.read_text()) for p in pid_files]
+        children = waited
 
         os.killpg(runner.pid, signal.SIGINT)  # what a terminal does
         try:
