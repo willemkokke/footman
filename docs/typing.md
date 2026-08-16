@@ -31,17 +31,22 @@ sorts each parameter into a position or a flag.
 
 !!! note "One reserved parameter name: `help`"
 
-    A parameter named `help` is the one name the signature can't turn into a
-    working option. It would map to `--help`, but `--help` (and `-h`) is
-    intercepted **anywhere before `--`** and turns the whole line into a help
-    request that never executes anything, so the flag is *shown*, never bound to
-    your parameter. Every other global name is free to reuse: the rest
-    (`--json`, `--version`, `-s`, `-j`, …) must come before the first task, so
-    `fm deploy --json` binds `--json` to `deploy`, not to footman; only
-    `--help`/`-h` win wherever they land on the line. It's the single reserved
-    name, and the collision is the harmless kind (help prints instead of the
-    task running). Rename the parameter (`show_help`, `explain`) to get a real
-    flag.
+    A parameter named `help` with a default is the one name the signature
+    can't turn into a working option. It would map to `--help`, but `--help`
+    (and `-h`) is intercepted **anywhere before `--`** and turns the whole line
+    into a help request that never executes anything, so the option could never
+    be reached. Footman **refuses the file** rather than shadow the parameter
+    quietly, and a refusal at load time takes the whole tasks file with it:
+    every task in it, `fm --list` and `fm --help` included, exits 64 with the
+    reserved-name message until the parameter is renamed (`show_help`,
+    `explain`).
+
+    The reservation is exactly as wide as the problem. A `help` with **no**
+    default is a required positional, and `*help` a variadic; neither ever
+    spells `--help`, so both stay legal. Every other global name is free to
+    reuse: the rest (`--json`, `--version`, `-s`, `-j`, …) must come before the
+    first task, so `fm deploy --json` binds `--json` to `deploy`, not to
+    footman; only `--help`/`-h` win wherever they land on the line.
 
 ## Naming an option without a value
 
