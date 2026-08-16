@@ -34,13 +34,14 @@ The plugin mounts like any other, in one line in your tasks file:
 ```python
 from footman import plugin
 
-plugin("footman.docs", into="footman")
+plugin("footman.docs")
 ```
 
 That's also the one-line demo of the [plugin system](composing.md): the
 entry point is the identity, `into=` is your placement, and after the mount
 `fm --list` shows `docs.page` and `docs.site`. (Cherry-pick
-with `only=`, or drop the `into=` to land the `docs` group at top level.)
+with `only=`, or pass `into="footman"` to nest the group deeper, as
+`footman.docs.page`.)
 
 ## One page: `fm docs.page`
 
@@ -58,7 +59,7 @@ commentary), so it pipes:
 fm docs.page | pandoc -o tasks.pdf     # or .html, .docx, …
 ```
 
-`--heading 2` (up to 6) makes the headings start deeper, so the output nests
+`--heading=2` (up to 6) makes the headings start deeper, so the output nests
 under a host page's own title, which is exactly how the sample below is
 embedded, via a [`pymdownx.snippets`](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/)
 include of a file the docs build regenerates:
@@ -67,8 +68,8 @@ include of a file the docs build regenerates:
 --8<-- "docs/_generated/tasks-page.md"
 ```
 
-`--flavor plain` (the default) is pure CommonMark and pipe tables, safe for
-pandoc and any renderer. `--flavor material` opts into what a
+`--flavor=plain` (the default) is pure CommonMark and pipe tables, safe for
+pandoc and any renderer. `--flavor=material` opts into what a
 zensical/mkdocs-material site already understands: heading anchors for
 stable deep links and an `!!! example` admonition for the synthesized
 invocation.
@@ -84,8 +85,8 @@ One file per task, an `index.md` per group with relative links, directories
 mirroring your group tree: drop it into your docs source and put the index
 in your nav. This site's **Task reference** section is exactly that, wired
 into [`zensical.toml`](https://github.com/willemkokke/footman/blob/main/zensical.toml)'s
-nav. `site` defaults to `--flavor material` because a docs site is where it
-lands; pass `--flavor plain` for anything else.
+nav. `site` defaults to `--flavor=material` because a docs site is where it
+lands; pass `--flavor=plain` for anything else.
 
 ## The runner itself: `fm docs.globals`
 
@@ -191,6 +192,6 @@ doesn't document itself unless asked).
 ## The live sample
 
 Everything below this line is `fm docs.page --target=docs
---heading 3 --flavor material`, regenerated on every docs build:
+--heading=3 --flavor=material`, regenerated on every docs build:
 
 --8<-- "docs/_generated/tasks-page.md"

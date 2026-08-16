@@ -141,7 +141,7 @@ arbitrary constant when it is really this machine's:
 
 ```text
   -j, --jobs=N       max parallel tasks; default: 13 (computed)
-      --color=WHEN   when to colour: always|never|auto; default: auto
+      --color=WHEN   when to colour: always|never|auto; default: auto (computed)
 ```
 
 ## What if I don't like annotating types?
@@ -191,7 +191,7 @@ So annotate when you want what a default cannot express:
 | a list, and what goes in it | `list[Path]`, `Many[int]` |
 | several fields filled from one option | a `NamedTuple` |
 | a value from the environment | `Annotated[str, env("DEPLOY_ENV")]` |
-| a prompt when it is missing | `Annotated[str, ask("Target?")]` |
+| a prompt when it is missing | `Annotated[str, ask(prompt="Target?")]` |
 
 Everything else on this page is that list expanded. None of it is required to
 get a good CLI out of a plain function.
@@ -243,7 +243,7 @@ PowerShell:
 
 ```python
 @task
-def release(tags: list[str]): ...   # fm release --tags=a,b,c  -> ["a", "b", "c"]
+def release(tags: list[str] = []): ...   # fm release --tags=a,b,c  -> ["a", "b", "c"]
 ```
 
 When a value may itself contain a comma, mark the parameter `nosplit`: then only
@@ -253,7 +253,7 @@ the repeated flag adds items, and a comma stays literal.
 from footman import NoSplit
 
 @task
-def notify(lines: NoSplit[list[str]]): ...
+def notify(lines: NoSplit[list[str]] = []): ...
 # fm notify --lines="Smith, John" --lines="Doe, Jane"  -> two names, commas kept
 ```
 
@@ -479,7 +479,7 @@ full `Annotated[...]` form, because their value can't ride in a type subscript.
 The `forward` marker is an orchestration tool that threads a value onward to
 the tasks this one dispatches, and is covered in
 [Chaining & parallelism](orchestration.md#forward-a-value-to-what-a-task-dispatches).
-Markers compose by listing them: `Annotated[bool, ask("Fix?"), forward]` both
+Markers compose by listing them: `Annotated[bool, ask(prompt="Fix?"), forward]` both
 prompts for the value and forwards it: one prompt at the top, the answer
 flowing down.
 
