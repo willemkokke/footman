@@ -2684,6 +2684,44 @@ def test_an_expected_failure_carries_no_stack(fm_project):
     assert " at " not in result.stderr
 
 
+def test_the_json_row_carries_a_stack_only_for_a_real_bug(fm_project):
+    # A consumer of the envelope is a log or a dashboard, never someone who
+    # can re-run with -v, so the stack rides along regardless of the terminal.
+    # But only for an exception nobody planned: a command exiting non-zero has
+    # nothing to place, and pointing at the line that ran it would be a lie.
+    import json as json_mod
+
+    fm = fm_project("""
+        import sys
+        from footman import fail, run, task
+
+        def helper(n):
+            return 10 // n
+
+        @task
+        def boom():
+            helper(0)
+
+        @task
+        def stopped():
+            fail("chose to stop")
+
+        @task
+        def command_failed():
+            run([sys.executable, "-c", "raise SystemExit(3)"])
+    """)
+    rows = {}
+    for name in ("boom", "stopped", "command-failed"):
+        envelope = json_mod.loads(fm.invoke(f"--json {name}").stdout)
+        rows[name] = next(i for i in envelope["items"] if i.get("task"))
+
+    trace = rows["boom"]["traceback"]
+    assert "in helper" in trace  # the caller's own frame
+    assert "src/footman" not in trace  # never the plumbing that called it
+    assert "traceback" not in rows["stopped"]  # a chosen stop
+    assert "traceback" not in rows["command-failed"]  # a command's exit code
+
+
 def test_the_stack_rule_reads_verbose_or_a_log():
     from footman import _describe
 

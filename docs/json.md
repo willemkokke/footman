@@ -59,7 +59,11 @@ A **task row** carries `task` (the dotted name), its request address
 (`address`), `ok`, `code`, `duration_ms`, `output` (what the body itself
 printed; footman's own receipt lines stay out, since every step already
 has a row of its own below), `error` (`null`, or the exception as a
-string), and, when the task returns a value, `returned`. Its steps follow it in the list, one item per
+string), and, when the task returns a value, `returned`. An exception
+footman did not expect — anything but a command exiting non-zero, a
+timeout, or a deliberate `fail()` — adds `traceback`, the stack with
+footman's own frames taken out, so a log carries the place a bug happened
+without anyone re-running with `-v`. Its steps follow it in the list, one item per
 [`run()`, tool, or `step()`](tools.md) call: `command`, the request
 address, `code`, `duration_ms`, split `stdout`/`stderr`, the `audit` (the
 verdict's provenance: one `[moment, actor, code]` entry per actor that

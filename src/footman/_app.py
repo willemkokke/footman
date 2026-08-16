@@ -1254,6 +1254,16 @@ def _print_json(
             "output": r.output,
             "error": None if r.error is None else str(r.error),
         }
+        if r.error is not None and not context._was_expected(r.error):
+            # An exception nobody planned, so the reader's own bug: the stack
+            # rides along whatever the terminal was doing. A consumer of this
+            # envelope is a log or a dashboard, never someone who can re-run
+            # with -v, and losing the one thing that places the failure is the
+            # problem this whole rule exists to fix. Trimmed of footman's
+            # frames like the printed one. Additive to schema 1; absent for a
+            # command that exited non-zero or a deliberate stop, which have
+            # nothing to place.
+            entry["traceback"] = _describe.user_traceback(r.error)
         if r.title:
             # A reviewer's label for the row; absent when no one set one.
             entry["title"] = r.title
