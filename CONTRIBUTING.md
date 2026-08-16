@@ -42,8 +42,11 @@ uv run fm docs.build --check
   never in `dependencies`.
 - **The completion hot path stays stdlib-only and never imports the
   framework.** A <kbd>Tab</kbd> press is one file read, one JSON parse and a
-  tree walk. It does not import footman, and it does not import your tasks.
-  That is the whole feature.
+  tree walk. The process that answers it does not import footman, and does
+  not import your tasks. That is the whole feature. Building the manifest
+  *does* import them — the hot path spawns a detached subprocess for that
+  and never imports inline, so the invariant is about the answering process,
+  not about the tree never being imported.
 
 Coverage is enforced at 92% on the merged CI matrix.
 

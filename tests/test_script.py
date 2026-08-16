@@ -234,6 +234,66 @@ def test_the_children_reexec_the_same_entry_they_are_spawned_with():
         assert entry in child, entry
 
 
+def _prelude(argv: list[str]) -> list[str]:
+    """The interpreter words of a child command line: the flags, the mode
+    switch, and (for `-m`) the module it names — everything ahead of the
+    payload. A leading interpreter path, where there is one, is not one."""
+    words = list(argv)
+    if words and not words[0].startswith("-"):
+        words.pop(0)
+    out: list[str] = []
+    while words and words[0].startswith("-"):
+        word = words.pop(0)
+        out.append(word)
+        if word == "-c":
+            break  # the one-liner behind it is payload, not a flag
+        if word == "-m":
+            out.append(words.pop(0))  # the module name rides with it
+            break
+    return out
+
+
+def test_the_children_reexec_the_same_interpreter_flags(monkeypatch):
+    # The other half of the drift guard, and the one a string comparison
+    # misses: `reexec_child` *replaces* the process with the argv it is
+    # handed, so a flag on the spawn and not on the re-exec is a hole that
+    # opens the moment a tasks file carries its own dependencies. `-P` is why
+    # this is worth pinning — without it the child's sys.path starts at the
+    # directory being completed, where a `footman.py` would answer its import
+    # — but the guard is about the flags agreeing, whatever they become.
+    import subprocess
+
+    from footman import _complete, _refresh, _suggest
+
+    spawned: list[list[str]] = []
+    reexeced: list[list[str]] = []
+    monkeypatch.setattr(_script, "child_python", lambda file: "/fake/python")
+    monkeypatch.setattr(
+        _script, "reexec_child", lambda python, argv: reexeced.append(list(argv))
+    )
+
+    def record_popen(cmd, **kwargs):
+        spawned.append(list(cmd))
+
+    def record_run(cmd, **kwargs):
+        spawned.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "Popen", record_popen)
+    _complete._spawn_refresh()
+    _refresh._maybe_reexec([Path("tasks.py")], "ENTRY", "arg")
+    assert _prelude(spawned[-1]) == _prelude(reexeced[-1]) == ["-P", "-c"]
+
+    monkeypatch.setattr(subprocess, "run", record_run)
+    _complete._fresh_dynamic("target", ["deploy"], ["a", ""])
+    _suggest._maybe_reexec([Path("tasks.py")])
+    assert (
+        _prelude(spawned[-1])
+        == _prelude(reexeced[-1])
+        == ["-P", "-m", "footman._suggest"]
+    )
+
+
 def test_the_uv_command_lines():
     file = Path("/tmp/tasks.py")
     assert _script.sync_argv("/fake/uv", file) == [

@@ -28,10 +28,12 @@ def _maybe_reexec(files: list[Path]) -> None:
     """Continue in a script file's own environment, when it already exists —
     a completer on a tasks file that carries its own dependencies needs
     that file's world to import at all. The rule lives in
-    `_script.maybe_reexec`, shared with the refresh child."""
+    `_script.maybe_reexec`, shared with the refresh child; the interpreter
+    flags come along too — `-P` on the spawn and not on the re-exec would be
+    a hole, since this replaces the process with the argv it is handed."""
     from footman import _script
 
-    _script.maybe_reexec(files, ["-m", "footman._suggest", *sys.argv[1:]])
+    _script.maybe_reexec(files, ["-P", "-m", "footman._suggest", *sys.argv[1:]])
 
 
 def _fresh(completer: Any) -> list[str]:

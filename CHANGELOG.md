@@ -19,6 +19,33 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A `footman.py` in the directory you press Tab in no longer runs.** The
+  children the completion path detaches — the manifest rebuild, a dynamic
+  completer, the cache collector — were spawned with `python -c …` and
+  `python -m …`, both of which put the current directory at the head of
+  `sys.path`. A file called `footman.py` sitting there answered the child's
+  own `import footman` before the installed package did, so one Tab in a
+  directory somebody else wrote executed its code, with no task ever run and
+  nothing on screen. Those children carry `-P` now, and so do the re-execs
+  into a script file's environment. Nothing legitimate loses the entry: a
+  tasks file's own directory is put on the path deliberately, for the moment
+  it is imported, so importing a helper beside it works as it always has.
+- **A config file that is not UTF-8 no longer bricks every command.** One
+  stray byte anywhere in any config footman reads — a `footman.toml`, or a
+  `pyproject.toml` where the byte sits in `[project] description` and nowhere
+  near `[tool.footman]` — escaped as a raw `UnicodeDecodeError` and exit 1,
+  so `fm hello` died along with the listings for as long as that file sat
+  between the repo root and your cwd. TOML's spec makes UTF-8 mandatory, so
+  such a file is malformed by the format's own rule and takes the paths a
+  malformed config already took: a discovered one is warned about and
+  skipped, a file named with `--config` is exit 64. Both say which byte, and
+  that the fix is to re-save the file as UTF-8.
+- **A config saved as UTF-8 with a byte-order mark reads normally.** What
+  Windows editors write was handed to the parser mark and all, which called
+  it an invalid statement on line 1 and threw the whole file away. A leading
+  mark is the one encoding hint that is never a guess: a UTF-8 one is
+  stripped and the settings behind it apply, and a UTF-16 one is refused by
+  name rather than decoded into settings no other TOML tool would read.
 - **The cache collector sweeps downloads abandoned mid-flight.** It globbed
   only bodies and sidecars, so a `.part` file left behind by a killed
   process — a multi-gigabyte tarball, possibly — sat in the cache forever.
@@ -206,6 +233,17 @@ versions may include breaking changes.
   waiting; and a task holding the serial lane blocked on itself when it
   asked for another lane from inside. Lineage is now exempt, and the wait
   is parked.
+- **The "never imports your code" claim covered a build that does.** The
+  README, the docs home page and the design page stated it without
+  qualification, so a reader checking footman before trusting it found the
+  opposite of the promise: the first <kbd>Tab</kbd> in a fresh directory
+  builds the manifest by spawning a subprocess that imports your `tasks.py`,
+  the same import a run does. What is import-free is the process answering
+  the keystroke — a warm <kbd>Tab</kbd> is still one file read, one JSON
+  parse and a tree walk. Every surface carrying the claim names that build
+  beside it, and `SECURITY.md` lists it among the things that are working as
+  intended: it had named "a completion path that executes something" as an
+  in-scope vulnerability, which is a description of the cold build.
 
 ### Documentation
 

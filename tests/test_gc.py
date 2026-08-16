@@ -174,6 +174,19 @@ def test_trigger_spawns_once_the_stamp_has_aged(tmp_path, monkeypatch):
     assert stamp.stat().st_mtime > then + 86400  # re-touched before spawning
 
 
+def test_the_collector_child_ignores_the_directory_it_starts_in(tmp_path, monkeypatch):
+    # `-c` heads sys.path with the cwd, so without `-P` a `footman.py` in the
+    # directory the run started in would answer the collector's own import.
+    from footman import _complete
+
+    cmd: list[list[str]] = []
+    monkeypatch.setattr(_complete, "detach", lambda c: cmd.append(list(c)))
+    _app._spawn_gc(tmp_path / "cache", "stem")
+    assert cmd[0][1:3] == ["-P", "-c"]
+    assert "_gc.main()" in cmd[0][3]
+    assert cmd[0][4:] == [str(tmp_path / "cache"), "stem"]
+
+
 def test_trigger_respects_a_young_stamp(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
     cache.mkdir()

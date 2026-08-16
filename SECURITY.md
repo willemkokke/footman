@@ -29,12 +29,22 @@ vulnerabilities:
   and it is why footman won't cascade past a project boundary.
 - A task passing your arguments to a program that then does something
   destructive.
+- Completion importing your task files to build its cache. The first Tab in
+  a fresh directory, and the background rebuild once a cached manifest goes
+  stale, spawn a subprocess that imports the same `tasks.py` a run would.
+  That is the documented design, not a hole: importing a repo's task files
+  is the same risk posture as opening any other code file in that repo, and
+  a [dynamic completer](https://willemkokke.github.io/footman/completion/#dynamic-completions-are-recomputed-fresh)
+  already runs your function on the execution path. The process that answers
+  the keystroke stays stdlib-only and imports nothing; what it spawns runs
+  code you already trusted enough to check out.
 
 These **do** count, and I want to hear about them:
 
 - Anything that makes footman run code from outside the task files it is
-  meant to load — a completion path that executes something, a cached
-  manifest that becomes a code path, a config key that reaches an exec.
+  meant to load — a completion path that runs something those files never
+  declared, a cached manifest that becomes a code path, a config key that
+  reaches an exec.
 - Files written outside the documented cache, data and config directories,
   or written with permissions wider than they should be.
 - A secret that leaks where it shouldn't: into the manifest, the timing

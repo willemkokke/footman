@@ -716,3 +716,60 @@ def test_every_config_backed_option_resolves_a_documented_key():
         f"resolved from config but absent from the KEYS table, so absent from "
         f"the reference page: {sorted(used - documented)}"
     )
+
+
+# --- the completion-import claim ----------------------------------------------
+# "A keystroke never imports your code" is true of the process that answers the
+# <kbd>Tab</kbd> and false of the cache behind it: a cold directory builds the
+# manifest by importing your tasks in a detached subprocess. test_complete.py's
+# test_cold_cache_builds_and_serves pins that it does — a cold press serves task
+# names nothing but an import could know. The claim is a headline, so it is
+# repeated across surfaces, and every copy has to carry the caveat beside it.
+
+_IMPORT_CLAIM = re.compile(r"(?:without|never) import(?:ing|s) your code")
+_COLD_CAVEAT = "detached subprocess"
+_CLAIM_WINDOW = 500
+
+CLAIM_SURFACES = ["../README.md", "index.md", "design.md"]
+
+
+@pytest.mark.parametrize("rel", CLAIM_SURFACES)
+def test_the_no_import_claim_names_the_cold_build(rel):
+    """No surface states the no-import claim without naming the build that
+    does import. Checked in a window rather than per file, because a caveat
+    three sections away from the headline is not a caveat."""
+    text = " ".join((DOCS / rel).resolve().read_text(encoding="utf-8").split())
+    found = list(_IMPORT_CLAIM.finditer(text))
+    assert found, f"{rel}: the claim is gone entirely — retarget or drop me"
+    for match in found:
+        window = text[match.start() : match.end() + _CLAIM_WINDOW]
+        assert _COLD_CAVEAT in window, (
+            f"{rel}: {match.group(0)!r} stands unqualified. A cold directory "
+            f"builds the manifest by importing your tasks — name the "
+            f"{_COLD_CAVEAT!r} that does it, the way docs/completion.md does."
+        )
+
+
+def test_the_threat_model_allows_the_completion_build():
+    """The security policy may not classify footman's own documented,
+    tested behaviour as a hole.
+
+    The in-scope list named "a completion path that executes something",
+    which is precisely what a cold <kbd>Tab</kbd> is: it spawns a build that
+    imports your `tasks.py`. So the policy invited a report for the feature
+    — while the not-a-vulnerability list, which explains that running a
+    task file *is* the product, never mentioned completion at all.
+    """
+    text = " ".join((ROOT / "SECURITY.md").read_text(encoding="utf-8").split())
+    intended, marker, in_scope = text.partition("These **do** count")
+    assert marker and in_scope, "SECURITY.md changed shape — update me"
+    for needle in ("Completion importing your task files", "same risk posture"):
+        assert needle in intended, (
+            f"SECURITY.md no longer explains the completion build as intended "
+            f"behaviour (missing {needle!r}), so the policy reads as though a "
+            f"cold Tab importing your tasks were a vulnerability."
+        )
+    assert "a completion path that executes something" not in in_scope, (
+        "SECURITY.md solicits reports for 'a completion path that executes "
+        "something' — the cold-cache build is exactly that, by design."
+    )

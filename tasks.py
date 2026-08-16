@@ -549,7 +549,8 @@ def _write_llms_txt() -> None:
         "> A Python task runner: typed function signatures become real CLI "
         "flags, modules become command groups, independent tasks run in "
         "parallel by default, and shell completion answers from a cached "
-        "manifest without importing your code. Machine surface: `fm --json "
+        "manifest without importing your code (building that cache imports "
+        "it once, in a detached subprocess). Machine surface: `fm --json "
         "--list` (catalog), `fm --json <chain>` (results), `fm --help <task>`.",
         "",
         "## Docs",

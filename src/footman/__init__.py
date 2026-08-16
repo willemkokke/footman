@@ -2,7 +2,9 @@
 
 Typed function signatures become real flags and positionals, modules become
 nested command groups, and shell completion answers from a cached manifest
-without importing your code.
+without importing your code. Building that manifest does import it, in a
+detached subprocess: the first <kbd>Tab</kbd> in a fresh directory, and the
+background rebuild once the cache goes stale.
 
 The console-script entry lives here and is deliberately thin: completion must
 dispatch to the stdlib-only hot path before importing the framework or the
@@ -248,6 +250,24 @@ def main(tasks_file: str | None = None) -> None:
 
         _paths.configure(builtin=BUILTIN)
         raise SystemExit(complete_cli(argv[1:]))
+    # Past the hot path, so the TAB press above pays nothing for it (and
+    # `_complete` writes bytes anyway): everything from here on prints text,
+    # and a locale-encoded stdout defaults to errors='strict'. A task name, a
+    # docstring, `--tree`'s own branch glyphs or the em dash in a header is
+    # then unencodable on an ascii or cp1252 console, and a listing dies
+    # half-written with a raw UnicodeEncodeError. Degrade those glyphs to '?'
+    # instead. This is the same reconfigure `context.routing()` installs
+    # around a run — hoisted here so the listings, which never start one, are
+    # covered too.
+    import contextlib
+
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(Exception):
+            # getattr, not hasattr-then-call: hasattr narrowing is not
+            # portable across checkers, the getattr is.
+            reconfigure = getattr(stream, "reconfigure", None)
+            if reconfigure is not None:
+                reconfigure(errors="replace")
     if tasks_file is not None and not any(
         a.startswith(("-f=", "--tasks-file=")) for a in argv
     ):

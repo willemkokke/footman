@@ -1514,6 +1514,10 @@ def _spawn_gc(cache: Path, skip_stem: str) -> None:
     _complete.detach(
         [
             sys.executable,
+            # `-P`, like the completion children: `-c` would otherwise head
+            # sys.path with the directory the run started in, where a
+            # `footman.py` would answer the collector's own import.
+            "-P",
             "-c",
             "from footman import _gc; _gc.main()",
             str(cache),

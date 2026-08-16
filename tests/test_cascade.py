@@ -257,6 +257,53 @@ def test_config_corrupt_toml_is_ignored(tmp_path):
     assert _config.load_config(tmp_path, tmp_path) == {}
 
 
+def test_config_non_utf8_is_malformed_not_a_crash(tmp_path):
+    # One latin-1 byte used to escape as a raw UnicodeDecodeError, so every
+    # invocation under that directory died. TOML's spec makes UTF-8
+    # mandatory: the file is malformed by the format's own rule, and takes
+    # the malformed path — warn, skip, carry on.
+    (tmp_path / "footman.toml").write_bytes(b"# caf\xe9\nsequential = true\n")
+    warnings: list[str] = []
+    assert _config.load_config(tmp_path, tmp_path, on_warning=warnings.append) == {}
+    assert any("not valid UTF-8" in w and "re-save" in w for w in warnings)
+
+
+def test_config_non_utf8_pyproject_does_not_brick_the_cascade(tmp_path):
+    # The bad byte need not be anywhere near [tool.footman]: a description
+    # nobody asked footman to read makes the whole file undecodable.
+    (tmp_path / "pyproject.toml").write_bytes(
+        b"[project]\nname='x'\ndescription='caf\xe9'\n"
+    )
+    warnings: list[str] = []
+    assert _config.load_config(tmp_path, tmp_path, on_warning=warnings.append) == {}
+    assert any("pyproject.toml" in w and "not valid UTF-8" in w for w in warnings)
+
+
+def test_config_non_utf8_explicit_file_is_loud(tmp_path):
+    # A file named on purpose fails loudly, like any other malformed --config.
+    named = tmp_path / "custom.toml"
+    named.write_bytes(b"# caf\xe9\nsequential = true\n")
+    with pytest.raises(_config.ConfigError, match=r"not valid UTF-8"):
+        _config.load_config(tmp_path, tmp_path, str(named))
+
+
+def test_config_utf8_bom_reads_normally(tmp_path):
+    # What a Windows editor writes. A byte-order mark is the one encoding
+    # hint that is never a guess, so it is stripped rather than handed to
+    # tomllib as a stray glyph on line 1.
+    (tmp_path / "footman.toml").write_bytes(b"\xef\xbb\xbfsequential = true\n")
+    assert _config.load_config(tmp_path, tmp_path)["sequential"] is True
+
+
+def test_config_utf16_bom_is_refused_by_name(tmp_path):
+    # Detected, never decoded: a UTF-16 config would work here and nowhere
+    # else, so the refusal says what it found instead of reading it anyway.
+    (tmp_path / "footman.toml").write_bytes("sequential = true\n".encode("utf-16"))
+    warnings: list[str] = []
+    assert _config.load_config(tmp_path, tmp_path, on_warning=warnings.append) == {}
+    assert any("UTF-16 byte-order mark" in w for w in warnings)
+
+
 def test_config_global_file_is_the_bottom_rung(tmp_path, monkeypatch):
     # The user-level file seeds the merge; every project layer beats it.
     global_file = _write(tmp_path / "global.toml", "uv = false\ntasks = 'g.py'\n")

@@ -55,13 +55,17 @@ The price is paid inside, where the binder, the coercion and the completion
 machinery are all standard library, and the dividend is that
 `uv add --dev footman` cannot change what your project depends on.
 
-**A keystroke never imports your code.** Completion answers from a baked
-file (one read, one JSON parse, a tree walk, ~30 ms) and `main()`
-checks for `--complete` before importing even footman itself. Your tasks
-file, its imports, its heavy dependencies: none of it runs on a
-<kbd>Tab</kbd>. The budget survives the only way budgets do: every
-feature that touches completion is checked against "what does the Tab
-pay", and a feature that would make the Tab pay gets built another way.
+**The process answering a keystroke never imports your code.** Completion
+answers from a baked file (one read, one JSON parse, a tree walk, ~30 ms)
+and `main()` checks for `--complete` before importing even footman itself.
+Your tasks file, its imports, its heavy dependencies: none of it runs *in*
+the process that serves the <kbd>Tab</kbd>. Baking the file does import
+them, in a detached subprocess — on the first <kbd>Tab</kbd> in a fresh
+directory, and in the background once the cache goes stale — which is the
+same import a run does, moved off the keystroke rather than skipped. The
+budget survives the only way budgets do: every feature that touches
+completion is checked against "what does the Tab pay", and a feature that
+would make the Tab pay gets built another way.
 
 **The manifest is written from declarations, never executions.** The
 baked file the <kbd>Tab</kbd> reads, the manifest, describes the task
