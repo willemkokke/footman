@@ -149,7 +149,8 @@ Refusals (an unknown task, a flag that will not coerce, a malformed
 chain) exit 64 (`EX_USAGE`), never a code a task could mean on purpose,
 so a typo in a wired-up command line can never impersonate a real verdict.
 The low codes belong to tasks: `fail("reason", code=2)` means exactly what
-it says to whoever reads 2. Interrupt is 130. (A chatty task that does not
+it says to whoever reads 2. Interrupt is 130, and a stop signal 143. (A
+chatty task that does not
 declare `Stdout[T]` still prints to stdout; the table's stdout column is
 about the tasks you address, and you wrote the address.)
 

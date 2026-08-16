@@ -325,8 +325,8 @@ time, not a surprise in a pipeline.
 ## Refusals
 
 A line footman refuses (a typo'd task, a misplaced flag, a broken tasks
-file, a bad `--config`, Ctrl-C) emits an error envelope, with the same
-taught message on stderr for humans:
+file, a bad `--config`, Ctrl-C, a supervisor's stop signal) emits an error
+envelope, with the same taught message on stderr for humans:
 
 ```console
 $ fm --json chekc
@@ -477,7 +477,9 @@ The process exit code tells the same story as the envelope:
 | 1 | a task raised an exception |
 | N | a task returned N / its `run()` command exited N — first failure wins |
 | 64 | footman refused before or while binding: parse, tasks-file, config, availability |
+| 129 | stopped by `SIGHUP` |
 | 130 | interrupted (Ctrl-C) |
+| 143 | stopped by a signal: `SIGTERM`, or `SIGBREAK` on Windows |
 
 Exit 64 before anything runs is a feature in CI: a typo'd workflow fails in
 milliseconds with a taught message, not after twenty minutes of setup.

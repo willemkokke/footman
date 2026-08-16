@@ -193,6 +193,24 @@ a shared bare prerequisite runs once. Different policy: a different run, so
 both appear in the graph. An empty `.opts()` is just the bare task, and
 options must be hashable values.
 
+## When something else asks the run to stop
+
+A supervisor stops a program with a signal, and the senders are everyday:
+`timeout`, `docker stop`, `kill`, a cancelled CI job, systemd, Kubernetes.
+footman takes one as a stop the way it takes `Ctrl-C`: pending tasks are
+cancelled, the subprocess trees still in flight are reaped (they are
+group-isolated, so the signal never reached them on its own), stderr says
+`terminated`, and a `--json` run still gets its one document. The exit code is
+**143**, or **129** for `SIGHUP`; on Windows `SIGBREAK` — what a cancelled job
+sends — means the same as `SIGTERM` and exits 143 too.
+
+The stop is immediate: the grace belongs to whoever asked for it, so nothing
+waits for work in flight. Reaping sends `SIGTERM` to each child's group and
+insists with `SIGKILL` two seconds later, comfortably inside `docker stop`'s
+ten seconds and Kubernetes' thirty. `SIGKILL` itself — and `taskkill /F` on
+Windows — cannot be caught by any program in any language; a run ended that way
+leaves no receipt, and nothing footman could do would change that.
+
 ## Interactive input
 
 One parallelism consequence belongs here: a run that contains an

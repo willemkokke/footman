@@ -74,6 +74,7 @@ fix the annotation.
 | `up: Unavailable: requires docker on PATH` | a `@requires`-gated task was asked to run; the reason is live, not cached |
 | `dependency cycle: b -> a -> b (check the pre/post declarations of these tasks)` | your `pre`/`post` graph loops |
 | `interrupted` (exit 130) | Ctrl-C — pending tasks were cancelled |
+| `terminated` (exit 143) | something asked the run to stop — `timeout`, `docker stop`, `kill`, a cancelled CI job. Pending tasks were cancelled and the subprocess trees reaped, exactly as for Ctrl-C (`hung up`, exit 129, is `SIGHUP`) |
 
 In a chain, a failed task's dependents are skipped; `-k/--keep-going` runs
 every independent branch anyway. Output from parallel tasks never

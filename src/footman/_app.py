@@ -30,6 +30,7 @@ from footman import (
     _progress,
     _schedule,
     _script,
+    _signals,
     _split,
     context,
     invocation,
@@ -87,8 +88,9 @@ def _refuse(json_mode: bool, message: str, code: int = EX_USAGE) -> int:
     """Report a refusal on stderr — and when `--json` promised an envelope,
     keep stdout a single JSON document describing the same refusal, so a
     machine consumer never has to parse two formats. Refusals exit
-    `EX_USAGE` (64), never a code a task could mean on purpose; the one
-    non-refusal caller passes 130 for interrupt."""
+    `EX_USAGE` (64), never a code a task could mean on purpose; the
+    non-refusal callers pass 130 for an interrupt and 143/129 for a stop
+    signal."""
     _error(message)
     if json_mode:
         envelope = {"schema": 1, "error": {"code": code, "message": message}}
@@ -1451,11 +1453,19 @@ def run(
     results as well as the exit code and printed output.
     """
     try:
-        return _run(argv, brand, collect)
+        with _signals.installed():
+            return _run(argv, brand, collect)
     except KeyboardInterrupt:
         # In --json mode nothing has reached stdout yet (capture buffers task
         # output), so the envelope contract still holds at 130.
         return _refuse(_wants_json(argv), "interrupted", 130)
+    except _signals.Stop as stop:
+        # A supervisor asked for a stop — `timeout`, `docker stop`, a
+        # cancelled CI job. It is delivered as an exception in the main
+        # thread on purpose, so it unwinds through the same abort arms Ctrl-C
+        # does: the in-flight process trees are already reaped by the time it
+        # lands here, and the envelope holds for the same reason 130's does.
+        return _refuse(_wants_json(argv), stop.word, stop.code)
 
 
 _WINDOWS = os.name == "nt"  # decided at import; a constant tests can steer
@@ -1526,9 +1536,9 @@ def _reexec(cmd: list[str]) -> None:
 
     On POSIX the process is replaced (`execvp`: tty, signals, stdin and the
     exit code all belong to the child). Windows `exec*` lies — the parent
-    exits while the child runs on — so there it spawns and waits,
-    swallowing its own Ctrl-C (the console already delivered it to the
-    child, which will exit 130 on its own terms).
+    exits while the child runs on — so there it spawns and waits, swallowing
+    its own Ctrl-C and console break (the console delivered both to the child
+    as well, which will exit 130 or 143 on its own terms).
     """
     sys.stdout.flush()
     sys.stderr.flush()
@@ -1537,7 +1547,7 @@ def _reexec(cmd: list[str]) -> None:
         while True:
             try:
                 raise SystemExit(proc.wait())
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, _signals.Stop):
                 continue
     os.execvp(cmd[0], cmd)
 
