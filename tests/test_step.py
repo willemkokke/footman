@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from asyncio import CancelledError  # a BaseException, unlike futures' namesake
 
 import pytest
 
@@ -334,3 +335,38 @@ def test_a_deliberate_step_failure_is_not_dressed_as_a_crash():
     with use_context(ctx), pytest.raises(Failed, match="this step chose to stop"):
         stopper()()
     assert "Traceback" not in ctx.steps[-1].stderr
+
+
+def test_a_base_exception_leaving_a_step_still_seals_its_record():
+    # The same rule tasks follow: an exception leaving the body is that body
+    # failing, whichever side of `Exception` it sits on. Catching only
+    # `Exception` here let a BaseException past the record, so no step row
+    # sealed — the task still failed, correctly, but with nothing to say which
+    # step did it, and `--json` and `recording()` read that record.
+    @step
+    def cancelled():
+        raise CancelledError("the loop cancelled us")
+
+    ctx = Context()
+    with use_context(ctx), pytest.raises(CancelledError):
+        cancelled()()
+    record = ctx.steps[-1]  # the receipt that used to be missing entirely
+    assert record.code != 0
+    assert "the loop cancelled us" in record.stderr
+
+
+def test_footmans_own_cancellation_is_not_a_step_failure():
+    # GeneratorExit is the pump's own cancel signal, raised INTO a step by
+    # `gen.close()`. Sealing a record around it would swallow the cancellation
+    # footman just issued, so it re-raises like KeyboardInterrupt does.
+    before = None
+
+    @step
+    def torn_down():
+        raise GeneratorExit
+
+    ctx = Context()
+    before = len(ctx.steps)
+    with use_context(ctx), pytest.raises(GeneratorExit):
+        torn_down()()
+    assert len(ctx.steps) == before  # no receipt: nothing failed

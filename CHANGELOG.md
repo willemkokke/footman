@@ -77,6 +77,16 @@ versions may include breaking changes.
   is 143 (`hung up` and 129 for `SIGHUP`, and Windows binds `SIGBREAK` to the
   same meaning as `SIGTERM`). `SIGKILL` and `taskkill /F` stay uncatchable, by
   anyone.
+- **An exception leaving a task body is a task failure, whichever side of
+  `Exception` it sits on.** The body's failure catch stopped at `Exception`,
+  so an `asyncio.CancelledError` — a `BaseException`, and what escapes
+  `asyncio.run()` when a task cancels itself — went past the report
+  altogether: a raw traceback, no row of its own, no `--json` envelope, and
+  a sibling that had already succeeded went unreported too. The task now
+  gets an ordinary failed row with its code and the stack an unplanned
+  exception carries. `KeyboardInterrupt` and `GeneratorExit` keep their
+  run-level meaning: one is the user stopping the process, the other the
+  interpreter tearing a frame down, and neither is the task failing.
 - **Ctrl-C during an in-body `parallel()` stops the run instead of waiting
   it out.** The fan-out entered its pool with no abort arm, so the interrupt
   unwound in the main thread and then blocked joining workers that were

@@ -25,7 +25,7 @@ from collections.abc import Callable, Generator
 from contextvars import ContextVar
 from typing import Any, Generic, Literal, ParamSpec, TypeVar, cast, overload
 
-from footman import _describe
+from footman import _describe, _signals
 from footman import context as _context
 from footman.context import (
     AuditEntry,
@@ -402,7 +402,20 @@ def _pump(item: WorkItem[Any]) -> Any:
         # like an internal error. The reason reaches the report through the
         # sealed record, so it is not written twice.
         error = exc
-    except Exception as exc:  # the body failed; the record still seals
+    except (KeyboardInterrupt, GeneratorExit, _signals.Stop):
+        # Control flow, not a failing step — the same three `_call` re-raises,
+        # for the same reasons. GeneratorExit especially: the pump below raises
+        # it into a step to cancel one, so sealing a record around it here would
+        # swallow footman's own cancellation. `Stop` is a supervisor's SIGTERM
+        # arriving in whichever step happened to be running; a step that
+        # answered for it would be reporting someone else's decision as its own.
+        raise
+    except BaseException as exc:  # the step failed; the record still seals
+        # Everything else that leaves a step body is that step failing, which
+        # is the rule tasks already follow. `except Exception` let a
+        # BaseException past the record, so no step row sealed and the receipt
+        # was lost — the task still failed, correctly, but with nothing to say
+        # which step did it.
         error = exc
         # Trimmed of footman's own leading frames, so the first line is the one
         # somebody wrote. It goes into the record unconditionally — `--json`

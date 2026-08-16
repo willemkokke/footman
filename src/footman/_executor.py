@@ -30,7 +30,7 @@ from pathlib import Path, PurePath
 from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
-from footman import _binder, _coerce, _futures, _globals, context, registry
+from footman import _binder, _coerce, _futures, _globals, _signals, context, registry
 from footman._discover import defining_dir
 from footman._manifest import resolved_signature
 from footman._split import ChainError, Segment
@@ -1321,7 +1321,38 @@ def _call(
         # A `run()` command failed: propagate its own exit code, not a flat 1,
         # so `fm` mirrors the command's code (docs/ci.md's "exited N" contract).
         return (exc.result.code or 1), None, exc
-    except Exception as exc:  # a failed task must not crash the runner
+    except (KeyboardInterrupt, GeneratorExit, _signals.Stop):
+        # None of these is the task failing, so none becomes a receipt: all are
+        # control flow, and the layer that owns each must be the one to see it.
+        #
+        # A Ctrl-C is the user stopping the process. It arrives asynchronously
+        # wherever it lands, so the task it interrupted is incidental — the app
+        # layer answers it with "interrupted" and 130. `Stop` is the same shape
+        # with a different sender: a supervisor's SIGTERM/SIGHUP, answered with
+        # "terminated" and 143. Both are raised INTO whatever task happens to be
+        # running, so reading either as that task's verdict would report the
+        # wrong thing and, worse, let the run carry on past a stop it was told
+        # to make.
+        #
+        # A GeneratorExit is *footman's own cancellation signal*, not a stray:
+        # `_step`'s pump raises it by calling `gen.close()` on a step that timed
+        # out, that an abort caught, or that misused the yield channel. It
+        # arrives INTO a step to unwind it, so the generator's own try/finally
+        # runs and nothing is left half-held. Turning it into a task receipt
+        # would swallow the cancellation the pump just issued — the same
+        # mistake as catching SystemExit up in `_app.run`, where it is the uv
+        # handoff. The language agrees: a frame that swallows a GeneratorExit
+        # is handed a RuntimeError in place of the exit it refused.
+        raise
+    except BaseException as exc:  # a failed task must not crash the runner
+        # Everything else leaving the body is the task failing, whichever side
+        # of `Exception` it sits on — `sys.exit("reason")` is a BaseException
+        # and has always been read that way. `asyncio.CancelledError` is the
+        # one that turns up in practice: it inherits BaseException and leaves
+        # `asyncio.run()` when a task cancels itself. Catching only `Exception`
+        # let it past the report entirely — no row, no `--json` envelope, and a
+        # sibling that succeeded went unreported too — while the once-cell
+        # already failed a sharer with it, so the runner disagreed with itself.
         return 1, None, exc
     if isinstance(returned, int) and not isinstance(returned, bool) and not as_call:
         # An int return is the exit-code channel — unless the signature

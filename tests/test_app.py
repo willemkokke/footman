@@ -64,6 +64,14 @@ def crash():
     raise RuntimeError("kaboom")
 
 @task
+def cancelled():
+    """Raise a BaseException that is not a run-level one."""
+    import asyncio
+
+    raise asyncio.CancelledError("the loop cancelled us")
+
+
+@task
 def data():
     """Return structured data."""
     return {"n": 1, "flags": [True, False]}
@@ -196,6 +204,32 @@ def test_failing_task_sets_exit_code(project):
 
 def test_crash_task_exits_1(project):
     assert _app.run(["crash"]) == 1  # a raised exception -> flat 1
+
+
+def test_a_base_exception_from_a_body_is_a_task_failure(project, capsys):
+    # An exception leaving the task is a task failure, whichever side of
+    # `Exception` it sits on — the rule `sys.exit("reason")` has followed all
+    # along. Catching only `Exception` let an `asyncio.CancelledError` past the
+    # report entirely: a raw traceback out of `main()`, no row for the task,
+    # and the sibling that succeeded never reported either.
+    assert _app.run(["hi", "cancelled"]) == 1
+    captured = capsys.readouterr()
+    assert "hello world" in captured.out  # the sibling ran
+    assert "ok   hi" in captured.err  # and still has its row
+    assert "cancelled: CancelledError: the loop cancelled us" in captured.err
+
+
+def test_a_base_exception_reaches_the_json_envelope(project, capsys):
+    # The envelope is the whole story for a log or a dashboard, so the row and
+    # its stack must be there — an exception nobody planned is exactly what the
+    # `traceback` field exists for.
+    assert _app.run(["--json", "hi", "cancelled"]) == 1
+    rows = {item["task"]: item for item in json.loads(capsys.readouterr().out)["items"]}
+    assert rows["hi"]["ok"]
+    assert rows["cancelled"]["ok"] is False
+    assert rows["cancelled"]["code"] == 1
+    assert rows["cancelled"]["error"] == "the loop cancelled us"
+    assert "in cancelled" in rows["cancelled"]["traceback"]
 
 
 def test_systemexit_message_surfaces(project, capsys):
@@ -845,7 +879,7 @@ def test_missing_explicit_config_is_an_error(project, capsys):
     assert "--config" in err and "no such file" in err and "prod.tmol" in err
 
 
-# --- Ctrl-C ------------------------------------------------------------------
+# --- Ctrl-C and GeneratorExit: the exits the runner does not own --------------
 
 
 def test_keyboard_interrupt_exits_130(tmp_path, monkeypatch, capsys):
@@ -859,6 +893,22 @@ def test_keyboard_interrupt_exits_130(tmp_path, monkeypatch, capsys):
     assert "interrupted" in capsys.readouterr().err
     assert _app.run(["--sequential", "stop"]) == 130
     assert "interrupted" in capsys.readouterr().err
+
+
+def test_a_generator_exit_is_not_a_task_failure(tmp_path, monkeypatch):
+    # The one other name the body's failure catch lets through. It is the
+    # interpreter tearing a frame down — footman's own step pump closes
+    # generators to cancel them — and a frame that swallows the exit is handed
+    # a RuntimeError in place of the exit it refused. So it leaves by the front
+    # door like an interrupt, rather than becoming a receipt.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef stop():\n    raise GeneratorExit\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    with pytest.raises(GeneratorExit):
+        _app.run(["stop"])
 
 
 # --- the timing story: recording, the eta line, the off switches --------------
