@@ -1095,17 +1095,12 @@ def _emit_document(value: object, inner: object) -> None:
 
 
 def _stack_wanted(verbose: bool) -> bool:
-    """Whether an unexpected exception should carry its whole stack.
-
-    Under `-v`, or whenever stderr is not a terminal. Not-a-terminal means a
-    log — CI, a redirect, cron — and there is no second run there to add `-v`
-    to: the artifact is what you get. The progress estimate already reads the
-    same signal to take its one-shot path.
+    """`_describe.stack_wanted`, asked about this run's real stderr.
 
     The *real* stream, not `ctx.tty`, which folds in whether output is being
     captured: `Runner` captures, and a suite is not a log to be rescued.
     """
-    return verbose or not context.real_stderr().isatty()
+    return _describe.stack_wanted(verbose, context.real_stderr().isatty())
 
 
 def _print_summary(
@@ -1183,19 +1178,14 @@ def _print_summary(
                 # redirect, cron — where there is no second run to add -v to,
                 # and the same reasoning already sends the progress estimate
                 # down its one-shot path.
-                where = _describe.user_frame(err)
-                # A step that failed already printed this stack under its own
-                # receipt, where the reader was looking. Repeating it under the
-                # summary would say the same thing twice, so the summary keeps
-                # the one line that places it.
-                from_step = any(s.code != 0 for s in result.steps)
-                if (
-                    _stack_wanted(verbose)
-                    and not from_step
-                    and (stack := _describe.user_traceback(err))
-                ):
+                # One place decides, whichever half of the runner the exception
+                # came out of: a step keeps its stack in the record and leaves
+                # the placing to here, so a task and a step read the same and
+                # neither is said twice — including under a quiet capture,
+                # where a step's receipt is never displayed at all.
+                if _stack_wanted(verbose) and (stack := _describe.user_traceback(err)):
                     print(stack.rstrip("\n"), file=sys.stderr)
-                elif where:
+                elif where := _describe.user_frame(err):
                     _error(f"       at {where}")
         elif not result.ok and state != "skipped":
             # A skipped row's whole story is its cause, already on the line.

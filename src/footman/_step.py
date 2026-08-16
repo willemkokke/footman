@@ -299,6 +299,7 @@ def _pump(item: WorkItem[Any]) -> Any:
     deadline = start + timeout if timeout is not None else None
     value: Any = None
     error: BaseException | None = None
+    stack_text = ""
     timed_out = False
     out_buf, err_buf = io.StringIO(), io.StringIO()
 
@@ -398,12 +399,13 @@ def _pump(item: WorkItem[Any]) -> Any:
     except Exception as exc:  # the body failed; the record still seals
         error = exc
         # Trimmed of footman's own leading frames, so the first line is the one
-        # somebody wrote. The stack itself only belongs off a terminal (or under
-        # -v): on one, the failure line's `at file:line` is the answer, and the
-        # reader can ask for the rest. Written here rather than only in the
-        # summary because this is the step's own record — `--json` and
-        # `recording()` read it.
-        err_buf.write(_describe.user_traceback(exc))
+        # somebody wrote. It goes into the record unconditionally — `--json`
+        # and `recording()` read that, and a machine consumer is not reading
+        # for noise — while the *display* below follows the same rule the task
+        # summary does. Kept in hand as well as written, so the display can
+        # take it back out again without guessing where it starts.
+        stack_text = _describe.user_traceback(exc)
+        err_buf.write(stack_text)
 
     duration = time.perf_counter() - start
     if timed_out:
@@ -471,6 +473,13 @@ def _pump(item: WorkItem[Any]) -> Any:
             out = _sys.stdout
             out.write(_context._step_line(ctx, result.code == 0, view.title, duration))
             combined = result.stdout + result.stderr
+            if stack_text:
+                # The stack stays in the record — `--json` and `recording()`
+                # read that — and out of the display, which the run summary
+                # owns. One place decides how a failure is placed, so a task
+                # and a step answer identically and neither says it twice.
+                # What the body printed before it fell over is untouched.
+                combined = combined.replace(stack_text, "")
             if capture and combined and (result.code != 0 or ctx.verbose):
                 out.write(combined if combined.endswith("\n") else combined + "\n")
             if result.code != 0 and len(result.audit) > 1:

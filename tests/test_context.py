@@ -2612,6 +2612,87 @@ def test_an_async_body_is_refused_rather_than_reported_ok():
     assert "asyncio.run" in str(results[0].error)
 
 
+def test_an_unexpected_exception_places_itself_in_the_users_code(fm_project):
+    # A task that raised used to say what happened and never where — the type
+    # and message, in a file of forty tasks. Captured output is not a terminal,
+    # so this is the log-destined path: the whole stack, with footman's own
+    # leading frames off the front so the first line is one somebody wrote.
+    fm = fm_project("""
+        from footman import task
+
+        def helper(n):
+            return 10 // n
+
+        @task
+        def boom():
+            helper(0)
+    """)
+    result = fm.invoke("boom")
+    assert result.exit_code != 0
+    said = result.stderr
+    assert "ZeroDivisionError" in said
+    assert "in helper" in said  # the innermost frame the caller wrote
+    assert "src/footman" not in said  # and never the plumbing that called it
+
+
+def test_a_step_and_a_task_report_an_exception_the_same_way(fm_project):
+    # The two halves of the runner answering one question two ways is how this
+    # started: a task said only the type, a step printed footman's frames.
+    fm = fm_project("""
+        from footman import step, task
+
+        def helper(n):
+            return 10 // n
+
+        @task
+        def in_task():
+            helper(0)
+
+        @step
+        def _inner():
+            helper(0)
+
+        @task
+        def in_step():
+            _inner()()
+    """)
+    task_said = fm.invoke("in-task").stderr
+    step_said = fm.invoke("in-step").stderr
+    for said in (task_said, step_said):
+        assert "ZeroDivisionError" in said
+        assert "in helper" in said
+        assert "src/footman" not in said
+    # And the placement is not said twice for the step, whose own receipt
+    # already carried it.
+    assert step_said.count("in helper") == 1
+
+
+def test_an_expected_failure_carries_no_stack(fm_project):
+    # A command exiting non-zero is not a bug in the tasks file, and a location
+    # would point at the line that ran it as though it were the fault.
+    fm = fm_project("""
+        import sys
+        from footman import run, task
+
+        @task
+        def failing():
+            run([sys.executable, "-c", "raise SystemExit(3)"])
+    """)
+    result = fm.invoke("failing")
+    assert result.exit_code != 0
+    assert "Traceback" not in result.stderr
+    assert " at " not in result.stderr
+
+
+def test_the_stack_rule_reads_verbose_or_a_log():
+    from footman import _describe
+
+    assert not _describe.stack_wanted(verbose=False, is_terminal=True)
+    assert _describe.stack_wanted(verbose=True, is_terminal=True)
+    assert _describe.stack_wanted(verbose=False, is_terminal=False)  # a log
+    assert _describe.stack_wanted(verbose=True, is_terminal=False)
+
+
 def test_the_async_refusal_reads_the_call_not_the_function():
     # Deliberately checked on what the body *returned*, not on whether the
     # function is a coroutine function. A sync wrapper hides the latter both

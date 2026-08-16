@@ -921,20 +921,46 @@ def user_frame(exc: BaseException) -> str:
     return ""
 
 
-def user_traceback(exc: BaseException) -> str:
-    """The formatted traceback with footman's own frames off the front.
+def stack_wanted(verbose: bool, is_terminal: bool) -> bool:
+    """Whether an unexpected exception should show its whole stack.
 
-    Only the *leading* run is dropped — the plumbing between the runner and the
-    first line the caller wrote. Frames further down are kept even when they are
-    footman's, because a body that calls back into the framework has a real path
-    through it, and hiding the middle of a stack is worse than showing it.
+    Under `-v`, or whenever the failure is headed somewhere nobody is
+    watching: a log, a redirect, CI, cron. There is no second run *there* to
+    add `-v` to — the artifact is what you get — and the progress estimate
+    already reads the same signal to take its one-shot path.
+
+    Pure, and given both answers rather than finding them, so the one rule can
+    live here (with the rest of the phrasing) while its callers sit on either
+    side of the import that would otherwise make this circular.
+    """
+    return verbose or not is_terminal
+
+
+def user_traceback(exc: BaseException) -> str:
+    """The formatted traceback, with footman's own frames taken out.
+
+    Every one of them, not only the leading run. A step's body is reached
+    through the pump, so the framework sits in the *middle* of that stack, and
+    leaving it there puts `_pump` and `__call__` between two lines the reader
+    wrote. Nothing in those frames is ever theirs to fix, and the receipt above
+    already says the work was a step.
+
+    The cost is honest to name: two adjacent frames in the result were not
+    adjacent in the call. What is bought is that every line printed is one
+    somebody can act on.
     """
     import traceback
 
-    tb = exc.__traceback__
-    while tb is not None and _is_ours(tb.tb_frame.f_code.co_filename):
-        tb = tb.tb_next
-    return "".join(traceback.format_exception(type(exc), exc, tb or exc.__traceback__))
+    kept = [
+        frame
+        for frame in traceback.extract_tb(exc.__traceback__)
+        if not _is_ours(frame.filename)
+    ]
+    tail = "".join(traceback.format_exception_only(type(exc), exc))
+    if not kept:  # nothing but framework: the message is the whole story
+        return tail
+    body = "".join(traceback.StackSummary.from_list(kept).format())
+    return f"Traceback (most recent call last):\n{body}{tail}"
 
 
 def global_default_suffix(name: str, *, code: bool = False) -> str:
