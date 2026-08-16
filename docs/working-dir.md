@@ -122,7 +122,10 @@ environment router:
   the task's own reads and every child it spawns, and invisible to
   siblings. A one-time note names the deliberate spellings (`env=` per
   call, `ctx.env` for the task).
-- **Deletes** have no scoped meaning and error with the alternatives.
+- **Deletes** scope the same way: `del os.environ["NO_COLOR"]` removes the
+  key for this task and the children it spawns after, leaving a sibling's
+  copy untouched — which matters for variables read by *presence* rather
+  than value.
 - `os.putenv`/`os.unsetenv` error too, because they bypass `os.environ` even in
   plain Python.
 

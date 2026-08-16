@@ -18,8 +18,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
-import statistics
 import threading
 import time
 from dataclasses import dataclass
@@ -84,6 +82,11 @@ def estimate(runs: list[float]) -> Estimate | None:
     """A determinate estimate from *runs*, or None when honesty forbids one."""
     if len(runs) < MIN_SAMPLES:
         return None
+    # Imported past the guard, not at module scope: `statistics` drags
+    # `fractions` and `random` for ~1.2 ms, and a run with no history to speak
+    # of — a fresh project, CI's first green — never reaches this line.
+    import statistics
+
     deciles = statistics.quantiles(runs, n=10, method="inclusive")
     p50, p90 = statistics.median(runs), deciles[8]
     if p50 <= 0 or p90 > TAIL_RATIO * p50:
@@ -369,6 +372,8 @@ class StatusLine:
             if len(self.running) > 4:
                 names += " ..."
             line += f"  running: {names}"
+        import shutil
+
         from footman._describe import fit
 
         # The line carries ANSI when a failure is counted, so `len()` reads

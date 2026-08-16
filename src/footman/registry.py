@@ -30,7 +30,6 @@ from __future__ import annotations
 import contextlib
 import functools
 import os
-import shutil
 import threading
 from collections.abc import Callable, Generator, Iterator, Sequence
 from pathlib import Path
@@ -2476,6 +2475,8 @@ def requires_tool(*commands: str, reason: str = "") -> Callable[[_F], _F]:
     """Gate a task on command-line tools being on `PATH` (`shutil.which`)."""
 
     def check() -> str | None:
+        import shutil
+
         missing = [c for c in commands if shutil.which(c) is None]
         if not missing:
             return None

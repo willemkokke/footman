@@ -130,6 +130,11 @@ construction, so the real content is in the other columns.
 | Monorepo `tasks.py` cascade                 |   ✅    |   ❌    | ❌            | ❌            | ❌       |
 | Custom-branded CLI as a library             |   ✅    |   ✅    | ❌            | ❌            | ❌       |
 | Completion without re-importing             |   ✅    |   ❌    | ❌            | ❌            | ✅\*     |
-| Zero runtime dependencies                   |   ✅    |   ❌    | ❌            | ❌            | ❌       |
+| Zero runtime dependencies                   |   ✅    |   ❌    | ❌            | ✅†           | ❌       |
 
 \* poe skips the re-import only because its tasks aren't Python functions.
+
+† invoke declares no dependencies either. It gets there by vendoring:
+`invoke/vendor/` ships fluidity, lexicon and PyYAML inside the wheel.
+footman carries no third-party code at all — the difference is where the
+dependency lives, not whether you install one.

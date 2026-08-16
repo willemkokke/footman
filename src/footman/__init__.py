@@ -252,7 +252,14 @@ def main(tasks_file: str | None = None) -> None:
         a.startswith(("-f=", "--tasks-file=")) for a in argv
     ):
         argv = [f"--tasks-file={tasks_file}", *argv]
+    # Past the completion hot path, this process exists to run one command and
+    # exit, so it should not spend its startup collecting garbage it has not
+    # made yet. `_globals` turns the collector back on — with everything
+    # loaded by then frozen — at the last moment before task bodies run.
+    from footman import _globals
     from footman.app import App
+
+    _globals.defer_gc()
 
     # `dist` names the distribution this console script ships in — what a
     # project's lockfile pins, and what a tasks file carrying its own

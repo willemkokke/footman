@@ -43,7 +43,6 @@ from footman._split import ChainError
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from concurrent.futures import Future
 
     from footman._executor import TaskResult
 
@@ -53,19 +52,50 @@ if TYPE_CHECKING:
 _UNKEYABLE = object()
 
 
+class _Settled:
+    """The five-method slice of `Future` this module actually uses.
+
+    `concurrent.futures` costs ~4.9 ms to import — it drags `logging` through
+    `traceback`, and `logging` drags `_colorize` — and every run that executes
+    a task claims a cell, so every run paid it. Nothing here needs the
+    executor half of that module: a cell is written once by its owner and read
+    by whoever waits, which is a `threading.Event` and two slots.
+    """
+
+    __slots__ = ("_done", "_exc", "_value")
+
+    def __init__(self) -> None:
+        self._done = threading.Event()
+        self._value: Any = None
+        self._exc: BaseException | None = None
+
+    def done(self) -> bool:
+        return self._done.is_set()
+
+    def set_result(self, value: Any) -> None:
+        self._value = value
+        self._done.set()
+
+    def set_exception(self, exc: BaseException) -> None:
+        self._exc = exc
+        self._done.set()
+
+    def result(self) -> Any:
+        # No timeout: the wait graph above this layer is what refuses a claim
+        # that could not be satisfied, so a wait here is always one that ends.
+        self._done.wait()
+        if self._exc is not None:
+            raise self._exc
+        return self._value
+
+
 class _Cell:
     """One (task, arguments) execution: its future, its owner, its label."""
 
     __slots__ = ("future", "label", "owner", "record")
 
     def __init__(self, owner: int, label: str) -> None:
-        # Imported here, not at module scope: `concurrent.futures` drags
-        # `logging` (through `traceback`) for ~5.6 ms, and a line that never
-        # claims a cell — `--list`, `--help`, a refusal — has no use for
-        # either. A run that does claim one pays a dict lookup.
-        from concurrent.futures import Future
-
-        self.future: Future[Any] = Future()
+        self.future = _Settled()
         self.owner = owner  # the thread that claimed it (for the wait graph)
         self.label = label
         self.record: Any = None  # the execution's sealed row, for reuse

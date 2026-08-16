@@ -65,6 +65,7 @@ Two halves of the same idea: how a value is *collected*, and how it is
 `Secret`.
 
 ```python
+from typing import Annotated
 from footman import Secret, Stdout, ask, task
 
 @task

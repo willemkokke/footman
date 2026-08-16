@@ -200,4 +200,4 @@ def test_the_option_reaches_the_task(tmp_path):
 ```
 
 Entry points resolve from installed metadata, so the test environment
-installs your package (editable is fine) — exactly what your users' will do.
+installs your package (editable is fine) — exactly what your users will do.

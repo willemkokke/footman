@@ -96,8 +96,8 @@ build system (see `doit` for that niche).
 Not covered above, and why: **taskipy** (pyproject shell aliases, no
 Python-function tasks), **doit** (a proper build system with file-target and
 up-to-date tracking, a different game), **nox** / **tox** (environment and
-test-matrix orchestration), and the non-Python **just** / **go-task** / **mise**
-/ **make** (great UX and completion, no Python dynamism). `uv`'s own task support
+test-matrix orchestration), and the non-Python **go-task** / **mise**
+(great UX and completion, no Python dynamism). `uv`'s own task support
 is [in design](https://github.com/astral-sh/uv/issues/5903) and will cover the
 simple-named-command case; footman's patch of ground is typed Python-function
 tasks with real CLI semantics.

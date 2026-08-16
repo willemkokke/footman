@@ -234,7 +234,7 @@ a typo'd branch is refused against a *fresh* call, so pass
 
 ### KEY=VALUE options
 
-A `dict` parameter speaks the `--name KEY=VALUE` dialect, repeatable,
+A `dict` parameter speaks the `--name=KEY=VALUE` dialect, repeatable,
 with taught errors for malformed pairs:
 
 ```python
@@ -355,7 +355,7 @@ def serve(port: int = 8000):
 
 `infinite=True` implies `progress=False` (a duration that never arrives
 is not history), the status line yields to a one-time hint (`serve runs
-until you stop it, Ctrl-C`) and listings carry the same note:
+until you stop it — Ctrl-C`) and listings carry the same note:
 `serve  Run the dev server until Ctrl-C.  (runs until Ctrl-C)`. Ctrl-C
 itself cancels cleanly: the run reports `interrupted` and exits 130, no
 traceback. (This recipe used `progress=False` the day it was written;
@@ -797,7 +797,7 @@ def test_release_refuses_bad_versions(fm_project):
         def release(version: Annotated[str, check(semver)]): ...
     ''')
     result = fm.invoke("release not-a-version")
-    assert result.exit_code == 2
+    assert result.exit_code == 64
     assert "MAJOR.MINOR.PATCH" in result.stderr
 ```
 

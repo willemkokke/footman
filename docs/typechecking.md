@@ -53,7 +53,7 @@ its plain type. A `Stdin[str]` parameter is a `str`; a task returning
 
 **Availability gates are identity.** `@requires`, `@requires_dep`,
 `@requires_tool` and `@requires_env` hand back exactly what they wrap, so
-they never cost you the signature — whichever side of `@task` they stand.
+they never cost you the signature — whichever side of `@task` they stand on.
 
 **The rest of the surface states its types.** `run()` returns a `Result`
 (`.code`, `.ok`, `.stdout`, `.stderr`); `parallel(*calls)` returns

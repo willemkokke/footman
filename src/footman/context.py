@@ -19,7 +19,6 @@ import inspect
 import io
 import os
 import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -2499,6 +2498,8 @@ _BASH_HINTS = (
 
 def _find_exe(name: str, hints: tuple[str, ...] = ()) -> str | None:
     """A concrete path for *name*: a known *hints* location first, then PATH."""
+    import shutil
+
     for hint in hints:
         if os.path.isfile(hint):
             return hint
