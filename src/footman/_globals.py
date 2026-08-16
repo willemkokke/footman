@@ -895,30 +895,60 @@ def named_lanes(lanes: tuple[Lane, ...], name: str = "") -> Any:
 
     @contextlib.contextmanager
     def _hold() -> Any:
+        global _parked
         if not lanes:
             yield []
             return
         wanted = {ln.name for ln in lanes}
         stalled = False
+        # The lineage exemption `lane()` already applies, applied here too: a
+        # serial/exclusive task *is* the holder of the lane this claim would
+        # wait for, so waiting on it is waiting for itself. The hold is
+        # already total — it conflicts with every named lane — so a step
+        # inside it needs no further grant, and asking for one deadlocks the
+        # run deterministically.
+        from footman.context import current
+
+        mine = bool(getattr(current(), "serial_active", False))
         with _arb_cv:
             # Inside the lock on purpose: the clock must cover only the
             # predicate wait. Started outside, a claim granted on arrival
             # would book the mutex acquisition as a lane wait — a phantom
             # row whenever the arbiter is briefly busy.
             entered = time.monotonic()
-            while (
-                any(w in _named_holders for w in wanted)
-                or _serial_holder is not None
-                or _excl_holder is not None
-                or _excl_waiting
-            ):
-                stalled = True
-                busy = next((w for w in wanted if w in _named_holders), None)
-                _wait_note(
-                    name,
-                    f"the {busy} lane" if busy else "the exclusive drain",
-                    _named_holders.get(busy or "") or _serial_holder or _excl_holder,
-                )
+            # Parked across the wait, the same exemption a pool wait takes:
+            # this body is blocked in footman's own code and can touch nothing,
+            # so it must not hold the exclusive drain open. Without it the two
+            # predicates close a circle — the drain waits for every body to
+            # finish, and this claim waits for the queued drain — and the run
+            # hangs with nothing shared between the two tasks. Counted here
+            # rather than through `parked()`, which takes the arbiter lock this
+            # frame already holds.
+            #
+            # `_excl_waiting` stays in the predicate below: a queued exclusive
+            # must still block *new* claims, or a stream of them starves it.
+            _parked += 1
+            _arb_cv.notify_all()
+            try:
+                while any(w in _named_holders for w in wanted) or (
+                    not mine
+                    and (
+                        _serial_holder is not None
+                        or _excl_holder is not None
+                        or _excl_waiting
+                    )
+                ):
+                    stalled = True
+                    busy = next((w for w in wanted if w in _named_holders), None)
+                    _wait_note(
+                        name,
+                        f"the {busy} lane" if busy else "the exclusive drain",
+                        _named_holders.get(busy or "")
+                        or _serial_holder
+                        or _excl_holder,
+                    )
+            finally:
+                _parked -= 1
             for w in wanted:
                 _named_holders[w] = name or "?"
         try:

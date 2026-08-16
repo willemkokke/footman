@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import textwrap
 import threading
 import time
@@ -10,6 +12,85 @@ import time
 import pytest
 
 from footman import Context, lane, parallel, step, use_context
+
+# --- deadlock regressions ----------------------------------------------------
+#
+# These drive a real `fm` in a subprocess rather than `Runner`. A claim that
+# deadlocks holds the arbiter's condition variable, so in-process it would not
+# fail this test — it would wedge every test that ran after it. A subprocess
+# turns a regression into one red test with a message.
+
+_DEADLOCK_SOURCE = """
+import time
+import footman
+from footman import step, task
+
+db = footman.lane("db", reason="the one test database")
+
+@step
+def _work(): ...
+
+laned = _work.opts(lanes=(db,))
+
+@task
+def lane_user():
+    time.sleep(0.3)          # so the exclusive task queues mid-body
+    laned()()
+
+@task(exclusive=True)
+def drainer(): ...
+
+@task(serial=True)
+def serial_step():
+    laned()()
+
+@task(exclusive=True)
+def exclusive_step():
+    laned()()
+"""
+
+
+def _fm(tmp_path, *argv: str, timeout: float = 30.0):
+    """Run `fm` in its own process; fail loudly rather than hang the suite."""
+    (tmp_path / "tasks.py").write_text(textwrap.dedent(_DEADLOCK_SOURCE))
+    env = {**os.environ, "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache")}
+    env.pop("VIRTUAL_ENV", None)
+    env.pop("PYTHONPATH", None)
+    try:
+        return subprocess.run(
+            [sys.executable, "-m", "footman", *argv],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:  # pragma: no cover - the regression
+        pytest.fail(f"`fm {' '.join(argv)}` did not finish in {timeout}s: deadlock")
+
+
+def test_an_exclusive_task_does_not_deadlock_a_concurrent_lane_claim(tmp_path):
+    """The two share nothing — no lane, no dependency — and used to circle.
+
+    The drain waited for every body to finish; the step's claim waited for the
+    queued drain; a body blocked in footman's own arbiter still counted as
+    running. Neither could move.
+    """
+    done = _fm(tmp_path, "lane-user", "drainer")
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_serial_task_may_claim_a_lane_from_its_own_step(tmp_path):
+    """`serial=` is already the all-lanes hold, so a step inside it waited on
+    a lane its own task held."""
+    done = _fm(tmp_path, "serial-step")
+    assert done.returncode == 0, done.stderr
+
+
+def test_an_exclusive_task_may_claim_a_lane_from_its_own_step(tmp_path):
+    """As above, for the exclusive hold."""
+    done = _fm(tmp_path, "exclusive-step")
+    assert done.returncode == 0, done.stderr
 
 
 def test_two_claimants_serialise_and_unrelated_work_overlaps():
