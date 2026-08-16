@@ -1233,6 +1233,37 @@ class Failed(Exception):
         super().__init__(reason)
 
 
+def coroutine_refusal(kind: str, fn: Any = None) -> Failed:
+    """The taught refusal for an `async def` body footman would never run.
+
+    Calling an `async def` builds a coroutine and executes none of it, so a
+    body left like that reports success for work that never happened — the one
+    receipt the design refuses to mint (docs/design.md, "No fiction"). footman
+    runs no event loop on purpose, and the same page says why, so this names
+    the way in rather than pretending to be one.
+
+    The definition site is part of the message because this is a refusal about
+    a *declaration*, not about anything the run did: the answer to "which one?"
+    is a place in a file, and a chain across a cascade can hold a great many
+    bodies. `unwrap` first, so a decorated body points at the `async def`
+    somebody wrote rather than at the wrapper that returned its coroutine.
+
+    One phrasing for both callers: tasks go through `_executor`, steps through
+    `_step`'s pump, and two copies of a message drift.
+    """
+    where = ""
+    if fn is not None:
+        code = getattr(inspect.unwrap(fn), "__code__", None)
+        if code is not None:
+            where = f" at {code.co_filename}:{code.co_firstlineno}"
+    return Failed(
+        f"the {kind} body{where} is an `async def` and footman runs no event "
+        f"loop, so calling it builds a coroutine and executes nothing. Make "
+        f"it a plain `def` and drive the async work from inside it "
+        f"(`asyncio.run(...)`)."
+    )
+
+
 def fail(reason: str = "", *, code: int = 1) -> NoReturn:
     """Fail the current task with a *reason* (and exit *code*, default 1).
 
@@ -1261,6 +1292,19 @@ def _is_deliberate_stop(err: BaseException) -> bool:
     """Whether *err* is a chosen stop with a message (`fail()`/`sys.exit("…")`)
     rather than a crash — so its reason renders verbatim, no type prefix."""
     return isinstance(err, (SystemExit, Failed))
+
+
+def _was_expected(err: BaseException) -> bool:
+    """Whether footman saw *err* coming — so no stack belongs with it.
+
+    A chosen stop, and a command that exited non-zero or ran out of time: three
+    outcomes the runner has words for, where a traceback would describe
+    footman's own plumbing rather than anything the reader did. Everything else
+    is an exception nobody planned — a bug in the tasks file — and the one
+    question it raises is *where*, which is why those carry a location and,
+    off a terminal, the stack.
+    """
+    return isinstance(err, (SystemExit, Failed, RunFailed, RunTimeout))
 
 
 def context_param_name(sig: inspect.Signature) -> str | None:

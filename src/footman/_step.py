@@ -21,14 +21,15 @@ from __future__ import annotations
 import inspect
 import io
 import time
-import traceback
 from collections.abc import Callable, Generator
 from contextvars import ContextVar
 from typing import Any, Generic, Literal, ParamSpec, TypeVar, cast, overload
 
+from footman import _describe
 from footman import context as _context
 from footman.context import (
     AuditEntry,
+    Failed,
     Result,
     ResultView,
     RunFailed,
@@ -304,7 +305,16 @@ def _pump(item: WorkItem[Any]) -> Any:
     def drive() -> Any:
         nonlocal timed_out
         if not maker._is_gen:
-            return maker._fn(*item._args, **item._kwargs)
+            produced = maker._fn(*item._args, **item._kwargs)
+            if inspect.iscoroutine(produced):
+                # An `async def` is not a generator function, so it lands here
+                # and the call builds a coroutine that nothing drives: the step
+                # recorded a receipt for work that never happened. A generator
+                # body is the supported way to yield, and it is a cancellation
+                # point rather than a scheduling one.
+                produced.close()  # or "was never awaited" trails the refusal
+                raise _context.coroutine_refusal("step", maker._fn)
+            return produced
         gen: Generator[Any, Any, Any] = maker._fn(*item._args, **item._kwargs)
         payload: Any = None
         while True:
@@ -377,9 +387,23 @@ def _pump(item: WorkItem[Any]) -> Any:
         else:  # a string reason: print it, fail with 1 — sys.exit's contract
             err_buf.write(f"{exc.code}\n")
             exit_code = 1
+    except Failed as exc:
+        # A deliberate stop, not a crash: `footman.fail()` and the refusals
+        # built on it carry a reason written for the person reading it, and
+        # `Failed` promises that reason renders verbatim. A traceback here
+        # buried it under footman's own frames and made a considered stop look
+        # like an internal error. The reason reaches the report through the
+        # sealed record, so it is not written twice.
+        error = exc
     except Exception as exc:  # the body failed; the record still seals
         error = exc
-        err_buf.write(traceback.format_exc())
+        # Trimmed of footman's own leading frames, so the first line is the one
+        # somebody wrote. The stack itself only belongs off a terminal (or under
+        # -v): on one, the failure line's `at file:line` is the answer, and the
+        # reader can ask for the rest. Written here rather than only in the
+        # summary because this is the step's own record — `--json` and
+        # `recording()` read it.
+        err_buf.write(_describe.user_traceback(exc))
 
     duration = time.perf_counter() - start
     if timed_out:

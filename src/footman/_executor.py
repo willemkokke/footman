@@ -41,6 +41,7 @@ from footman.context import (
     RunFailed,
     _current,
     context_param_name,
+    coroutine_refusal,
 )
 from footman.params import Secret
 from footman.registry import Group, Task
@@ -1294,12 +1295,7 @@ def _call(
             # purpose (docs/design.md, "No event loop"), so the refusal names
             # the way in rather than pretending to be one.
             returned.close()  # or Python warns "was never awaited" as well
-            raise Failed(
-                "the body is an `async def` and footman runs no event loop, "
-                "so calling it builds a coroutine and executes nothing. Make "
-                "it a plain `def` and drive the async work from inside it "
-                "(`asyncio.run(...)`)."
-            )
+            raise coroutine_refusal("task", registry.task_body(fn))
     except SystemExit as exc:
         # A non-int, non-None code is Python's `sys.exit("message")` idiom: the
         # object is the reason the interpreter would print to stderr. Carry it as

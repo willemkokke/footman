@@ -1094,10 +1094,25 @@ def _emit_document(value: object, inner: object) -> None:
     sys.stdout.write(text + "\n")
 
 
+def _stack_wanted(verbose: bool) -> bool:
+    """Whether an unexpected exception should carry its whole stack.
+
+    Under `-v`, or whenever stderr is not a terminal. Not-a-terminal means a
+    log — CI, a redirect, cron — and there is no second run there to add `-v`
+    to: the artifact is what you get. The progress estimate already reads the
+    same signal to take its one-shot path.
+
+    The *real* stream, not `ctx.tty`, which folds in whether output is being
+    captured: `Runner` captures, and a suite is not a log to be rescued.
+    """
+    return verbose or not context.real_stderr().isatty()
+
+
 def _print_summary(
     results: list[_executor.TaskResult],
     *,
     timings: bool,
+    verbose: bool = False,
     total: float,
 ) -> None:
     # The summary is commentary about the run, not the run's output — it goes
@@ -1157,6 +1172,31 @@ def _print_summary(
             else:
                 detail = f"{type(err).__name__}: {err}"
             _error(f"{result.task}: {detail}")
+            if not context._was_expected(err):
+                # An exception nobody planned: the reader's own bug, and the
+                # only question it raises is where. The line used to end above,
+                # so a task that raised said what happened and never where —
+                # information destroyed rather than merely unformatted.
+                #
+                # The place by default, the whole stack under -v or when
+                # stderr is not a terminal. Not a terminal means a log — CI, a
+                # redirect, cron — where there is no second run to add -v to,
+                # and the same reasoning already sends the progress estimate
+                # down its one-shot path.
+                where = _describe.user_frame(err)
+                # A step that failed already printed this stack under its own
+                # receipt, where the reader was looking. Repeating it under the
+                # summary would say the same thing twice, so the summary keeps
+                # the one line that places it.
+                from_step = any(s.code != 0 for s in result.steps)
+                if (
+                    _stack_wanted(verbose)
+                    and not from_step
+                    and (stack := _describe.user_traceback(err))
+                ):
+                    print(stack.rstrip("\n"), file=sys.stderr)
+                elif where:
+                    _error(f"       at {where}")
         elif not result.ok and state != "skipped":
             # A skipped row's whole story is its cause, already on the line.
             _error(f"{result.task}: exited with code {result.code}")
@@ -2277,7 +2317,12 @@ def _run_tree(
                     sys.stderr.write(r.output)
             sys.stderr.flush()
         if not g.get("quiet"):
-            _print_summary(results, timings=bool(g.get("timings")), total=total)
+            _print_summary(
+                results,
+                timings=bool(g.get("timings")),
+                verbose=bool(g.get("verbose")),
+                total=total,
+            )
         if emitters:
             doc_seg, doc_inner = emitters[0]
             doc_result = next((r for r in results if r.task == doc_seg.task), None)

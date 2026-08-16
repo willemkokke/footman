@@ -17,7 +17,7 @@ import re
 import unicodedata
 import uuid
 from collections.abc import Callable, Iterator
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import Any
 
 TYPE_WORD = {
@@ -878,6 +878,63 @@ def jsonable(value: Any) -> tuple[bool, Any]:
         return True, json.loads(json.dumps(redact(value), default=json_default))
     except (TypeError, ValueError):
         return False, None
+
+
+# --- where user code lives ----------------------------------------------------
+#
+# One answer to "where is this?", for every message that needs it: the refusals
+# that name a declaration, the shadow chain in `--help`, and the failure line
+# for an exception nobody expected. Kept here, with the rest of the phrasing,
+# because three copies of `co_filename:co_firstlineno` is how they drift.
+
+_OURS = str(Path(__file__).resolve().parent)
+
+
+def source_of(fn: Any) -> str:
+    """`file:line` where *fn* is written, or `""` when it cannot be told.
+
+    `unwrap` first: a decorated body should point at what somebody wrote, not
+    at the wrapper standing in front of it.
+    """
+    import inspect
+
+    code = getattr(inspect.unwrap(fn), "__code__", None) if fn is not None else None
+    return f"{code.co_filename}:{code.co_firstlineno}" if code is not None else ""
+
+
+def _is_ours(filename: str) -> bool:
+    return str(Path(filename).resolve()).startswith(_OURS)
+
+
+def user_frame(exc: BaseException) -> str:
+    """`file:line in name` for the innermost frame that is the caller's code.
+
+    Innermost *user* frame, not innermost frame: a body that calls `run()` with
+    a callable ends its traceback inside footman, and naming that would answer
+    a question nobody asked. Empty when every frame is footman's own.
+    """
+    import traceback
+
+    for frame in reversed(traceback.extract_tb(exc.__traceback__)):
+        if not _is_ours(frame.filename):
+            return f"{frame.filename}:{frame.lineno} in {frame.name}"
+    return ""
+
+
+def user_traceback(exc: BaseException) -> str:
+    """The formatted traceback with footman's own frames off the front.
+
+    Only the *leading* run is dropped — the plumbing between the runner and the
+    first line the caller wrote. Frames further down are kept even when they are
+    footman's, because a body that calls back into the framework has a real path
+    through it, and hiding the middle of a stack is worse than showing it.
+    """
+    import traceback
+
+    tb = exc.__traceback__
+    while tb is not None and _is_ours(tb.tb_frame.f_code.co_filename):
+        tb = tb.tb_next
+    return "".join(traceback.format_exception(type(exc), exc, tb or exc.__traceback__))
 
 
 def global_default_suffix(name: str, *, code: bool = False) -> str:
