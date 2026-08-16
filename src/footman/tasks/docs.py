@@ -104,7 +104,9 @@ def page(
         Literal["plain", "material"],
         doc("plain CommonMark, or material/zensical extras"),
     ] = "plain",
-    out: Path | None = None,
+    out: Annotated[
+        Path | None, doc("file to write the page into; omitted = stdout")
+    ] = None,
     prog: Annotated[str, _invoking_cli, doc("command name in usage and examples")] = "",
     all: Annotated[bool, doc("include footman's own mounted tasks")] = False,
 ) -> list[str] | None:
@@ -1238,7 +1240,11 @@ def cast(
 
 
 @tasks.task
-def errors(out: Path | None = None) -> list[str] | None:
+def errors(
+    out: Annotated[
+        Path | None, doc("file to write the page into; omitted = stdout")
+    ] = None,
+) -> list[str] | None:
     """Render every runtime error and note as a markdown reference page.
 
     The entries are extracted from footman's own source (AST, not prose):
@@ -1313,7 +1319,11 @@ def errors(out: Path | None = None) -> list[str] | None:
 
 
 @tasks.task
-def config(out: Path | None = None) -> list[str] | None:
+def config(
+    out: Annotated[
+        Path | None, doc("file to write the table into; omitted = stdout")
+    ] = None,
+) -> list[str] | None:
     """Render the `[tool.footman]` keys as a markdown table.
 
     The rows come from `_config.KEYS`, the list the runner itself
@@ -1334,7 +1344,9 @@ def config(out: Path | None = None) -> list[str] | None:
 
 @tasks.task(name="globals")
 def globals_(
-    out: Path | None = None,
+    out: Annotated[
+        Path | None, doc("file to write the table into; omitted = stdout")
+    ] = None,
     prog: Annotated[str, _invoking_cli, doc("command name in the table")] = "",
 ) -> list[str] | None:
     """Render the runner's global options as a markdown table.

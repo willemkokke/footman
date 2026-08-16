@@ -137,6 +137,32 @@ def test_globals_task_writes_out(plugin_project, capsys):
     assert dest.read_text(encoding="utf-8").startswith("| option")
 
 
+def test_no_docs_parameter_says_only_its_own_type():
+    """`--out=PATH  a path` is the label said twice. With no `doc(...)` the
+    help line falls back to the type word, which the metavar already
+    carried — so the row costs a reader a glance and hands back nothing.
+    Every parameter this plugin ships has to say more than its type."""
+    from footman import _manifest
+    from footman._describe import TYPE_WORD, listed_params, param_detail
+    from footman.tasks.docs import tasks
+
+    words = set(TYPE_WORD.values())
+    bare: list[str] = []
+
+    def walk(node, path: list[str]) -> None:
+        for name, task in node.get("tasks", {}).items():
+            for p in listed_params(task):
+                detail = param_detail(p)
+                # Nothing but type words, unions included ("a path or text").
+                if detail and all(bit in words for bit in detail.split(" or ")):
+                    bare.append(f"{'.'.join([*path, name])} {p['name']}: {detail}")
+        for name, child in node.get("groups", {}).items():
+            walk(child, [*path, name])
+
+    walk(_manifest.build_manifest(tasks)["tree"], [])
+    assert bare == []
+
+
 # --- docs shots: pty screenshots, and the @requires_dep dogfood ---------------
 
 
