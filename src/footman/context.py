@@ -2141,6 +2141,22 @@ _aborting = threading.Event()  # set once *any* termination (fail-fast/Ctrl-C) f
 _abort_full = threading.Event()  # set when the abort spares nothing (Ctrl-C, error)
 
 
+def abort_reaches(keep_going: bool) -> bool:
+    """Does the live abort reach work under this failure policy?
+
+    The abort flags are process-wide latches, but fail-fast's abort is
+    per-subtree: a keep-going subtree is not doomed by a sibling's failure, so
+    nothing about it — its children, its verdicts — belongs to that abort. A
+    *full* abort (Ctrl-C, an internal error) spares nothing.
+
+    Every reader of the latches asks this question, so it is answered here
+    once. `_register_child` calls it under `_children_lock` to keep its
+    snapshot atomic; the executor calls it to decide whether a failure was
+    genuine or cut off.
+    """
+    return _aborting.is_set() and (_abort_full.is_set() or not keep_going)
+
+
 def _kill_tree(proc: subprocess.Popen[str], *, force: bool) -> None:
     """Signal a spawned child *and its descendants*, not just the child itself.
 
@@ -2180,12 +2196,13 @@ def _register_child(proc: subprocess.Popen[str], keep_going: bool = False) -> No
     # a child is killed either by that sweep or by this check, never missed.
     with _children_lock:
         _live_children[proc] = keep_going
-        aborting = _aborting.is_set()
-        full = _abort_full.is_set()
+        # Read inside the lock, so the answer belongs to the same instant as
+        # the registration above.
+        doomed = abort_reaches(keep_going)
     # A child spawned after an abort fired self-terminates, so the doomed run
     # can't outrun the kill — but a keep-going child spawned after a *fail-fast*
     # abort (not a full Ctrl-C) is spared, matching the per-subtree policy.
-    if aborting and (full or not keep_going):
+    if doomed:
         _kill_tree(proc, force=False)
 
 

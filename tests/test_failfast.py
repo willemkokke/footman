@@ -274,6 +274,39 @@ def test_a_killed_task_reports_cancelled_not_failed():
     assert results["slow"].cancelled is True  # cut off by fail-fast, not a failure
 
 
+def test_keep_going_reports_a_later_failure_as_its_own_not_cancelled():
+    # The twin of the test above, and the case the abort latch got wrong. The
+    # flags are process-wide, but fail-fast's abort is per-subtree: `boom`
+    # setting the latch does not doom a keep-going sibling, which is spared
+    # the reap and runs to its own conclusion. Reading the latch alone called
+    # that conclusion a cancellation — so `--keep-going`, whose whole job is
+    # to collect every failure, reported the first and hid the rest: the
+    # "cancelled" line *replaces* the error rather than joining it.
+    from footman import context
+    from footman._schedule import run_plan
+
+    def tasks(reg):
+        @reg.task
+        def late():
+            # Deterministic, and no sleep: wait for the very latch that used
+            # to mislabel this task, then fail on this task's own terms.
+            assert context._aborting.wait(timeout=10), "sibling never aborted"
+            raise RuntimeError("my own fault")
+
+        @reg.task
+        def boom():
+            raise SystemExit(7)
+
+    reg, tree = _tree(tasks)
+    segs = _segs(tree, "late boom")
+    results = {
+        r.task: r for r in run_plan(reg, segs, sequential=False, keep_going=True)
+    }
+    assert results["late"].cancelled is False
+    assert isinstance(results["late"].error, RuntimeError)  # the error survives
+    assert results["boom"].cancelled is False and results["boom"].code == 7
+
+
 @pytest.mark.skipif(
     sys.platform == "win32", reason="POSIX process groups; Windows uses taskkill /T"
 )

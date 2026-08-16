@@ -2406,7 +2406,13 @@ def run_bound(
     _futures.resolve(cell, returned, error, record=result)
     # A task that failed while fail-fast was already aborting the run wasn't a
     # genuine failure — it was cut off. Report that honestly, not as "failed".
-    if not result.ok and context._aborting.is_set():
+    # Only when the abort actually *reaches* this task, though: the latch is
+    # process-wide and a sibling's failure sets it, but a keep-going task is
+    # spared the reap and runs to its own conclusion. Reading the latch alone
+    # called that conclusion a cancellation — and because the label replaces
+    # the error rather than joining it, `--keep-going` reported the first
+    # failure and hid every one after it, which is the opposite of the flag.
+    if not result.ok and context.abort_reaches(ctx.keep_going):
         result.cancelled = True
     return result
 
