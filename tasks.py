@@ -324,6 +324,13 @@ def _scaffold_hero_demo() -> str:
             "user.email=demo@example.com",
             "-c",
             "user.name=demo",
+            # Signing is global config, and this throwaway repo has no business
+            # reaching for the maintainer's key: a gated agent turns a docs
+            # build into `failed to write commit object`, and an unattended one
+            # (CI, a release) would hang on a prompt nobody can answer. The
+            # identity above is overridden for the same reason.
+            "-c",
+            "commit.gpgsign=false",
             "commit",
             "-qm",
             "demo",
