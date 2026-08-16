@@ -186,7 +186,12 @@ export function highlightPython(code) {
   return frag;
 }
 
-export { autocompletion, completionKeymap } from "@codemirror/autocomplete";
+export {
+  autocompletion,
+  completionKeymap,
+  completionStatus,
+  startCompletion,
+} from "@codemirror/autocomplete";
 export { python } from "@codemirror/lang-python";
 export { Prec, StateEffect, StateField } from "@codemirror/state";
 export {

@@ -811,18 +811,21 @@ def _editor_sighelp(
 
 def test_playground_parameter_hints_track_the_cursor(tmp_path: Path):
     """The IDE gesture for positionals: typing ( or , asks which parameter
-    the cursor is on (jedi's Signature.index), and the panel answers with
-    the signature — the callee spelled as the user typed it, never the
-    tool handle's class — the active parameter named, and its prose: the
-    Args entry when it has one, the docstring's summary when it doesn't
-    (a variadic positional rides on the summary line)."""
+    the cursor is on (jedi's Signature.index) and the panel answers
+    prose-first (Willem's layout): docstring summary, what the call
+    returns, the active parameter's Args entry — and the signature as a
+    one-line footer, the callee spelled as the user typed it (never the
+    tool handle's class), the active parameter's span marked for inline
+    highlight. A variadic positional rides on the summary line."""
     pre = "ruff.check("
     help_, err = _editor_sighelp(
         tmp_path, "from toolroom import ruff\n" + pre, 2, len(pre)
     )
     assert help_ is not None, err
     assert help_["label"].startswith("check("), help_
+    assert "\n" not in help_["label"], help_  # collapsed to one line
     assert help_["active"] == "args", help_
+    assert help_["sig"][1].startswith("*args"), help_
     assert "Run Ruff" in help_["summary"], help_
 
     # Past the comma the highlight moves to the next parameter, and a
@@ -831,7 +834,7 @@ def test_playground_parameter_hints_track_the_cursor(tmp_path: Path):
     help_, err = _editor_sighelp(tmp_path, src, 4, len('deploy("prod", '))
     assert help_ is not None, err
     assert help_["active"] == "region", help_
-    assert "\n    " in help_["label"], help_  # forced one-param-per-line
+    assert help_["sig"] == ["deploy(target, ", 'region="eu"', ")"], help_
     pre = 'ruff.check("src", fix='
     help_, err = _editor_sighelp(
         tmp_path, "from toolroom import ruff\n" + pre, 2, len(pre)
@@ -839,6 +842,29 @@ def test_playground_parameter_hints_track_the_cursor(tmp_path: Path):
     assert help_ is not None, err
     assert help_["active"] == "fix", help_
     assert "Apply fixes" in help_["doc"], help_
+
+    # A Google-style Returns section surfaces — the panel says what the
+    # call answers with, not just what it takes.
+    own = (
+        "def build(target: str = 'app') -> str:\n"
+        '    """Compile one bundle.\n'
+        "\n"
+        "    Args:\n"
+        "        target: Which bundle to compile.\n"
+        "\n"
+        "    Returns:\n"
+        "        The artifact's path.\n"
+        '    """\n'
+        "    return target\n"
+        "\n"
+        "build(\n"
+    )
+    help_, err = _editor_sighelp(tmp_path, own, 12, 6)
+    assert help_ is not None, err
+    assert "Compile one bundle" in help_["summary"], help_
+    assert help_["returns"] == "The artifact's path.", help_
+    assert help_["active"] == "target", help_
+    assert "Which bundle" in help_["doc"], help_
 
     # Outside a call there is nothing to say, and a comma inside a
     # string literal is prose, not an argument boundary.

@@ -514,13 +514,11 @@ def _fm_invoke(files_json, line, columns=80):
             if file and str(Path(file).resolve()) in written:
                 del sys.modules[mod_name]
 
-def _fm_wrap_signature(sig, force=False):
+def _fm_wrap_signature(sig):
     # One parameter per line once a signature outgrows one: split at the
     # outermost parens' depth-zero commas. String-level on purpose -- the
     # name branch only ever has the stub's rendered line to work with.
-    # Signature help forces the split -- the active parameter is
-    # highlighted by line, so every parameter needs one.
-    if len(sig) <= 60 and not force:
+    if len(sig) <= 60:
         return sig
     open_i = sig.find("(")
     close_i = sig.rfind(")")
@@ -561,6 +559,20 @@ def _fm_arg_doc(doc, name):
             break
         if ln.startswith("    " + name + ":"):
             out.append(ln.split(":", 1)[1].strip())
+            grabbing = True
+    return " ".join(out)
+
+def _fm_returns_doc(doc):
+    # The Returns section's text, joined to one paragraph.
+    out = []
+    grabbing = False
+    for ln in doc.split(chr(10)):
+        if grabbing:
+            if ln.startswith("    ") and ln.strip():
+                out.append(ln.strip())
+                continue
+            break
+        if ln.strip() == "Returns:":
             grabbing = True
     return " ".join(out)
 
@@ -911,12 +923,34 @@ def _fm_editor_sighelp(files_json, source, line, column):
                     or _fm_arg_doc(prose, star + active)
                     or _fm_arg_doc(prose, star + star + active)
                 )
+        # The signature stays one line -- the panel's footer; the prose
+        # leads. The active parameter travels as its span so the page
+        # highlights it inline instead of by line.
+        before = label
+        mid = ""
+        after = ""
+        if active and idx is not None:
+            frag = ""
+            try:
+                frag = params[idx].to_string() or ""
+            except Exception:
+                frag = ""
+            at = label.find(frag) if frag else -1
+            if at < 0:
+                frag = active
+                at = label.find(frag)
+            if at >= 0:
+                before = label[:at]
+                mid = frag
+                after = label[at + len(frag) :]
         return json.dumps(
             {
-                "label": _fm_wrap_signature(label, force=len(params) > 1),
+                "label": label,
+                "sig": [before, mid, after],
                 "active": active,
                 "doc": doc,
                 "summary": summary,
+                "returns": _fm_returns_doc(prose),
             }
         )
     except Exception:
@@ -1549,6 +1583,8 @@ function initPlayground() {
         footmanTheme,
         autocompletion,
         completionKeymap,
+        completionStatus,
+        startCompletion,
         keymap,
         hoverTooltip,
         tooltips,
@@ -1664,41 +1700,50 @@ function initPlayground() {
         },
         provide: (f) => showTooltip.from(f),
       });
+      /* Willem's layout: the prose leads — docstring summary, what the
+       * call returns, then the active parameter's own documentation —
+       * and the signature is the footer, collapsed to one line with the
+       * active parameter highlighted inline. The old signature-first
+       * rendering was a thirty-line wall with the documentation below
+       * the fold. */
       const buildHintsDom = (help) => {
         const dom = document.createElement("div");
         dom.className = "fmp-signature";
-        for (const lineText of help.label.split("\n")) {
-          const lineEl = document.createElement("div");
-          lineEl.className = "fmp-sig-line";
-          const bare = lineText.trimStart().replace(/^\*+/, "");
-          if (
-            help.active &&
-            (bare === help.active ||
-              bare.startsWith(help.active + ":") ||
-              bare.startsWith(help.active + "=") ||
-              bare.startsWith(help.active + ","))
-          )
-            lineEl.classList.add("fmp-sig-active");
-          lineEl.appendChild(highlightPython(lineText));
-          dom.appendChild(lineEl);
-        }
-        const text = help.doc || help.summary;
-        if (text) {
+        const prose = [];
+        if (help.summary) prose.push(["", help.summary]);
+        if (help.returns) prose.push(["Returns", help.returns]);
+        if (help.doc && help.active) prose.push([help.active, help.doc]);
+        if (prose.length) {
           const docEl = document.createElement("div");
           docEl.className = "fmp-signature-doc";
-          const row = document.createElement("div");
-          row.className = "fmp-arg";
-          if (help.doc && help.active) {
-            const nameEl = document.createElement("strong");
-            nameEl.textContent = help.active;
-            row.appendChild(nameEl);
-            row.appendChild(document.createTextNode(" " + help.doc));
-          } else {
-            row.textContent = text;
+          for (const [name, text] of prose) {
+            const row = document.createElement("div");
+            row.className = "fmp-arg";
+            if (name) {
+              const nameEl = document.createElement("strong");
+              nameEl.textContent = name;
+              row.appendChild(nameEl);
+              row.appendChild(document.createTextNode(" " + text));
+            } else {
+              row.textContent = text;
+            }
+            docEl.appendChild(row);
           }
-          docEl.appendChild(row);
           dom.appendChild(docEl);
         }
+        const sigEl = document.createElement("div");
+        sigEl.className = "fmp-sig-line";
+        if (prose.length) sigEl.classList.add("fmp-sig-footer");
+        const [before, mid, after] = help.sig;
+        sigEl.appendChild(highlightPython(before));
+        if (mid) {
+          const midEl = document.createElement("span");
+          midEl.className = "fmp-sig-active";
+          midEl.appendChild(highlightPython(mid));
+          sigEl.appendChild(midEl);
+        }
+        if (after) sigEl.appendChild(highlightPython(after));
+        dom.appendChild(sigEl);
         return dom;
       };
       let hintsSeq = 0;
@@ -1741,7 +1786,11 @@ function initPlayground() {
             if (t) typed = t.slice(-1);
           });
           if ((typed === "(" || typed === ",") && pyodideReady) {
+            // Both surfaces, the VS Code way: the completion menu below
+            // the cursor (what can I insert), the hints panel above it
+            // (what does this slot mean). Same keystroke.
             paramHintsProbe(update.view);
+            startCompletion(update.view);
             return;
           }
         }
@@ -1760,6 +1809,9 @@ function initPlayground() {
           {
             key: "Escape",
             run: (v) => {
+              // The menu closes first (its own Escape binding), the
+              // panel second — the VS Code order.
+              if (completionStatus(v.state)) return false;
               if (!v.state.field(paramHintsField, false)) return false;
               hintsSeq++; // drop any in-flight answer
               v.dispatch({ effects: setParamHints.of(null) });

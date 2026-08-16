@@ -492,11 +492,19 @@ body .cm-tooltip.cm-tooltip.cm-completionInfo {
   text-indent: -8ch;
 }
 
-/* Parameter hints: the active parameter's line, highlighted the way the
+/* Parameter hints: the active parameter's span, highlighted the way the
  * site highlights a code line (the low-alpha hll background). */
 .fmp-sig-active {
   background: var(--md-code-hl-color--light);
   border-radius: 0.1rem;
+}
+
+/* The collapsed one-line signature is the panel's footer: the prose
+ * reads first, the signature is the reference beneath it. */
+.fmp-sig-footer {
+  margin-top: 0.3rem;
+  border-top: 0.05rem solid var(--md-default-fg-color--lightest);
+  padding-top: 0.3rem;
 }
 
 .fmp-signature-doc {
