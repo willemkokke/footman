@@ -44,6 +44,19 @@ def test_recording_captures_without_executing(tmp_path):
     assert not marker.exists()
 
 
+def test_recording_holds_the_secret_the_display_hides(capsys):
+    """`recording()` is a record, not a display: a test asserting on what a
+    task builds must see the value it built with. The `$` rehearsal line
+    above it is a display, and shows `***`."""
+    from footman.params import Secret
+
+    with recording(quiet=False) as steps:
+        run(["git", "push", Secret("hunter2")])
+    assert steps[0].command == "git push hunter2"
+    assert steps[0].shown == "git push ***"
+    assert "hunter2" not in capsys.readouterr().out
+
+
 def test_recording_is_silent(capsys):
     with recording():
         run("echo NOPE")

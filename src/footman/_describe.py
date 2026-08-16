@@ -853,10 +853,13 @@ def returns_phrase(spec: dict[str, Any], *, plural: bool = False) -> str:
 
 
 def redact(value: Any) -> Any:
-    """Secrets never serialise: any `params.Secret` inside *value* becomes
-    `***` before a JSON surface (the `--json` envelope, baked manifest
-    defaults). A str subclass rides json.dumps' fast path and never reaches
-    the `default` hook, so this pre-walk is the only reliable interception."""
+    """The one redaction walk: any `params.Secret` inside *value* becomes
+    `***` on its way to a surface that *shows* it — the `--json` envelope,
+    baked manifest defaults, and the command line a step is printed under
+    (`context._shown`). A str subclass rides json.dumps' fast path and never
+    reaches the `default` hook, so this pre-walk is the only reliable
+    interception. Records are walked on the way out, never on the way in:
+    what `recording()` and a dependent read is the value that was passed."""
     from footman.params import Secret
 
     if isinstance(value, Secret):

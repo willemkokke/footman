@@ -6,7 +6,21 @@ import json
 import textwrap
 
 from footman import Context, parallel, run, step, use_context
+from footman.params import Secret
 from footman.testing import Runner
+
+
+def test_an_address_is_minted_from_the_shown_command():
+    """A name is printed wherever the record travels — `--json`, a profile
+    track — so it is minted from the shown line. A `Secret` in the argv would
+    otherwise ride into the tree as a node name, and the record still holds
+    the real command for anyone reading rather than printing."""
+    ctx = Context()
+    ctx.address = "login"
+    with use_context(ctx):
+        run(["git", Secret("hunter2")], nofail=True)
+    assert ctx.steps[0].address == "login/git"
+    assert ctx.steps[0].command == "git hunter2"
 
 
 def test_same_labelled_steps_take_ordinals_in_written_order():

@@ -128,6 +128,37 @@ def test_the_trace_carries_the_run(tmp_path, monkeypatch):
     assert workers  # every used track is named
 
 
+SECRET_TASKS = textwrap.dedent(
+    """
+    import footman
+    from footman import task
+    from footman.compose import plugin
+    from footman.params import Secret
+
+    plugin("footman.profile")
+
+    @task
+    def login():
+        footman.run(["python", "-c", "pass", Secret("hunter2")])
+    """
+)
+
+
+def test_a_span_is_named_by_the_shown_command(tmp_path, monkeypatch):
+    """A trace is a file that gets attached to tickets and dropped into
+    ui.perfetto.dev — SECURITY.md names it in scope. The span reads the
+    shown line, not the record's."""
+    monkeypatch.chdir(tmp_path)
+    src = tmp_path / "tasks.py"
+    src.write_text(SECRET_TASKS)
+    result = Runner().invoke("--profile login", tasks=src)
+    assert result.ok, result.stderr
+    target = tmp_path / "fm-profile.json"
+    assert "hunter2" not in target.read_text(encoding="utf-8")
+    step = next(e for e in _trace(target) if e.get("cat") == "step")
+    assert step["name"] == "python -c pass ***"
+
+
 def test_overlapping_child_steps_render_async_not_stacked(tmp_path, monkeypatch):
     # parallel() folds child steps onto the parent with their real, mutually
     # overlapping times: those must leave the X lane (which renders by
