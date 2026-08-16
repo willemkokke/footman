@@ -545,16 +545,78 @@ What footman owns comes to five verbs and no wire semantics:
 | **stop** | SIGTERM |
 | **reap** | `_gc.py`'s existing age sweep, plus eviction on key change |
 
-Health is deliberately *not* footman's. It guarantees "this is the process I
-started for this key and it is still running", nothing more. A daemon sick in a
-way that is not structurally visible fails the plugin's own client, and footman
-falls back to a cold run — the same fallback the freshness check needs anyway.
+An earlier draft of this note excluded health entirely — footman guarantees
+"this is the process I started for this key and it is still running", and a
+daemon sick in some other way is the plugin's problem. That line is in the wrong
+place, and Willem said so: footman already owns **liveness** (structural) and
+**readiness** (the `yield` *is* the ready signal), so excluding only the third
+of the three is arbitrary. See the next section.
 
 Stop has a property that falls out of the generator shape rather than being
 designed: **SIGTERM resumes the generator.** The second half of the body *is*
 the shutdown handler.
 
-### Seven triggers, one stop
+### Health, and how much of it is transport-independent
+
+> Can we at least provide syntactic sugar / affordances for health? There has to
+> be some functionality all health monitoring systems need? Ideally transport
+> independent. — Willem, 2026-08-16
+
+Health decomposes into five parts. Four are the same for every daemon and
+belong to footman; one is the tool's business:
+
+| part | whose |
+|---|---|
+| **when** to check | footman |
+| **what to do** with a bad answer | footman — it is a stop trigger |
+| **how not to hammer** a sick one | footman — the crash breaker, already listed |
+| **how a human hears about it** | footman — a reason string, rendered |
+| **what the check actually does** | the plugin |
+
+Three of footman's four already exist under other names, which is the sign that
+this is not new surface.
+
+**The idiom already exists.** `@requires_env("CI")` is a predicate the framework
+calls and whose *reason* it renders — `(unavailable: set CI)`. A health probe is
+the same shape one layer down, so it should be spelled the same way: a stacked
+declaration, not a constructor argument.
+
+```python
+@task
+def pyright() -> Iterator[Endpoint]:
+    ...
+    yield endpoint
+
+@pyright.health          # raise, or return a reason, to say unhealthy
+def _(ep: Endpoint) -> None:
+    ep.request("$/status", timeout=2)
+```
+
+**Transport-independence comes from the handle, not from footman knowing
+anything.** The probe receives exactly what the consumers receive: a live object
+for a run-scoped service, a descriptor plus client for a daemon, the same for a
+remote one. One signature, three transports — the transport-legality ladder
+doing its job rather than a special case.
+
+**The cheapest probe is the request you were going to make anyway.** Running a
+health round-trip before every reuse taxes the happy path for nothing. So the
+default is *no periodic probe at all*: footman classifies the failure of a real
+request as either "the call failed" or "the daemon is bad", and on the latter
+stops it, respawns, and retries **once**. Periodic self-probing is opt-in, for
+slow degradation that requests do not surface.
+
+That classification is not new surface either — it is precondition 4 of the
+remote rung, arriving early. *"`Result`/`Failed` says 'it failed'; it does not
+distinguish 'could not reach it' from 'it ran and failed'."* One distinction,
+two payoffs: health-based respawn locally, and an honest answer to "did my
+deploy run?" remotely. Build it once, here.
+
+**What footman should still not do**, so this does not become a monitoring
+product: define what healthy means, poll by default, or grow Kubernetes'
+three-probe vocabulary. Healthy or not, plus a reason string, plus a
+last-checked stamp in `fm --daemons`. A task runner does not need `degraded`.
+
+### Eight triggers, one stop
 
 Every cross-cutting daemon feature turns out to be a reason to stop one, and
 there must be exactly one stop path:
@@ -564,6 +626,7 @@ there must be exactly one stop path:
 | idle timeout | no interaction in the window |
 | key change | tool version, config hash or footman version moved — the daemon is now *wrong* |
 | crash breaker | died N times in M minutes; stop respawning, run cold, say so |
+| failed health | a real request classified as "the daemon is bad", or an opt-in periodic probe |
 | LRU eviction | the live-daemon ceiling was hit |
 | explicit | `fm --daemons stop <name>` |
 | gc sweep | its project is gone, or its cache entry was reaped |
@@ -669,7 +732,10 @@ this could be built, none of which are footman features today:
    remote in listings and help. `into=` already does the prefixing half.
 4. **The failure vocabulary must widen.** `Result`/`Failed` says "it failed"; it
    does not distinguish "could not reach it" from "it ran and failed". For a
-   deploy that distinction is the whole ballgame.
+   deploy that distinction is the whole ballgame. **This one arrives early** —
+   the health section above needs the same distinction to decide whether a bad
+   request means respawn the daemon or report the failure, so it gets built with
+   the local transports and the remote rung inherits it.
 5. **Transport-relative markers must land first** (above), or a remote task with
    `exists` on a parameter validates the wrong machine's disk.
 
