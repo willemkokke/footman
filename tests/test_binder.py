@@ -10,6 +10,8 @@ the pipe is its only source.
 from __future__ import annotations
 
 import datetime
+import enum
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any, Literal, NamedTuple, TypedDict
@@ -17,7 +19,7 @@ from typing import Annotated, Any, Literal, NamedTuple, TypedDict
 import pytest
 
 from footman import _manifest, context
-from footman._describe import param_detail, usage_fragment
+from footman._describe import json_default, param_detail, usage_fragment
 from footman._executor import EX_USAGE, run_chain
 from footman._split import ChainError, split_chain
 from footman.params import stdin
@@ -80,6 +82,32 @@ class Row:
 class Stamped:
     when: datetime.datetime
     note: str | None = None
+
+
+class Level(enum.Enum):
+    LOW = 1
+    HIGH = 2
+
+
+class Rank(enum.IntEnum):
+    FIRST = 1
+    SECOND = 2
+
+
+class Flagged(enum.Enum):
+    YES = True
+    NO = False
+
+
+@dataclass
+class Report:
+    level: Level
+    rank: Rank = Rank.FIRST
+
+
+@dataclass
+class Switch:
+    flag: Flagged
 
 
 def build_tree(build):
@@ -200,6 +228,63 @@ def test_a_bad_literal_choice_names_the_path(piped):
     assert results[0].code == EX_USAGE
     assert "items[0].kind" in str(results[0].error)
     assert "unit|functional" in str(results[0].error)
+
+
+def test_a_numeric_enum_round_trips_through_json(piped):
+    """The document footman prints is one it can read back: `json_default`
+    writes an enum as its `.value`, so a number has to bind."""
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def grade(report: Annotated[Report, stdin]):
+            seen["report"] = report
+
+    document = json.dumps(Report(Level.HIGH, Rank.SECOND), default=json_default)
+    assert document == '{"level": 2, "rank": 2}'
+    piped(document)
+    results = run(tasks, "grade")
+    assert results[0].code == 0, results[0].error
+    assert seen["report"].level is Level.HIGH
+    assert seen["report"].rank is Rank.SECOND
+
+
+def test_an_enum_still_binds_by_name_and_by_string(piped):
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def grade(report: Annotated[Report, stdin]):
+            seen["report"] = report
+
+    piped('{"level": "HIGH"}')
+    run(tasks, "grade")
+    assert seen["report"].level is Level.HIGH
+    piped('{"level": "2"}')
+    run(tasks, "grade")
+    assert seen["report"].level is Level.HIGH
+
+
+def test_a_bool_does_not_answer_an_int_valued_member(piped):
+    """`1 == True` in Python, so a member has to match on type as well."""
+
+    def numeric(reg):
+        @reg.task
+        def grade(report: Annotated[Report, stdin]): ...
+
+    def boolean(reg):
+        @reg.task
+        def flip(switch: Annotated[Switch, stdin]): ...
+
+    piped('{"level": true}')
+    results = run(numeric, "grade")
+    assert results[0].code == EX_USAGE
+    assert "report.level" in str(results[0].error)
+
+    piped('{"flag": 1}')
+    results = run(boolean, "flip")
+    assert results[0].code == EX_USAGE
+    assert "switch.flag" in str(results[0].error)
 
 
 def test_a_list_of_dataclasses_binds(piped):

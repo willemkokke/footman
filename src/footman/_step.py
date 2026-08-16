@@ -467,7 +467,14 @@ def _pump(item: WorkItem[Any]) -> Any:
         ctx.steps.append(result)
         # Task grain at normal verbosity: the receipt shows under --verbose
         # (and for uncaptured, live items) — and always when it failed.
-        if not ctx.quiet and (ctx.verbose or not capture or result.code != 0):
+        # Under --json the item has a row of its own, so the receipt would
+        # only arrive twice: once as chrome inside the task's `output`, once
+        # as the fields a reader parses. Same call as run()'s step line.
+        if (
+            not ctx.quiet
+            and not ctx.machine_read
+            and (ctx.verbose or not capture or result.code != 0)
+        ):
             import sys as _sys
 
             out = _sys.stdout

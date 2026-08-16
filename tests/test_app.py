@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from footman import _app, _paths, _progress
+from footman import _app, _manifest, _paths, _progress
 from footman._executor import EX_USAGE
 from footman._split import Segment
 
@@ -412,6 +412,22 @@ def test_tasks_file_does_not_poison_completion_cache(project):
     after = cache.read_text()
     assert after == before  # cache untouched
     assert "solo" not in after
+
+
+def test_an_unwritable_cache_does_not_break_the_run(project, monkeypatch, capsys):
+    # H41: a read-only HOME (a locked-down image, a stray chmod) used to turn
+    # every command into a 47-line traceback, because the manifest rewrite ran
+    # unguarded on the execution path. The write only makes the next TAB fast;
+    # the run already holds the tree it needs.
+    def denied(manifest, path):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(_manifest, "write_manifest", denied)
+
+    assert _app.run(["hi", "--name=footman"]) == 0
+    assert "hello footman" in capsys.readouterr().out
+    assert _app.run(["--help"]) == 0
+    assert "hi" in capsys.readouterr().out
 
 
 def test_directory_restores_cwd(project):

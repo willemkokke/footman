@@ -2326,22 +2326,30 @@ def _run_subprocess(
             group["creationflags"] = flags
     elif isolate:
         group["start_new_session"] = True
+    # Footman's own spawn, not a body's: run() has already worked out both
+    # the environment and the directory, so the Popen injector must keep its
+    # hands off. Left to it, `cwd=None` reads as "left at the default" and
+    # gets ctx.cwd written over it — the exact opposite of what a per-call
+    # cwd='unmanaged' declares — and the note would tell the author to prefer
+    # run() when run() is what they used. Thread-local, so a sibling task's
+    # raw Popen in another thread still earns both.
     try:
-        proc = subprocess.Popen(
-            argv,
-            env=env,
-            cwd=cwd,
-            # A fed child reads a pipe; otherwise stdin is inherited
-            # untouched, so an uncaptured child keeps the terminal it
-            # always had.
-            stdin=subprocess.PIPE if input is not None else None,
-            stdout=subprocess.PIPE if capture else None,
-            stderr=subprocess.PIPE if capture else None,
-            text=True,
-            encoding=encoding,
-            errors="replace",
-            **group,
-        )
+        with _globals.internal():
+            proc = subprocess.Popen(
+                argv,
+                env=env,
+                cwd=cwd,
+                # A fed child reads a pipe; otherwise stdin is inherited
+                # untouched, so an uncaptured child keeps the terminal it
+                # always had.
+                stdin=subprocess.PIPE if input is not None else None,
+                stdout=subprocess.PIPE if capture else None,
+                stderr=subprocess.PIPE if capture else None,
+                text=True,
+                encoding=encoding,
+                errors="replace",
+                **group,
+            )
     except FileNotFoundError:
         if cwd is not None and not cwd.is_dir():
             raise  # the *directory* is what's missing — keep the honest OS error
@@ -3559,7 +3567,19 @@ def _run_thunks(
             max_workers=workers, thread_name_prefix="fm-parallel"
         ) as pool,
     ):
-        outcomes = list(pool.map(invoke, calls))
+        try:
+            outcomes = list(pool.map(invoke, calls))
+        except BaseException:
+            # The same abort arm the scheduler has: on Ctrl-C the interrupt
+            # unwinds here, in the main thread, while every worker is still
+            # blocked in communicate() on a group-isolated child that never
+            # saw the terminal's signal. Without this the pool's `with` exit
+            # joins those threads and the interrupt waits out the work it
+            # just cancelled (measured: a 300-second child held it 25s+
+            # before a second Ctrl-C escaped and orphaned the tree).
+            terminate_live_children()
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
 
     if not keep_going:
         for _record, error in outcomes:

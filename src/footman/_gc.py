@@ -7,11 +7,14 @@ a rebuild. Two rules, in order:
 
 1. **The directory is gone.** Manifests bake in the ``cwd`` they describe;
    if that path no longer exists, the pair (manifest + timing history) is
-   leftovers from a deleted project — collected at any age.
+   leftovers from a deleted project — collected at any age. Only a file
+   footman recognises as its own manifest is read this way; a task author is
+   invited to keep state in ``cache_dir()``, and one of those files with a
+   ``cwd`` key of its own is nobody's leftovers.
 2. **The pair is idle.** Untouched for `IDLE_DAYS`, nobody even TAB-completes
    there any more (background refreshes keep a visited manifest's mtime
-   fresh) — collected. Manifests from before the ``cwd`` key rely on this
-   rule alone.
+   fresh) — collected. Manifests from before the ``cwd`` key, and anything
+   in the directory footman did not write, rely on this rule alone.
 3. **The fetch room ages the same way.** ``fetch/`` holds cached downloads
    keyed by URL — no ``cwd`` to test, so idleness is the whole rule. A cache
    serve touches the pair's mtimes (`_fetch._touch`), so idle genuinely means
@@ -64,8 +67,8 @@ def collect(cache_dir: Path, skip_stem: str = "") -> int:
             data = json.loads(manifest_path.read_text("utf-8"))
         except (OSError, ValueError):
             data = None
-        cwd = data.get("cwd") if isinstance(data, dict) else None
-        if isinstance(cwd, str) and cwd and not Path(cwd).exists():
+        cwd = _baked_cwd(data)
+        if cwd and not Path(cwd).exists():
             doomed = True  # rule 1: leftovers of a deleted project
         else:
             doomed = _idle(now, manifest_path, times_path)  # rule 2
@@ -98,6 +101,21 @@ def collect(cache_dir: Path, skip_stem: str = "") -> int:
             unlink(sidecar)
 
     return removed
+
+
+def _baked_cwd(data: object) -> str:
+    """The directory *data* describes, or `""` if it is not one of ours.
+
+    Rule 1 reads meaning out of a file and no age protects what it condemns,
+    so it may only speak for a file footman wrote. A task is invited to keep
+    its own state in `cache_dir()`; one of those that happens to carry a `cwd`
+    key of its own is judged by age alone, like an unparseable file. `tree`
+    and `hash` have been in every manifest since the first schema.
+    """
+    if not isinstance(data, dict) or "tree" not in data or "hash" not in data:
+        return ""
+    cwd = data.get("cwd")
+    return cwd if isinstance(cwd, str) else ""
 
 
 def _idle(now: float, *paths: Path) -> bool:

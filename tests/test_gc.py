@@ -107,6 +107,24 @@ def test_collect_tolerates_garbage_manifests(tmp_path):
     assert (cache / "junk.json").exists()
 
 
+def test_collect_reads_only_its_own_manifests_for_the_cwd_rule(tmp_path):
+    # A task may keep its own state in `cache_dir()` — the docs invite it — so
+    # readable JSON is not automatically a manifest. A coincidental `cwd` key
+    # naming a missing path used to condemn such a file at any age, seconds
+    # after it was written. Age still owns it; that half is the bargain.
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    body = json.dumps({"cwd": str(tmp_path / "gone"), "entries": []})
+    (cache / "index.json").write_text(body, encoding="utf-8")
+    (cache / "ancient.json").write_text(body, encoding="utf-8")
+    then = time.time() - (_gc.IDLE_DAYS + 5) * 86400
+    os.utime(cache / "ancient.json", (then, then))
+
+    assert _gc.collect(cache) == 1
+    assert (cache / "index.json").exists()
+    assert not (cache / "ancient.json").exists()
+
+
 # --- the trigger --------------------------------------------------------------
 
 

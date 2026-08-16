@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -320,6 +321,41 @@ def test_popen_explicit_args_win(tmp_path, monkeypatch):
     results = drive(tasks, "go", cwd=tmp_path)
     assert results[0].ok, results[0].error
     assert seen["lines"] == [str(other), "None"]  # explicit cwd/env untouched
+
+
+def test_run_is_footmans_own_spawn_and_the_injector_leaves_it_alone(
+    tmp_path, monkeypatch, capfd
+):
+    """run() works out both cwd and env, so it never needs filling in.
+
+    The injector could not tell the `cwd=None` that a per-call
+    cwd='unmanaged' resolves to from a kwarg left at its default, so it
+    wrote ctx.cwd over the token — the opposite of what the token declares.
+    It then told the author to prefer run(), which is what they used.
+    """
+    live, managed = tmp_path / "live", tmp_path / "managed"
+    live.mkdir()
+    managed.mkdir()
+    monkeypatch.chdir(live)
+    seen = {}
+    show_cwd = [sys.executable, "-c", "import os; print(os.getcwd())"]
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            os.environ["SCOPED"] = "rides"
+            seen["managed"] = run(show_cwd).stdout.strip()
+            seen["unmanaged"] = run(show_cwd, cwd="unmanaged").stdout.strip()
+            seen["env"] = run(
+                [sys.executable, "-c", _PRINT_CWD_AND_SCOPED]
+            ).stdout.splitlines()[1]
+
+    results = drive(tasks, "go", cwd=managed)
+    assert results[0].ok, results[0].error
+    assert Path(seen["managed"]).resolve() == managed.resolve()
+    assert Path(seen["unmanaged"]).resolve() == live.resolve()  # the token holds
+    assert seen["env"] == "rides"  # run() carried the task's env on its own
+    assert "raw subprocess" not in capfd.readouterr().err  # nothing to teach
 
 
 # --- the os guards ------------------------------------------------------------

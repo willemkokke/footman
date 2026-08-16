@@ -280,7 +280,10 @@ def test_run_callable_foreign_cwd_still_refuses_without_the_token(tmp_path):
 
 def test_run_subprocess_per_call_unmanaged_inherits_live_cwd(tmp_path, monkeypatch):
     # A spawned child gets cwd=None — the live process cwd, not ctx.cwd
-    # (which here names a directory that does not even exist).
+    # (which here names a directory that does not even exist). The routers
+    # are not armed here, so this is the resolution only; the token under a
+    # real run is test_globals.py's
+    # `test_run_is_footmans_own_spawn_and_the_injector_leaves_it_alone`.
     monkeypatch.chdir(tmp_path)
     with use_context(Context(cwd=tmp_path / "nowhere")):
         result = context.run(

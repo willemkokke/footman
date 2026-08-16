@@ -1188,6 +1188,13 @@ def sync_manifest(
     writes (and mtime churn) when nothing about the command surface changed — a
     changed *completion_max_age* also forces a rewrite so a config edit takes
     effect.
+
+    The write itself is best-effort. Everything the caller needs is the
+    returned tree, which is already in hand; the file is only there to make
+    the next TAB fast. A cache nobody can write to — a read-only HOME in a
+    locked-down image, a stray `chmod` — must cost a cold completion, not
+    every command, so an `OSError` here is swallowed the way `_progress`
+    swallows the timing history's.
     """
     fresh = build_manifest(root, completion_max_age=completion_max_age, project=project)
     if bake_cwd:
@@ -1223,5 +1230,9 @@ def sync_manifest(
         or cached.get("cwd") != fresh.get("cwd")
         or cached.get("tasks_file") != fresh.get("tasks_file")
     ):
-        write_manifest(fresh, path)
+        # Guarded here rather than inside `write_manifest`, whose contract is
+        # "the write landed, or you hear about it" — that is what its retry
+        # loop is for. Only a caller can say the file was optional.
+        with contextlib.suppress(OSError):
+            write_manifest(fresh, path)
     return fresh

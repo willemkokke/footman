@@ -74,6 +74,17 @@ def _rebuild() -> None:
         filename = _paths.tasks_file_name()
     name = filename
     project_files = _paths.task_files(cwd, ceiling, name)
+    if not project_files:
+        # The cascade went empty — the last tasks file here was deleted or
+        # renamed. Nothing else rewrites the cwd-keyed manifest (global mode
+        # writes the *global* one), so without this the cache outlives its
+        # project: TAB keeps offering tasks the runner already refuses by
+        # name, and every aged TAB bumps the mtime, so the collector's idle
+        # sweep never reaches it either. Removing it puts the directory back
+        # where a fresh one starts — the hot path falls through to global
+        # mode.
+        with contextlib.suppress(OSError):
+            _paths.manifest_path(cwd).unlink()
     files = project_files
     user = _paths.user_tasks_file(name)
     if user.is_file():

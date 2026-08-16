@@ -1169,3 +1169,38 @@ def test_a_hidden_parameter_stays_out_of_the_synthesised_example():
     parts = example_parts(["deploy"], tree["tasks"]["deploy"], "fm")
     assert "--token" not in " ".join(f for _, f in parts)
     assert "--verbose" in " ".join(f for _, f in parts)  # the shown flag still is
+
+
+def test_the_synthesised_example_is_a_line_footman_accepts():
+    """An example is printed to be copied, so the only test that means
+    anything is running it: everything after the program name goes back
+    through the splitter and the executor. A required option's value is
+    always `=`-attached — the detached form is EX_USAGE with a "did you
+    mean" — so the example has to attach it too."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def shoot(
+            source: str,
+            *rest: str,
+            out: str,
+            width: int = 72,
+            force: bool = False,
+        ):
+            seen.update(source=source, rest=rest, out=out, width=width, force=force)
+
+    reg, tree = build_tree(tasks)
+    parts = example_parts(["shoot"], tree["tasks"]["shoot"], "fm")
+    line = " ".join(text for kind, text in parts if kind != "prog")
+    _, segments = split_chain(tree, line.split(), _app._choices_resolver(reg))
+    assert [r.ok for r in run_chain(reg, segments)] == [True]
+    # The option and its value are one token, never two.
+    assert "--out=<out>" in [text for _, text in parts]
+    assert seen == {
+        "source": "<source>",
+        "rest": ("<rest>",),
+        "out": "<out>",
+        "width": 72,
+        "force": True,
+    }

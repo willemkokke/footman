@@ -357,9 +357,23 @@ def _resolve_module(source: str) -> tuple[str, Group | Task]:
     for n in range(len(segments), 0, -1):
         prefix = ".".join(segments[:n])
         if prefix in _module_trees:  # already captured this process: reuse
-            node = _walk_subpath(
-                _module_trees[prefix], segments[n:], verb="include", source=source
-            )
+            try:
+                node = _walk_subpath(
+                    _module_trees[prefix], segments[n:], verb="include", source=source
+                )
+            except RegistrationError:
+                # A shallower memo can be a package the last include() walked
+                # *through* (`include("pkg.alpha")` memoises `pkg`'s empty
+                # capture), and the next submodule of that package is not in
+                # it. When the remainder still names an importable module, the
+                # memo simply isn't the answer — fall through to the import
+                # walk, which reuses the memo for the parent and imports the
+                # child. An exact-prefix miss is a real typo: keep its words.
+                if n < len(segments) and registry._importable(
+                    ".".join(segments[: n + 1])
+                ):
+                    break
+                raise
             return prefix, node
     if not (segments[0] in sys.modules or registry._importable(segments[0])):
         raise RegistrationError(

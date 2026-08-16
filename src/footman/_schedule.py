@@ -468,7 +468,11 @@ def dag_wants_progress(root: Group, segments: list[Segment]) -> bool:
     """Whether every task in the expanded DAG — pre/post deps included —
     consented to timing. One `@task(progress=False)` opts the run out of
     recording and of a determinate bar (the pulse still shows)."""
-    return all(wants_progress(n.fn) for n in _build_dag(root, segments))
+    try:
+        nodes = _build_dag(root, segments)
+    except (KeyError, IndexError, ChainError):
+        return False  # a malformed chain surfaces its real error in run_plan
+    return all(wants_progress(n.fn) for n in nodes)
 
 
 class NotConfirmed(Exception):

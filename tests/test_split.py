@@ -162,6 +162,33 @@ def test_a_bare_mention_does_not_disturb_the_tokens_around_it(tree):
     assert second.task == "lint"
 
 
+def test_the_attachment_hint_is_said_once_when_a_task_option_shadows_a_global():
+    # `--jobs` is deploy's own option here and a value-taking global too, so
+    # the resolver's refusal for the stranded `4` is already the attachment
+    # teaching — the wrapper used to append the same sentence a second time.
+    def tasks(reg):
+        @reg.task
+        def deploy(jobs: str = "one"): ...
+
+        @reg.task
+        def ship(mode: str = "fast"): ...
+
+    _, tree = build_tree(tasks)
+
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["deploy", "--jobs", "4"])
+    message = str(excinfo.value)
+    assert "--jobs takes its value attached — did you mean --jobs=4?" in message
+    assert message.count("did you mean") == 1
+
+    # An option shadowing nothing still gets its one hint, appended as before.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["ship", "--mode", "quick"])
+    message = str(excinfo.value)
+    assert message.endswith("did you mean --mode=quick?")
+    assert message.count("did you mean") == 1
+
+
 def test_dash_leading_value_attaches(tree):
     # A value that starts with a dash parses trivially in attached form —
     # the case the space form could never express.
@@ -310,6 +337,51 @@ def test_unmatchable_typo_gets_no_suggestion(tree):
     with pytest.raises(ChainError) as excinfo:
         split_chain(tree, ["zzzzzzzz"])
     assert "did you mean" not in str(excinfo.value)
+
+
+def test_an_empty_listing_says_nothing_rather_than_trailing_off():
+    # Every "know:" clause has a tree that can leave it empty, and `(know: )`
+    # reads as a bug in footman rather than an answer.
+    def tasks(reg):
+        reg.group("docs")
+
+        @reg.task
+        def check(): ...
+
+    _, tree = build_tree(tasks)
+
+    # A group with no children, named bare and descended into.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["docs"])
+    assert "name one of its tasks (know: nothing)" in str(excinfo.value)
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["docs.x"])
+    assert "no task named 'docs.x' (docs has: nothing)" in str(excinfo.value)
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["docs."])
+    assert "'docs.' is an incomplete address (know: nothing)" in str(excinfo.value)
+
+    # A tasks file with no @task at all.
+    _, bare = build_tree(lambda reg: None)
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(bare, ["build"])
+    assert "no task named 'build' (know: nothing)" in str(excinfo.value)
+
+
+def test_an_empty_listing_covers_tasks_hidden_by_the_project_question():
+    # The tasks are right there in the tree — `_children` leaves them out
+    # because there is no project to run them from, which empties the listing
+    # just as thoroughly as having no tasks at all.
+    reg = Group("root")
+
+    @reg.task(needs_project=True)
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg, project=False)["tree"]
+
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["nope"])
+    assert "no task named 'nope' (know: nothing)" in str(excinfo.value)
 
 
 def test_a_grouped_shape_is_refused_before_anything_runs():

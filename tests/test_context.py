@@ -2795,6 +2795,100 @@ def test_ctrl_c_reaps_the_child_a_task_was_waiting_on(tmp_path):
             runner.kill()
 
 
+def test_ctrl_c_does_not_wait_out_an_in_body_parallel(tmp_path):
+    """Ctrl-C during an in-body `parallel()` waited out the work it cancelled.
+
+    The fan-out pool had no abort arm, so the interrupt unwound in the main
+    thread and then blocked in the pool's `with` exit, joining workers that
+    each sat in communicate() on a group-isolated child the terminal's SIGINT
+    never reached. The scheduler's pool has had that arm all along; this one
+    only shows when the task holding the fan-out runs on the main thread — a
+    bare `fm <task>`, or any -s run — with no outer pool to save it.
+
+    A real process, for the same reason as the sibling test above: the bug is
+    about which signal reaches whom. And a hang in-process would take the
+    whole suite with it.
+    """
+    import os
+    import signal
+    import subprocess
+    import time
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX process groups and SIGINT")
+
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(f"""
+        import sys
+        from footman import parallel, run, step, task
+
+        HERE = {str(tmp_path)!r}
+
+        def sleeper(n):
+            run([sys.executable, "-c",
+                 "import os, sys, time;"
+                 "open(sys.argv[1], 'w').write(str(os.getpid()));"
+                 "time.sleep(120)",
+                 HERE + "/child-" + str(n) + ".pid"])
+
+        @task
+        def slow():
+            parallel(step(sleeper)(1), step(sleeper)(2))
+        """)
+    )
+    env = {**os.environ, "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache")}
+    env.pop("VIRTUAL_ENV", None)
+    runner = subprocess.Popen(
+        [sys.executable, "-m", "footman", "slow"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    pid_files = [tmp_path / "child-1.pid", tmp_path / "child-2.pid"]
+    children: list[int] = []
+    try:
+        deadline = time.time() + 30
+        while time.time() < deadline and not all(p.exists() for p in pid_files):
+            time.sleep(0.05)
+        assert all(p.exists() for p in pid_files), (
+            "both children never started; the test proves nothing"
+        )
+        children = [int(p.read_text()) for p in pid_files]
+
+        os.killpg(runner.pid, signal.SIGINT)  # what a terminal does
+        try:
+            # Well under the 120s the children sleep: a runner that waits for
+            # them is the bug, and one Ctrl-C is all the user gets to press.
+            runner.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            pytest.fail("the interrupt waited out the fan-out's children")
+
+        gone_by = time.time() + 15
+        while time.time() < gone_by:
+            if not any(_alive(pid) for pid in children):
+                break
+            time.sleep(0.05)
+        else:
+            pytest.fail("a child outlived the interrupt")
+    finally:
+        if runner.poll() is None:  # pragma: no cover - only on a regression
+            runner.kill()
+        for pid in children:  # never leak a sleeper into the rest of the suite
+            if _alive(pid):  # pragma: no cover - only on a regression
+                os.kill(pid, signal.SIGKILL)
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
 def test_the_stack_rule_reads_verbose_or_a_log():
     from footman import _describe
 

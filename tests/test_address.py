@@ -171,3 +171,39 @@ def test_the_envelope_carries_task_output_and_not_footman_chrome(tmp_path):
     (step_row,) = [i for i in items if "command" in i]
     assert step_row["code"] == 2
     assert step_row["address"].startswith("build/")
+
+
+def test_a_lifted_steps_receipt_stays_out_of_the_envelope_too(tmp_path):
+    """The twin of the case above, for `@step`: a lifted item took the same
+    receipt line and a replay of its own streams into the task's buffer,
+    because only `run()`'s copy of the guard knew about `--json`. Both
+    already have a step row carrying exactly those bytes in fields."""
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import step, task
+
+            @step
+            def bundle():
+                print("a step's own words")
+                raise RuntimeError("boom")
+
+            @task
+            def build():
+                print("a body's own words")
+                bundle()()
+            """
+        )
+    )
+    result = Runner().invoke("--json build", cwd=tmp_path)
+    assert not result.ok
+    items = json.loads(result.stdout)["items"]
+    (row,) = [i for i in items if "task" in i]
+    assert row["output"] == "a body's own words\n"
+    assert "FAIL" not in row["output"]
+    # The step's own prints belong to the step's row, not the task's buffer.
+    (step_row,) = [i for i in items if "command" in i]
+    assert step_row["command"] == "bundle"
+    assert step_row["code"] == 1
+    assert step_row["stdout"] == "a step's own words\n"
+    assert "RuntimeError: boom" in step_row["stderr"]

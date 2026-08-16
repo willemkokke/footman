@@ -10,6 +10,7 @@ is never in play.
 from __future__ import annotations
 
 import enum
+import json
 from pathlib import Path
 from typing import Annotated
 
@@ -18,8 +19,8 @@ import pytest
 from footman import _manifest, context
 from footman._describe import param_detail
 from footman._executor import EX_USAGE, resolve_asks, run_chain
-from footman._split import split_chain
-from footman.params import Stdin, ask, check, env, stdin
+from footman._split import ChainError, split_chain
+from footman.params import Stdin, ask, between, check, env, isfile, stdin
 from footman.registry import Group
 from footman.testing import Runner
 
@@ -208,6 +209,70 @@ def test_check_validators_run_on_stdin_text(piped):
     piped("a\tb")
     results = run(tasks, "wc")
     assert results[0].code == EX_USAGE and "no tabs" in str(results[0].error)
+
+
+# --- markers on a piped document ----------------------------------------------
+# The binder gives a document its shape; the markers still decide whether it
+# may pass. A container arriving by pipe used to skip bounds, path
+# requirements and choices entirely, so the two channels disagreed about the
+# same value.
+
+
+def test_bounds_run_on_a_piped_list(piped):
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def scale(sizes: Annotated[list[int], stdin, between(1, 5)] = []):
+            seen["sizes"] = sizes
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match="between 1 and 5"):
+        split_chain(tree, ["scale", "--sizes=9"])  # the CLI channel refuses it
+
+    piped("[1, 9]")
+    results = run(tasks, "scale")
+    assert results[0].code == EX_USAGE
+    assert "between 1 and 5" in str(results[0].error)
+    assert seen == {}  # the body never ran
+
+    piped("[1, 5]")
+    run(tasks, "scale")
+    assert seen["sizes"] == [1, 5]  # an in-range document still binds
+
+
+def test_bounds_run_on_a_piped_mapping(piped):
+    def tasks(reg):
+        @reg.task
+        def scale(sizes: Annotated[dict[str, int], stdin, between(1, 5)] = {}): ...
+
+    piped('{"a": 1, "b": 9}')
+    results = run(tasks, "scale")
+    assert results[0].code == EX_USAGE
+    assert "between 1 and 5" in str(results[0].error)
+
+
+def test_a_path_requirement_runs_on_a_piped_list(piped, tmp_path):
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def scan(paths: Annotated[list[Path], stdin, isfile] = []):
+            seen["paths"] = paths
+
+    piped('["/nope/one", "/nope/two"]')
+    results = run(tasks, "scan")
+    assert results[0].code == EX_USAGE
+    # The refusal names the offending element, spelled the way the platform
+    # spells it — `Path("/nope/one")` is `\nope\one` on Windows, so comparing
+    # against the literal would test the separator, not the refusal.
+    assert str(Path("/nope/one")) in str(results[0].error)
+
+    real = tmp_path / "one.txt"
+    real.write_text("x")
+    piped(json.dumps([str(real)]))
+    run(tasks, "scan")
+    assert seen["paths"] == [real]
 
 
 # --- bytes --------------------------------------------------------------------

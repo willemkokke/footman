@@ -468,13 +468,21 @@ def _stdin_value(
     target = _document_shape(peeled)
     if target is not None:
         bound = _binder.bind_document(_stdin_json(payload), target, param.name)
-        if isinstance(bound, list):
-            return _container(
-                peeled, [_run_checks(v, peeled, label, params) for v in bound], label
+
+        def checked(value: Any) -> Any:
+            # The binder gives shape, not validation, so the markers have to
+            # run here as well: a piped `[1, 9]` used to walk past the
+            # `between(1, 5)` that refuses `--sizes=9` on the command line.
+            # Same pipeline as `_coerce_extra`, minus the token to coerce.
+            return _run_checks(
+                _validate_value(value, peeled, label), peeled, label, params
             )
+
+        if isinstance(bound, list):
+            return _container(peeled, [checked(v) for v in bound], label)
         if isinstance(bound, dict):
-            return {k: _run_checks(v, peeled, label, params) for k, v in bound.items()}
-        return _run_checks(bound, peeled, label, params)
+            return {k: checked(v) for k, v in bound.items()}
+        return checked(bound)
 
     if (group := _coerce.group_of(peeled.element)) is not None:
         # A fixed-arity shape with no field names — a plain `tuple[X, Y]`. A
