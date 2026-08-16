@@ -530,6 +530,22 @@ def _fm_wrap_signature(sig):
     body = "".join("    " + p + "," + nl for p in parts)
     return sig[: open_i + 1] + nl + body + sig[close_i:]
 
+def _fm_arg_doc(doc, name):
+    # The Args-section entry for *name*: its first line and the
+    # continuation lines indented beneath it, joined to one paragraph.
+    out = []
+    grabbing = False
+    for ln in doc.split(chr(10)):
+        if grabbing:
+            if ln.startswith("        ") and ln.strip():
+                out.append(ln.strip())
+                continue
+            break
+        if ln.startswith("    " + name + ":"):
+            out.append(ln.split(":", 1)[1].strip())
+            grabbing = True
+    return " ".join(out)
+
 def _fm_editor_help(files_json, source, line, column):
     # Hover help, asked of the interpreter: the signature first (jedi
     # get_signatures answers inside a call; help() answers on the name
@@ -549,21 +565,204 @@ def _fm_editor_help(files_json, source, line, column):
             path=str(Path("editing.py").resolve()),
             environment=jedi.InterpreterEnvironment(),
         )
+        # A quoted or numeric literal has nothing worth a tooltip --
+        # without this, the enclosing call's signature answered for
+        # every string argument hovered.
+        src_all = source.split(chr(10))
+        li0 = int(line) - 1
+        if 0 <= li0 < len(src_all):
+            t0 = src_all[li0]
+            a0 = int(column)
+            while a0 > 0 and (t0[a0 - 1].isalnum() or t0[a0 - 1] == "_"):
+                a0 -= 1
+            b0 = int(column)
+            while b0 < len(t0) and (t0[b0].isalnum() or t0[b0] == "_"):
+                b0 += 1
+            w0 = t0[a0:b0]
+            quotes = chr(34) + chr(39)
+            if w0 and w0[0].isdigit():
+                return json.dumps(None)
+            if (a0 > 0 and t0[a0 - 1] in quotes) or (
+                b0 < len(t0) and t0[b0] in quotes
+            ):
+                return json.dumps(None)
         signatures = script.get_signatures(int(line), int(column))
         if signatures:
             head = signatures[0]
+
+            def call_doc():
+                # The call's docstring, reaching through to __call__ when
+                # the synthesized signature dropped it: rewrite the
+                # callee at its bracket and ask again.
+                d = head.docstring(raw=True) or ""
+                if d:
+                    return d
+                try:
+                    bline, bcol = head.bracket_start
+                except Exception:
+                    return ""
+                src_lines = source.split(chr(10))
+                li = bline - 1
+                if not (0 <= li < len(src_lines)):
+                    return ""
+                text = src_lines[li]
+                probed = text[:bcol] + ".__call__" + text[bcol:]
+                probe_src = chr(10).join(
+                    src_lines[:li] + [probed] + src_lines[li + 1 :]
+                )
+                try:
+                    calls = jedi.Script(
+                        code=probe_src,
+                        environment=jedi.InterpreterEnvironment(),
+                    ).help(bline, bcol + 5)
+                    if calls:
+                        return calls[0].docstring(raw=True) or ""
+                except Exception:
+                    pass
+                return ""
+
+            # A keyword argument under the pointer answers with ITS
+            # documentation, not the whole signature: the hovered word,
+            # followed by a single =, matching one of the call's params.
+            src_lines = source.split(chr(10))
+            li = int(line) - 1
+            word = ""
+            keyword_side = False
+            if 0 <= li < len(src_lines):
+                text = src_lines[li]
+                a = int(column)
+                while a > 0 and (text[a - 1].isalnum() or text[a - 1] == "_"):
+                    a -= 1
+                b = int(column)
+                while b < len(text) and (text[b].isalnum() or text[b] == "_"):
+                    b += 1
+                word = text[a:b]
+                rest = text[b:].lstrip()
+                keyword_side = rest.startswith("=") and not rest.startswith("==")
+            pnames = []
+            try:
+                pnames = [p.name for p in head.params]
+            except Exception:
+                pnames = []
+            if word and keyword_side and word in pnames:
+                try:
+                    plabel = head.params[pnames.index(word)].to_string()
+                except Exception:
+                    plabel = word
+                pdoc = _fm_arg_doc(call_doc(), word)
+                if pdoc or plabel != word:
+                    return json.dumps({"label": plabel, "doc": pdoc})
+
+            label = None  # decided below: symbol first, call as fallback
+        # The symbol under the pointer outranks the enclosing call --
+        # hovering a variable used as an argument should answer about
+        # the variable, not recite the callee's whole signature.
+        names = script.help(int(line), int(column))
+        names = [n for n in names if n.type != "keyword"]
+        if names and names[0].type == "instance" and (
+            (names[0].full_name or "").startswith("builtins.")
+        ):
+            return json.dumps(None)  # a literal: nothing worth saying
+        if not names and signatures:
+            head = signatures[0]
             label = head.to_string()
-            doc = head.docstring(raw=True) or ""
+            doc = call_doc()
+        elif not names:
+            return json.dumps(None)
         else:
-            names = script.help(int(line), int(column))
-            if not names:
-                return json.dumps(None)
             head = names[0]
-            # A Name's docstring() leads with the signature -- for a
-            # toolroom stub that IS the story (raw=True strips it, which
-            # is how the tooltip once showed a bare "check"). The
-            # signature may wrap over several physical lines, so take
-            # the paren-balanced head, not just the first line.
+            # A callable name answers with its call signature and the
+            # docstring behind it -- for a toolroom stub that reaches
+            # through to __call__, whose Args section documents every
+            # flag. Only a non-callable falls through to the name's own
+            # docstring dance below.
+            if head.type == "param":
+                # A parameter answers with its declaration, and with the
+                # owner's Args entry when the docstring carries one --
+                # a bare name told the reader nothing.
+                desc = head.description or ""
+                if desc.startswith("param "):
+                    desc = desc[6:]
+                label = desc or (head.name or "")
+                doc = ""
+                parent = None
+                try:
+                    parent = head.parent()
+                except Exception:
+                    parent = None
+                if parent is not None:
+                    try:
+                        doc = _fm_arg_doc(
+                            parent.docstring(raw=True) or "", head.name or ""
+                        )
+                    except Exception:
+                        doc = ""
+                    owner = parent.name or ""
+                    if owner == "__call__":
+                        try:
+                            owner = parent.parent().name or owner
+                        except Exception:
+                            pass
+                    if not doc and owner:
+                        doc = "Parameter of " + owner + "()."
+                return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
+            if head.type == "module":
+                label = head.name or ""
+                doc = head.docstring(raw=True) or ""
+                paragraphs = [
+                    p for p in doc.split(chr(10) + chr(10)) if p.strip()
+                ]
+                doc = (chr(10) + chr(10)).join(paragraphs[:3])
+                return json.dumps({"label": label, "doc": doc})
+            call_sigs = []
+            try:
+                call_sigs = head.get_signatures()
+            except Exception:
+                call_sigs = []
+            if call_sigs and (call_sigs[0].name or "").startswith("_"):
+                call_sigs = []  # a private synthesized callee teaches nothing
+            if call_sigs:
+                label = call_sigs[0].to_string()
+                doc = call_sigs[0].docstring(raw=True) or ""
+                if not doc:
+                    # The synthesized instance-call signature drops the
+                    # docstring a stub puts on __call__ -- asking for
+                    # name.__call__ literally retrieves it (measured), so
+                    # rewrite the hovered expression and ask again.
+                    src_lines = source.split(chr(10))
+                    li = int(line) - 1
+                    if 0 <= li < len(src_lines):
+                        text = src_lines[li]
+                        end = int(column)
+                        while end < len(text) and (
+                            text[end].isalnum() or text[end] == "_"
+                        ):
+                            end += 1
+                        probed = text[:end] + ".__call__" + text[end:]
+                        probe_src = chr(10).join(
+                            src_lines[:li] + [probed] + src_lines[li + 1 :]
+                        )
+                        try:
+                            calls = jedi.Script(
+                                code=probe_src,
+                                environment=jedi.InterpreterEnvironment(),
+                            ).help(int(line), end + 5)
+                            if calls:
+                                doc = calls[0].docstring(raw=True) or ""
+                        except Exception:
+                            pass
+                paragraphs = [
+                    p for p in doc.split(chr(10) + chr(10)) if p.strip()
+                ]
+                doc = (chr(10) + chr(10)).join(paragraphs[:3])
+                lines = doc.split(chr(10))
+                if len(lines) > 200:
+                    doc = chr(10).join(lines[:200]) + chr(10) + "…"
+                return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
+            # A Name's docstring() leads with the signature -- raw=True
+            # strips it, which is how the tooltip once showed a bare
+            # "check". The signature may wrap over several physical
+            # lines, so take the paren-balanced head, not just line one.
             full = head.docstring() or ""
             lines = full.split(chr(10))
             sig_lines = []
@@ -586,11 +785,17 @@ def _fm_editor_help(files_json, source, line, column):
                 first = lines[0].strip() if lines else ""
                 label = first if first else (head.name or "")
                 doc = chr(10).join(lines[1:]).strip()
+            if label.startswith("_") and (head.name or "") and not (
+                head.name.startswith("_")
+            ):
+                label = head.name  # a private synthesized shape hides the real name
+        # The tooltip scrolls, so the budget is generous: an Args section
+        # documenting thirty flags is the payload, not an overflow.
         paragraphs = [p for p in doc.split(chr(10) + chr(10)) if p.strip()]
-        doc = (chr(10) + chr(10)).join(paragraphs[:2])
+        doc = (chr(10) + chr(10)).join(paragraphs[:3])
         lines = doc.split(chr(10))
-        if len(lines) > 12:
-            doc = chr(10).join(lines[:12]) + chr(10) + "…"
+        if len(lines) > 200:
+            doc = chr(10).join(lines[:200]) + chr(10) + "…"
         if not label and not doc:
             return json.dumps(None)
         return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
@@ -1196,7 +1401,47 @@ function initPlayground() {
             if (help.doc) {
               const docEl = document.createElement("div");
               docEl.className = "fmp-signature-doc";
-              docEl.textContent = help.doc;
+              // A Google-style Args section renders structurally — each
+              // argument a bold name with its description — the way an
+              // IDE would show it; any other doc stays plain text.
+              const argsAt = help.doc.match(/(^|\n)Args:\n/);
+              if (!argsAt) {
+                docEl.textContent = help.doc;
+              } else {
+                const summary = help.doc.slice(0, argsAt.index).trim();
+                if (summary) {
+                  const sumEl = document.createElement("div");
+                  sumEl.textContent = summary;
+                  docEl.appendChild(sumEl);
+                }
+                const headEl = document.createElement("div");
+                headEl.className = "fmp-args-head";
+                headEl.textContent = "Arguments";
+                docEl.appendChild(headEl);
+                const block = help.doc.slice(argsAt.index + argsAt[0].length);
+                let entry = null;
+                const flush = () => {
+                  if (!entry) return;
+                  const row = document.createElement("div");
+                  row.className = "fmp-arg";
+                  const nameEl = document.createElement("strong");
+                  nameEl.textContent = entry.name;
+                  row.appendChild(nameEl);
+                  row.appendChild(document.createTextNode(" " + entry.text));
+                  docEl.appendChild(row);
+                  entry = null;
+                };
+                for (const lineText of block.split("\n")) {
+                  const m = lineText.match(/^ {4}(\w+): ?(.*)$/);
+                  if (m) {
+                    flush();
+                    entry = { name: m[1], text: m[2] };
+                  } else if (entry && lineText.trim()) {
+                    entry.text += " " + lineText.trim();
+                  }
+                }
+                flush();
+              }
               dom.appendChild(docEl);
             }
             return { dom };
@@ -1216,10 +1461,12 @@ function initPlayground() {
           autocompletion({ override: [editorCompletions] }),
           keymap.of(completionKeymap),
           signatureHelp,
-          // Fixed positioning lifts tooltips out of the pane's
-          // overflow:hidden — a tall signature was clipped at the
-          // editor's edge instead of floating over the page.
-          tooltips({ position: "fixed" }),
+          // Tooltips live on document.body: fixed positioning alone
+          // still clipped at the pane's edges (an ancestor kept acting
+          // as the containing block), and a body parent is the one
+          // reliable escape. Their styling rides playground.css — the
+          // editor theme's scope ends at the editor's own DOM.
+          tooltips({ position: "fixed", parent: document.body }),
           // The bundle's theme colours via the site's --md-code-hl-*
           // variables: the editor matches every Pygments block on the
           // site and follows the palette toggle live, no re-mount.

@@ -97,58 +97,11 @@ const chrome = EditorView.theme({
   ".cm-activeLineGutter": {
     backgroundColor: "var(--md-code-hl-color--light, transparent)",
   },
-  // The completion and hover tooltips, in the site's own variables —
-  // CM's stock tooltip styling is light-mode-only and never matched the
-  // page (Willem: "no concept of dark mode perhaps?").
-  ".cm-tooltip": {
-    backgroundColor: "var(--md-code-bg-color)",
-    color: "var(--md-code-fg-color)",
-    border: "0.05rem solid var(--md-default-fg-color--lightest)",
-    borderRadius: "0.2rem",
-  },
-  ".cm-tooltip.cm-tooltip-autocomplete > ul": {
-    fontFamily: '"Fira Code", var(--md-code-font-family)',
-    fontSize: "0.64rem",
-    maxHeight: "14em",
-  },
-  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
-    backgroundColor: "var(--md-default-fg-color--lightest)",
-    color: "var(--md-code-fg-color)",
-  },
-  ".cm-completionMatchedText": {
-    textDecoration: "none",
-    fontWeight: "700",
-    color: "var(--md-accent-fg-color)",
-  },
-  ".cm-tooltip.cm-completionInfo": {
-    backgroundColor: "var(--md-code-bg-color)",
-    border: "0.05rem solid var(--md-default-fg-color--lightest)",
-    color: "var(--md-default-fg-color--light)",
-    fontSize: "0.64rem",
-    maxWidth: "28rem",
-    whiteSpace: "pre-wrap",
-  },
-  ".fmp-signature": {
-    padding: "0.4rem 0.6rem",
-    fontFamily: '"Fira Code", var(--md-code-font-family)',
-    fontSize: "0.64rem",
-    minWidth: "min(26rem, 80vw)",
-    maxWidth: "min(42rem, 90vw)",
-    maxHeight: "min(50vh, 22rem)",
-    overflow: "auto",
-  },
-  // One block per signature line: a soft-wrapped long parameter hangs
-  // at its own indent instead of snapping back to column zero.
-  ".fmp-sig-line": {
-    whiteSpace: "pre-wrap",
-    paddingLeft: "8ch",
-    textIndent: "-8ch",
-  },
-  ".fmp-signature-doc": {
-    color: "var(--md-default-fg-color--light)",
-    fontFamily: "var(--md-text-font-family, inherit)",
-    marginTop: "0.2rem",
-  },
+  // Tooltip styling lives in docs/assets/playground.css, not here:
+  // the tooltips are parented to document.body (the only reliable
+  // escape from ancestor clipping), which puts them outside this
+  // theme's scope. The highlighter's generated classes are
+  // document-global, so signature colouring survives the move.
 });
 
 const colours = HighlightStyle.define([

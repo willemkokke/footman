@@ -429,6 +429,94 @@
   font-weight: 700;
 }
 
+/* The editor's tooltips — completion menu, info panel, hover
+ * signatures. They are parented to document.body (the reliable escape
+ * from the panes' overflow clipping), so their styling lives here in
+ * global CSS rather than in the editor theme, whose scope ends at the
+ * editor's own DOM. Colours ride the same --md variables as
+ * everything else. The doubled .cm-tooltip class is load-bearing:
+ * CodeMirror's base sheet scopes its light-grey tooltip styling
+ * under the editor's generated theme class (which rides along even
+ * onto body-parented tooltips) and is injected at runtime, so it
+ * wins ties -- these selectors outrank it instead. */
+
+body .cm-tooltip.cm-tooltip {
+  z-index: 10000;
+  background: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+  box-shadow: 0 0.3rem 0.8rem rgba(0, 0, 0, 0.25);
+}
+
+body .cm-tooltip.cm-tooltip.cm-tooltip-autocomplete > ul {
+  font-family: "Fira Code", var(--md-code-font-family);
+  font-size: 0.64rem;
+  max-height: 14em;
+}
+
+body .cm-tooltip.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--md-default-fg-color--lightest);
+  color: var(--md-code-fg-color);
+}
+
+body .cm-tooltip.cm-tooltip .cm-completionMatchedText {
+  text-decoration: none;
+  font-weight: 700;
+  color: var(--md-accent-fg-color);
+}
+
+body .cm-tooltip.cm-tooltip.cm-completionInfo {
+  background: var(--md-code-bg-color);
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color--light);
+  font-size: 0.64rem;
+  max-width: 28rem;
+  white-space: pre-wrap;
+}
+
+.fmp-signature {
+  padding: 0.4rem 0.6rem;
+  font-family: "Fira Code", var(--md-code-font-family);
+  font-size: 0.64rem;
+  min-width: min(26rem, 80vw);
+  max-width: min(42rem, 90vw);
+  max-height: min(50vh, 22rem);
+  overflow: auto;
+}
+
+/* One block per signature line: a soft-wrapped long parameter hangs at
+ * its own indent instead of snapping back to column zero. */
+.fmp-sig-line {
+  white-space: pre-wrap;
+  padding-left: 8ch;
+  text-indent: -8ch;
+}
+
+.fmp-signature-doc {
+  margin-top: 0.3rem;
+  color: var(--md-default-fg-color--light);
+  font-family: var(--md-text-font-family, inherit);
+  white-space: pre-wrap;
+}
+
+.fmp-args-head {
+  margin-top: 0.4rem;
+  font-weight: 700;
+  color: var(--md-code-fg-color);
+}
+
+.fmp-arg {
+  margin-top: 0.3rem;
+  white-space: normal;
+}
+
+.fmp-arg strong {
+  font-family: "Fira Code", var(--md-code-font-family);
+  color: var(--md-code-fg-color);
+  font-weight: 700;
+}
+
 /* The "run it there" link under every runnable example. */
 
 .fmp-runlink {

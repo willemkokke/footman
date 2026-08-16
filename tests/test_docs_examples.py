@@ -686,8 +686,22 @@ def test_playground_hover_help_answers_signatures(tmp_path: Path):
     # "check" slide (Willem's screenshot). Long signatures wrap to one
     # parameter per line, so the tooltip reads instead of scrolling.
     assert help_["label"].startswith("Check("), help_
-    assert "fix" in help_["label"] or "fix" in help_["doc"], help_
     assert "\n    " in help_["label"], help_
+    # The stub's __call__ docstring rides along: the summary line and the
+    # Args section documenting every flag — the whole reason to hover.
+    assert "Args:" in help_["doc"], help_
+    assert "diff:" in help_["doc"], help_
+
+    # Hovering a keyword ARGUMENT answers about that argument — its
+    # declaration as the label, its Args entry as the doc — never the
+    # whole signature (Willem: "the documentation for fix").
+    on_keyword = "from toolroom import ruff\nruff.check('src', fix=True)"
+    col = on_keyword.split("\n")[1].index("fix=") + 1
+    help_, err = _editor_help(tmp_path, on_keyword, 2, col)
+    assert help_ is not None, err
+    assert help_["label"].startswith("fix"), help_
+    assert "Check(" not in help_["label"], help_
+    assert "Apply fixes" in help_["doc"], help_
 
 
 def test_example_markers_are_spent():
