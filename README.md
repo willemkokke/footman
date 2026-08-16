@@ -12,7 +12,8 @@ dependencies. Python 3.11+.
 > [!NOTE]
 > **Beta.** footman is pre-1.0: the surface is settling, but minor versions
 > may still include breaking changes — always called out in the
-> [changelog](CHANGELOG.md), never in a patch release. Pin the minor
+> [changelog](https://github.com/willemkokke/footman/blob/main/CHANGELOG.md),
+> never in a patch release. Pin the minor
 > (`footman~=0.41.0`) if you build on it. What is covered, what is internal,
 > and what has to be true before 1.0 are written down in the
 > [stability promise](https://willemkokke.github.io/footman/stability/).
@@ -31,7 +32,8 @@ composite commands like `fm lint` and `check` real commands, a monorepo task
 cascade that merges a `tasks.py` per directory, and a first-party story for
 testing your tasks. The receipts live
 in the [comparison](https://willemkokke.github.io/footman/comparison/) —
-every number reproducible from [`comparison/`](comparison/).
+every number reproducible from
+[`comparison/`](https://github.com/willemkokke/footman/tree/main/comparison).
 
 ## Taste
 
@@ -41,6 +43,7 @@ uv add --dev footman        # or: pip install footman
 
 ```python
 # tasks.py
+from typing import Literal
 from footman import task, group, run
 from toolroom import pytest, ruff
 
@@ -49,10 +52,20 @@ def lint(fix: bool = False):
     "Run ruff over the project."
     ruff.check("src", fix=fix)
 
+@task
+def typecheck():
+    "Type-check the project."
+    run("basedpyright src")
+
 @task(pre=[lint])
 def test(*pytest_args):
     "Run the test suite (extra args after --)."
     pytest(*pytest_args)
+
+@task
+def deploy(target: Literal["dev", "staging", "prod"]):
+    "Deploy to a target."
+    run(f"./deploy.sh {target}")
 
 docs = group("docs", help="Documentation")
 
@@ -64,7 +77,8 @@ def serve(port: int = 8000):
 
 ```console
 $ fm lint --fix
-$ fm lint test docs.serve --port=8001   # one chain; independent tasks run in parallel
+$ fm lint typecheck test                # one chain; independent tasks run in parallel
+$ fm docs.serve --port=8001             # options go right after their task
 $ fm test -- -k grammar -x              # everything after -- goes to pytest
 $ fm deploy produ
 fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you mean 'prod'?
@@ -110,7 +124,8 @@ if __name__ == "__main__":
     footman.main(__file__)
 ```
 
-`fm health` builds that environment once and runs inside it; `chmod +x`
+`fm health` builds that environment once and runs inside it — name any
+other file with `-f=deploy.py` and the same rule applies. `chmod +x`
 and `./deploy.py health` works with no runner installed at all. Checked
 into a project that pins footman, the header is simply ignored and the
 file runs on the project's dependencies — portable and at home.
@@ -130,4 +145,5 @@ then the good parts:
 [CI & automation](https://willemkokke.github.io/footman/ci/) ·
 [comparison with duty / invoke / poe / typer](https://willemkokke.github.io/footman/comparison/)
 
-MIT licensed. The road to 1.0 lives in [ROADMAP.md](ROADMAP.md).
+MIT licensed. The road to 1.0 lives in
+[ROADMAP.md](https://github.com/willemkokke/footman/blob/main/ROADMAP.md).
