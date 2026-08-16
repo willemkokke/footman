@@ -275,12 +275,16 @@ def _managed_task() -> tuple[Any, bool]:
     """(ctx, guarded) — guarded only inside a managed *parallel* task body.
 
     `unmanaged` is the one off-switch (that token *means* footman stays
-    out), and a serial/exclusive task owns the real globals legitimately."""
+    out), and a serial/exclusive task owns the real globals legitimately.
+    Work footman does on the body's behalf (`internal()`) is never guarded
+    either: it has already worked out whatever a guard would fill in, and a
+    note about it would name a line the author never wrote."""
     from footman.context import current
 
     ctx = current()
     guarded = (
         bool(_installs)
+        and not _is_internal()
         and ctx.in_task
         and not ctx.cwd_unmanaged
         and not ctx.serial_active
@@ -346,6 +350,24 @@ def _is_internal() -> bool:
     return bool(getattr(_internal, "on", False))
 
 
+def internal() -> Any:
+    """Mark this thread as footman working on the body's behalf, so the
+    guards and the Popen injector stay out of the way. Saves and restores
+    rather than clearing, so a nested region leaves the outer one standing."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _internal_cm() -> Any:
+        was = _is_internal()
+        _internal.on = True
+        try:
+            yield
+        finally:
+            _internal.on = was
+
+    return _internal_cm()
+
+
 def warm_tempdir(cwd: Any) -> None:
     """Resolve `tempfile`'s temp directory before a task whose cwd has shifted.
 
@@ -376,11 +398,8 @@ def warm_tempdir(cwd: Any) -> None:
     # `run_task` sets `in_task` before the cwd is even resolved, so this
     # resolution is guarded like a body's. It is not a body's: mark it as
     # footman's own, or the warm earns the note it exists to prevent.
-    _internal.on = True
-    try:
+    with internal():
         tempfile.gettempdir()
-    finally:
-        _internal.on = False
 
 
 def _install_os_guards() -> None:

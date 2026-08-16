@@ -2326,22 +2326,30 @@ def _run_subprocess(
             group["creationflags"] = flags
     elif isolate:
         group["start_new_session"] = True
+    # Footman's own spawn, not a body's: run() has already worked out both
+    # the environment and the directory, so the Popen injector must keep its
+    # hands off. Left to it, `cwd=None` reads as "left at the default" and
+    # gets ctx.cwd written over it — the exact opposite of what a per-call
+    # cwd='unmanaged' declares — and the note would tell the author to prefer
+    # run() when run() is what they used. Thread-local, so a sibling task's
+    # raw Popen in another thread still earns both.
     try:
-        proc = subprocess.Popen(
-            argv,
-            env=env,
-            cwd=cwd,
-            # A fed child reads a pipe; otherwise stdin is inherited
-            # untouched, so an uncaptured child keeps the terminal it
-            # always had.
-            stdin=subprocess.PIPE if input is not None else None,
-            stdout=subprocess.PIPE if capture else None,
-            stderr=subprocess.PIPE if capture else None,
-            text=True,
-            encoding=encoding,
-            errors="replace",
-            **group,
-        )
+        with _globals.internal():
+            proc = subprocess.Popen(
+                argv,
+                env=env,
+                cwd=cwd,
+                # A fed child reads a pipe; otherwise stdin is inherited
+                # untouched, so an uncaptured child keeps the terminal it
+                # always had.
+                stdin=subprocess.PIPE if input is not None else None,
+                stdout=subprocess.PIPE if capture else None,
+                stderr=subprocess.PIPE if capture else None,
+                text=True,
+                encoding=encoding,
+                errors="replace",
+                **group,
+            )
     except FileNotFoundError:
         if cwd is not None and not cwd.is_dir():
             raise  # the *directory* is what's missing — keep the honest OS error
