@@ -27,4 +27,4 @@
 *[lane]: A declared resource claim (lane(), cwd_lane, console_lane, serial=): one holder at a time, granted at task boundaries by the scheduler, so claims are scheduled rather than contended for.
 *[lanes]: A declared resource claim (lane(), cwd_lane, console_lane, serial=): one holder at a time, granted at task boundaries by the scheduler, so claims are scheduled rather than contended for.
 *[shared]: A request answered by an execution the run already performed — the record reused, reported as shared; shared=False asks for a fresh run instead.
-*[unshared]: A request answered by an execution the run already performed — the record reused, reported as shared; shared=False asks for a fresh run instead.
+*[unshared]: A request that runs on its own — it reuses no earlier execution and answers no later one; asked for with shared=False on the task or the call, or inherited from an unshared caller.

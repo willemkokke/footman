@@ -476,7 +476,15 @@ def test_glossary_inflections_share_their_definition():
     diverged = {stem: defs for stem, defs in by_stem.items() if len(defs) > 1}
     assert not diverged, f"glossary inflections diverged: {sorted(diverged)}"
     defs = dict(entries)
-    assert defs["shared"] == defs["unshared"], "shared/unshared drifted apart"
+    # `unshared` is not an inflection of `shared`, it is its negation, so the
+    # two definitions must differ. This assertion used to demand they match,
+    # which pinned a copy-paste in place: the tooltip on `unshared` read out
+    # the definition of `shared`, telling the reader the opposite of the word
+    # they had hovered.
+    assert defs["shared"] != defs["unshared"], (
+        "unshared carries shared's definition — a negation cannot share the "
+        "wording of the thing it negates"
+    )
 
 
 def test_our_docstrings_stay_google():
