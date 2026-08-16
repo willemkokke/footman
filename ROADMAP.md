@@ -1,13 +1,13 @@
 # Roadmap
 
 This file began as a critical self-audit of footman at **v0.4.0** — every
-claim checked against the source, file and line. Ten releases later, almost
-all of it has shipped. The file now does two jobs: the road ahead, and — for
-posterity — the original audit preserved item by item, each with the release
-that closed it. The full stories live in the
+claim checked against the source, file and line. Almost all of it has
+shipped in the releases since. The file does two jobs: the road ahead, and
+— for posterity — the original audit preserved item by item, each with the
+release that closed it. The full stories live in the
 [changelog](https://willemkokke.github.io/footman/changelog/).
 
-**Where footman stands (2026-08-07, v0.33.0, Beta on PyPI).** The typed core
+**Where footman stands (2026-08-16, v0.41.0, Beta on PyPI).** The typed core
 — coercion, chain grammar, manifest, scheduler, cascade — held up; everything
 since has been built on it without structural change. The runner now has a
 real help story, a testing story, a composition story, completion installed
@@ -41,9 +41,14 @@ that closed it:
   `--no-clean` the convention would have guessed. Verified 2026-08-07
   against the generated stub. toolroom releases on its own train; footman
   neither imports nor names it.
-- **The stability promise, written down**: decorator surface, CLI grammar,
-  `--json` schema additive-only, manifest format additive-only. Then a bake
-  cycle with no breaking changes.
+- **The stability promise, and the bake cycle after it.** The page landed
+  in 0.40.0:
+  [Stability](https://willemkokke.github.io/footman/stability/) names the
+  four surfaces a project builds on — the public API, the CLI grammar, the
+  `--json` envelope, the `[tool.footman]` keys — and says plainly that the
+  manifest file and the caches are *not* among them, which the original
+  item had wrong. What is left is the bake cycle: a stretch of releases
+  with no breaking change to that surface.
 - **The 1.0 flip**: pre-1.0 warnings out, promise in — one coordinated
   change, with a TestPyPI dry-run before the real tag. (The
   `Development Status` classifier already moved Alpha → Beta in 0.12.0.)
@@ -70,7 +75,10 @@ plan:
 
 Not gating anything, carried forward minus the entries that shipped
 (task-returned JSON payloads landed in 0.10.0, the TTY progress UI grew into
-0.12.0's history-backed bar, PowerShell/nushell completion landed in 0.8.0):
+0.12.0's history-backed bar, PowerShell/nushell completion landed in 0.8.0,
+the typing table's two post-1.0 rows — hidden parameters and fixed-arity
+`tuple[X, Y]` in comma form, `--size=800,600` — both landed in 0.34.0, and
+`fm new` landed in 0.36.0):
 
 - **Watch mode** — `fm --watch lint`: re-run on file change, debounced.
 - **JSONL event streaming** — `--json` is a summary; agents and CI dashboards
@@ -92,7 +100,6 @@ Not gating anything, carried forward minus the entries that shipped
   the built environment (so the colour contract survives the wipe) and be a
   taught error for an in-process task — code in footman's own process can't be
   handed an isolated environment.
-- **`fm new`** — scaffold a tasks.py that demonstrates the good idioms.
 - **Optional rich terminal output** — a lazily-imported renderer, behind a
   stacked `@requires_dep` (the one blessed zero-dep exception), that paints
   `--help` and docstrings as formatted markdown in the terminal. Off by default
@@ -103,8 +110,6 @@ Not gating anything, carried forward minus the entries that shipped
   want. uv shipped first because `uv.lock` makes the fire-rule
   unambiguous, and its native script support carries the PEP 723 rule
   too; each manager needs an equally sharp rule of its own.
-- From the typing table's "post-1.0" rows: hidden parameters, and fixed-arity
-  `tuple[X, Y]` in comma form (`--size 800,600`).
 
 Two of the audit's three "never"s are still never, for the same reasons:
 counting flags (`-vvv` belongs to the runner, not task params), and short
@@ -202,7 +207,9 @@ breaking was still free.
 
 Shipped whole in **0.7.0**: `@task(when=…, reason=…)` disable-but-list,
 `include(source, into=…, only=…, exclude=…, override=…)`, the
-`footman.tasks` entry point with opt-in `[tool.footman] plugins`,
+`footman.tasks` entry point with an opt-in `[tool.footman] plugins` key
+(0.21.0 replaced that key with the `plugin()` line in a tasks file, where
+placement and filtering already lived; a leftover key is a taught refusal),
 `registry.capture()` as the public seam, and the *Composing tasks* page.
 `@task(requires=…)` followed in 0.9.0 as the import-free dependency gate,
 reusing the same availability machinery. The "hiding is an `if` statement"
@@ -218,7 +225,7 @@ stance held — no kwarg was ever added.
 | `env("VAR")` fallback | 0.6.0 — CLI > env > default, same coercion path |
 | `check(fn)` validator | 0.6.0 — post-coercion, per element |
 | Silent `str` degrade of unknown annotations | 0.6.0 — warns |
-| Hidden params, `tuple[X, Y]` | still post-1.0 (backlog above) |
+| Hidden params, `tuple[X, Y]` | 0.34.0 — `hidden`/`Hidden[T]` keeps a parameter out of the listings and nothing else; a fixed-arity tuple binds from `--size=800,600` and from a JSON array |
 | Prompts | **reversed** — shipped as `ask()`, `confirm=`, `interactive=True`, CI-safe by construction |
 | Counting flags, short aliases for task params | still never |
 
@@ -249,11 +256,11 @@ pages, and descriptions in every shell that renders them (0.10.0).
 | CI page, troubleshooting catalogue | 0.8.0 |
 | Benchmark honesty (import cost, completion latency) | 0.7.0 and 0.10.0 — committed scripts behind both |
 | Voice pass over the older pages | 0.10.0 docs cycle — restructure, tabs, one voice |
-| The cookbook | landed 2026-07-20, post-0.14.0 — seventeen recipes, agents included |
+| The cookbook | 0.15.0 — seventeen recipes, agents included |
 
 The audit's other docs worry — the hand-maintained global-options table that
-"*will* drift" — proved right on schedule: it drifted three ways and is now
-generated from the grammar on every docs build (unreleased, post-0.12.0).
+"*will* drift" — proved right on schedule: it drifted three ways, and 0.13.0
+generates it from the grammar on every docs build.
 
 ### §10 The release train
 
@@ -265,7 +272,9 @@ correctness pass, in-process tools, stubs), 0.10.0 (the one-envelope `--json`
 contract, `doc()`, agents + llms.txt), 0.11.0 (docstring parameter docs, the
 stdout/stderr contract, markdown export), 0.12.0 (the progress bar with
 duration history, `-j/--jobs`, `FOOTMAN_CACHE_DIR`, one colour palette,
-Beta).
+Beta). The train kept its cadence past the audit's horizon; the
+[changelog](https://willemkokke.github.io/footman/changelog/) carries every
+stop from 0.13.0 on.
 
 ### §11 The original backlog
 
@@ -274,11 +283,12 @@ Beta).
 | Task-customizable `--json` payloads | shipped, 0.10.0 — `returned`, symmetric with what footman coerces in |
 | A TTY progress UI for the DAG | shipped, 0.12.0 — and it learned to estimate from duration history |
 | PowerShell/nushell completion | shipped, 0.8.0 |
-| Watch mode, JSONL streaming, fingerprint skipping, timeout/retry, `fm new` | open — carried in the backlog above |
+| Watch mode, JSONL streaming, fingerprint skipping, timeout/retry | open — carried in the backlog above |
+| `fm new` | shipped, 0.36.0 — a starter tasks file, footman's own first built-in, and it refuses to overwrite |
 | `fm --plugins` | shipped — lists entry points, pulled or not |
 
 ---
 
 *The original audit was generated from a full source read at v0.4.0 (commit
 9328109) and is preserved in the git history of this file. This revision
-reflects v0.12.0.*
+reflects v0.41.0.*
