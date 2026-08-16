@@ -3567,7 +3567,19 @@ def _run_thunks(
             max_workers=workers, thread_name_prefix="fm-parallel"
         ) as pool,
     ):
-        outcomes = list(pool.map(invoke, calls))
+        try:
+            outcomes = list(pool.map(invoke, calls))
+        except BaseException:
+            # The same abort arm the scheduler has: on Ctrl-C the interrupt
+            # unwinds here, in the main thread, while every worker is still
+            # blocked in communicate() on a group-isolated child that never
+            # saw the terminal's signal. Without this the pool's `with` exit
+            # joins those threads and the interrupt waits out the work it
+            # just cancelled (measured: a 300-second child held it 25s+
+            # before a second Ctrl-C escaped and orphaned the tree).
+            terminate_live_children()
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
 
     if not keep_going:
         for _record, error in outcomes:
