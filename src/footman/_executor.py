@@ -1286,6 +1286,20 @@ def _call(
         # The task's own body — never the handle, whose call is the body-call
         # machinery that would route this invocation straight back here.
         returned = registry.task_body(fn)(*args, **kwargs)
+        if inspect.iscoroutine(returned):
+            # Calling an `async def` builds a coroutine and runs none of it.
+            # Left alone this reported `ok` for a body that never executed —
+            # a receipt with no work behind it, which is the one thing the
+            # design says it will not mint. footman has no event loop on
+            # purpose (docs/design.md, "No event loop"), so the refusal names
+            # the way in rather than pretending to be one.
+            returned.close()  # or Python warns "was never awaited" as well
+            raise Failed(
+                "the body is an `async def` and footman runs no event loop, "
+                "so calling it builds a coroutine and executes nothing. Make "
+                "it a plain `def` and drive the async work from inside it "
+                "(`asyncio.run(...)`)."
+            )
     except SystemExit as exc:
         # A non-int, non-None code is Python's `sys.exit("message")` idiom: the
         # object is the reason the interpreter would print to stderr. Carry it as

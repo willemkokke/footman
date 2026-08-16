@@ -2591,3 +2591,67 @@ def test_run_refuses_a_bare_container_in_its_list():
         run(["ssh", "app@host", payload])  # type: ignore[list-item]
     with pytest.raises(TypeError, match=r"Spread it with `\*`"):
         run(["echo", ["a", "b"]])  # type: ignore[list-item]
+
+
+def test_an_async_body_is_refused_rather_than_reported_ok():
+    # Calling an `async def` builds a coroutine and runs none of it, so this
+    # used to report `ok` for a body that never executed — a receipt with no
+    # work behind it. footman runs no event loop on purpose (docs/design.md,
+    # "No event loop"), so the refusal names the way in instead.
+    ran: dict[str, bool] = {}
+
+    def build(reg):
+        @reg.task
+        async def sleeper():
+            ran["it"] = True
+
+    _, _, results = drive(build, "sleeper")
+    assert not results[0].ok
+    assert not ran.get("it")  # it never ran, and never claimed to
+    assert "async def" in str(results[0].error)
+    assert "asyncio.run" in str(results[0].error)
+
+
+def test_the_async_refusal_reads_the_call_not_the_function():
+    # Deliberately checked on what the body *returned*, not on whether the
+    # function is a coroutine function. A sync wrapper hides the latter both
+    # ways round: one forgets to await (the body never runs, and the wrapper
+    # looks synchronous), the other drives it properly (and must be allowed).
+    import asyncio
+    import functools
+
+    ran: dict[str, bool] = {}
+
+    def leaks(f):
+        @functools.wraps(f)
+        def inner(*a, **k):
+            return f(*a, **k)  # never awaited
+
+        return inner
+
+    def runs(f):
+        @functools.wraps(f)
+        def inner(*a, **k):
+            return asyncio.run(f(*a, **k))
+
+        return inner
+
+    def build_leaky(reg):
+        @reg.task
+        @leaks
+        async def leaky():
+            ran["leaky"] = True
+
+    def build_proper(reg):
+        @reg.task
+        @runs
+        async def proper():
+            ran["proper"] = True
+
+    # Driven apart: chained, the first failure would fail-fast the second and
+    # the assertion below would pass for the wrong reason.
+    _, _, leaky_results = drive(build_leaky, "leaky")
+    assert not leaky_results[0].ok and not ran.get("leaky")
+
+    _, _, proper_results = drive(build_proper, "proper")
+    assert proper_results[0].ok and ran.get("proper")  # awaited: real work
