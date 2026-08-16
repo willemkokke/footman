@@ -186,6 +186,16 @@ emscripten, real micropip installs, scriptable. Candidate follow-up: a
 browser-parity CI rung on that rig (weigh the pyodide download against
 what only it can catch).
 
+Second flavour of the same gap, found the same day: **Pyodide bundles
+its own wheels and micropip prefers them over PyPI** — the page ran
+jedi 0.19.2 (bundled) while every CPython rehearsal ran 0.20.0, and
+0.19.2 resolves footman's annotated `task` instance to a bare
+statement, no signature, no doc. The fix is a floor the bundled wheel
+cannot satisfy (`jedi>=0.20`), which forces the PyPI line. Rule of
+thumb: any package the page installs should pin PAST the Pyodide
+distribution's bundled version, or the page and the rehearsals run
+different code.
+
 ## The released-wheel gap (learned 2026-08-14)
 
 The page installs footman FROM PYPI; the rehearsals run the SOURCE

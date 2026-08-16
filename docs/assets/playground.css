@@ -479,7 +479,6 @@ body .cm-tooltip.cm-tooltip.cm-completionInfo {
   padding: 0.4rem 0.6rem;
   font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.64rem;
-  min-width: min(26rem, 80vw);
   max-width: min(42rem, 90vw);
   max-height: min(50vh, 22rem);
   overflow: auto;

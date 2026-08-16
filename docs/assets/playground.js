@@ -607,35 +607,7 @@ def _fm_editor_help(files_json, source, line, column):
             head = signatures[0]
 
             def call_doc():
-                # The call's docstring, reaching through to __call__ when
-                # the synthesized signature dropped it: rewrite the
-                # callee at its bracket and ask again.
-                d = head.docstring(raw=True) or ""
-                if d:
-                    return d
-                try:
-                    bline, bcol = head.bracket_start
-                except Exception:
-                    return ""
-                src_lines = source.split(chr(10))
-                li = bline - 1
-                if not (0 <= li < len(src_lines)):
-                    return ""
-                text = src_lines[li]
-                probed = text[:bcol] + ".__call__" + text[bcol:]
-                probe_src = chr(10).join(
-                    src_lines[:li] + [probed] + src_lines[li + 1 :]
-                )
-                try:
-                    calls = jedi.Script(
-                        code=probe_src,
-                        environment=jedi.InterpreterEnvironment(),
-                    ).help(bline, bcol + 5)
-                    if calls:
-                        return calls[0].docstring(raw=True) or ""
-                except Exception:
-                    pass
-                return ""
+                return _fm_call_doc(source, head)
 
             # A keyword argument under the pointer answers with ITS
             # documentation, not the whole signature: the hovered word,
@@ -675,6 +647,23 @@ def _fm_editor_help(files_json, source, line, column):
         # the variable, not recite the callee's whole signature.
         names = script.help(int(line), int(column))
         names = [n for n in names if n.type != "keyword"]
+        # A definition in the user's own buffer outranks the inferred
+        # type: a @task-decorated function is statically a TaskFn (the
+        # decorator's annotation), but hovering it should answer with
+        # ITS signature and ITS docstring, not the protocol's.
+        local_def = False
+        try:
+            here = str(Path("editing.py").resolve())
+            local = [
+                n
+                for n in script.goto(int(line), int(column))
+                if n.type == "function" and str(n.module_path or "") == here
+            ]
+            if local:
+                names = local
+                local_def = True
+        except Exception:
+            pass
         if names and names[0].type == "instance" and (
             (names[0].full_name or "").startswith("builtins.")
         ):
@@ -732,7 +721,8 @@ def _fm_editor_help(files_json, source, line, column):
                 return json.dumps({"label": label, "doc": doc})
             call_sigs = []
             try:
-                call_sigs = head.get_signatures()
+                if not local_def:
+                    call_sigs = head.get_signatures()
             except Exception:
                 call_sigs = []
             if call_sigs and (call_sigs[0].name or "").startswith("_"):
@@ -805,6 +795,30 @@ def _fm_editor_help(files_json, source, line, column):
                 head.name.startswith("_")
             ):
                 label = head.name  # a private synthesized shape hides the real name
+            if local_def and head.line:
+                # jedi bakes the inferred type into every render -- a
+                # @task def answers TaskFn even through its own
+                # docstring -- but the source header has the truth.
+                dln = head.line - 1
+                if 0 <= dln < len(src_all):
+                    header = ""
+                    depth = 0
+                    seen = False
+                    for ln2 in src_all[dln : dln + 12]:
+                        header = header + (" " if header else "") + ln2.strip()
+                        for ch in ln2:
+                            if ch in "([{":
+                                depth += 1
+                                seen = True
+                            elif ch in ")]}":
+                                depth -= 1
+                        if seen and depth <= 0:
+                            break
+                    if header.startswith("def "):
+                        header = header[4:]
+                    header = header.rstrip(":").strip()
+                    if header:
+                        label = header
         # The tooltip scrolls, so the budget is generous: an Args section
         # documenting thirty flags is the payload, not an overflow.
         paragraphs = [p for p in doc.split(chr(10) + chr(10)) if p.strip()]
@@ -819,6 +833,36 @@ def _fm_editor_help(files_json, source, line, column):
         if os.environ.get("_FM_PLAYGROUND_SIM"):
             traceback.print_exc(file=sys.stderr)
         return json.dumps(None)
+
+def _fm_call_doc(source, head):
+    # The call's docstring, reaching through to __call__ when the
+    # synthesized signature dropped it: rewrite the callee at its
+    # bracket and ask again. Shared by hover help and completion.
+    import jedi
+    d = head.docstring(raw=True) or ""
+    if d:
+        return d
+    try:
+        bline, bcol = head.bracket_start
+    except Exception:
+        return ""
+    src_lines = source.split(chr(10))
+    li = bline - 1
+    if not (0 <= li < len(src_lines)):
+        return ""
+    text = src_lines[li]
+    probed = text[:bcol] + ".__call__" + text[bcol:]
+    probe_src = chr(10).join(src_lines[:li] + [probed] + src_lines[li + 1 :])
+    try:
+        calls = jedi.Script(
+            code=probe_src,
+            environment=jedi.InterpreterEnvironment(),
+        ).help(bline, bcol + 5)
+        if calls:
+            return calls[0].docstring(raw=True) or ""
+    except Exception:
+        pass
+    return ""
 
 def _fm_editor_complete(files_json, source, line, column):
     # Editor completion, asked of the interpreter: jedi over the buffer,
@@ -865,8 +909,50 @@ def _fm_editor_complete(files_json, source, line, column):
     if public:
         found = public
     out = []
+    # Inside a call, the call's own keyword parameters lead the list --
+    # boosted above everything, each carrying its declaration and its
+    # Args entry. An alphabetical soup of builtins was the old answer.
+    try:
+        sigs = script.get_signatures(int(line), int(column))
+    except Exception:
+        sigs = []
+    if sigs:
+        sig_doc = _fm_call_doc(source, sigs[0])
+        seen_params = set()
+        for prm in sigs[0].params:
+            pname = prm.name or ""
+            decl = ""
+            try:
+                decl = prm.to_string()
+            except Exception:
+                decl = pname
+            if not pname or pname in seen_params or decl.startswith("*"):
+                continue
+            seen_params.add(pname)
+            entry = {"label": pname + "=", "type": "keyword", "boost": 2}
+            info = decl
+            extra = _fm_arg_doc(sig_doc, pname)
+            if extra:
+                info = decl + chr(10) + chr(10) + extra
+            entry["info"] = info
+            out.append(entry)
+    taken = {e["label"] for e in out}
+    found = [
+        c for c in found if c.name not in taken and c.name + "=" not in taken
+    ]
+    # Scope-aware ranking: a name defined in the user's own tabs beats
+    # an import, and builtins sink below both -- the Pylance order.
+    here_dir = str(Path(".").resolve())
     for c in found[:20]:
         entry = {"label": c.name, "type": c.type}
+        try:
+            mp = str(c.module_path or "")
+            if mp.startswith(here_dir):
+                entry["boost"] = 1
+            elif c.in_builtin_module():
+                entry["boost"] = -1
+        except Exception:
+            pass
         if len(out) < 25:
             try:
                 doc = c.docstring()
@@ -1148,7 +1234,7 @@ function initPlayground() {
   // editor helps immediately; the status line narrates, and a failed
   // load may be retried by the next Run exactly as before.
   loadRuntime(setStatus)
-    .then((pyodide) => ensurePackages(pyodide, ["jedi"], setStatus))
+    .then((pyodide) => ensurePackages(pyodide, ["jedi>=0.20"], setStatus))
     .then(() => setStatus("ready"))
     .catch(() => {});
 
@@ -1340,7 +1426,7 @@ function initPlayground() {
     // Ctrl-Space may pay that cost; after that, dots complete freely.
     if (!context.explicit && !pyodideReady) return null;
     const pyodide = await loadRuntime(setStatus);
-    await ensurePackages(pyodide, ["jedi"], setStatus);
+    await ensurePackages(pyodide, ["jedi>=0.20"], setStatus);
     setStatus("ready");
     syncFiles();
     const pos = context.pos;
@@ -1358,6 +1444,7 @@ function initPlayground() {
       label: c.label,
       type: c.type,
       ...(c.info ? { info: c.info } : {}),
+      ...(c.boost ? { boost: c.boost } : {}),
     }));
     if (!options.length) return null;
     return { from: word ? word.from : pos, options };
@@ -1385,7 +1472,7 @@ function initPlayground() {
       const signatureHelp = hoverTooltip(async (view, pos) => {
         if (!pyodideReady) return null;
         const pyodide = await loadRuntime(setStatus);
-        await ensurePackages(pyodide, ["jedi"], setStatus);
+        await ensurePackages(pyodide, ["jedi>=0.20"], setStatus);
         syncFiles();
         const doc = view.state.doc;
         const lineObj = doc.lineAt(pos);
