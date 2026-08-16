@@ -124,9 +124,9 @@ def _download(
 
     Two separate facts that used to share one value: whether bytes moved
     (what the receipt reports), and the validators to persist for the next
-    revalidation (what the sidecar stores). curl is why they split — it
-    downloads every time and offers no validators, which under the shared
-    value read as "cached" on a first-ever fetch."""
+    revalidation (what the sidecar stores). A revalidation that comes back
+    `304` moves no bytes and keeps the validators it already had, which
+    under the shared value read as a fresh download of nothing."""
     if backend == "curl":
         return _download_curl(url, dest, meta)
     if backend in ("httpx", "requests"):
@@ -181,15 +181,43 @@ def _download_curl(
 ) -> tuple[bool, dict[str, Any]]:
     import subprocess
 
-    argv = ["curl", "-fsSL", "--retry", "2", "-o", str(dest), url]
+    dump = dest.with_name(dest.name + ".headers")
+    argv = ["curl", "-fsSL", "--retry", "2", "-D", str(dump), "-o", str(dest), url]
     for header, value in _conditional_headers(meta).items():
         argv += ["-H", f"{header}: {value}"]
-    done = subprocess.run(argv, capture_output=True, text=True)
-    if done.returncode != 0:
-        raise FetchError(f"fetch: {url} — curl: {done.stderr.strip()}")
-    # Downloaded every time, no validators to keep: curl's revalidation story
-    # is its own, re-fetch is honest — and so is the receipt saying so.
-    return True, {}
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True)
+        if done.returncode != 0:
+            raise FetchError(f"fetch: {url} — curl: {done.stderr.strip()}")
+        code, headers = _last_response(dump.read_text("utf-8", errors="replace"))
+    finally:
+        with contextlib.suppress(OSError):
+            dump.unlink()
+    if code == 304:  # not modified: curl wrote nothing, the cached copy stands
+        return False, {}
+    return True, {
+        "etag": headers.get("etag"),
+        "last_modified": headers.get("last-modified"),
+    }
+
+
+def _last_response(dump: str) -> tuple[int, dict[str, str]]:
+    """The status and headers of the final response in a curl `-D` dump.
+
+    Redirects and retries each append their own block; only the last one
+    describes the bytes that landed in the file.
+    """
+    code = 0
+    headers: dict[str, str] = {}
+    for line in dump.splitlines():
+        if line.upper().startswith("HTTP/"):
+            parts = line.split()
+            code = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+            headers = {}
+        elif ":" in line:
+            name, _, value = line.partition(":")
+            headers[name.strip().lower()] = value.strip()
+    return code, headers
 
 
 def _download_lib(

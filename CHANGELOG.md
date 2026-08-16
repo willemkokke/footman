@@ -9,6 +9,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The `curl` fetch backend revalidates like every other one.** It threw
+  its response headers away, so it stored no ETag, sent no `If-None-Match`,
+  and could never receive a `304` — every call re-downloaded the whole file.
+  Worse, it reported a download unconditionally, so when another backend's
+  sidecar did win it a `304` the receipt still said the bytes had moved. It
+  reads the status and the validators off the response now, the way `urllib`,
+  `httpx` and `requests` do. Which backend you name picks a socket, not a
+  behaviour.
 - **Ctrl-C during an in-body `parallel()` stops the run instead of waiting
   it out.** The fan-out entered its pool with no abort arm, so the interrupt
   unwound in the main thread and then blocked joining workers that were

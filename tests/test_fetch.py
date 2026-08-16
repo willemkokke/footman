@@ -88,14 +88,18 @@ def test_every_backend_refuses_a_404(server, backend):
         _fetch.fetch(server.replace("file.bin", "missing.bin"), backend=backend)
 
 
-@pytest.mark.parametrize("backend", ["urllib", "httpx", "requests"])
-def test_library_backends_revalidate_with_the_etag(server, backend):
-    """curl aside (it re-fetches by design), a warm cache revalidates: the
-    second call carries If-None-Match and the server answers 304."""
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_every_backend_revalidates_with_the_etag(server, backend):
+    """A warm cache revalidates: the second call carries If-None-Match, the
+    server answers 304, and the receipt says cached. curl used to be outside
+    this — it threw its headers away, so it stored no validator to send and
+    could never receive a 304 at all."""
     _skip_unless_available(backend)
     _fetch.fetch(server, backend=backend)
-    assert _fetch.fetch(server, backend=backend).read_bytes() == BODY
+    with use_context(Context(fetch_backend=backend)) as ctx:
+        assert _fetch.fetch(server).read_bytes() == BODY
     assert _Handler.hits == ["unconditional", '"v1"']
+    assert ctx.steps[-1].stdout == "cached"
 
 
 def test_fetch_downloads_and_caches(server):
@@ -147,14 +151,14 @@ def test_fetch_records_a_step(server):
 
 def test_a_download_is_never_reported_cached(server):
     # `cached` used to derive from "no validators came back", which read a
-    # curl download — validator-less by design — as cached on the first-ever
+    # curl download — validator-less back then — as cached on the first-ever
     # fetch. Downloaded and cached are separate facts now, on every backend.
     _skip_unless_available("curl")
     with use_context(Context(fetch_backend="curl")) as ctx:
         _fetch.fetch(server)
         assert ctx.steps[-1].stdout == ""  # a real download says so
-        _fetch.fetch(server)
-        assert ctx.steps[-1].stdout == ""  # re-fetch is honest: still not cached
+        _fetch.fetch(server, refresh=True)
+        assert ctx.steps[-1].stdout == ""  # forced past the ETag: still moved
 
 
 def test_a_revalidated_serve_counts_as_use(server):
@@ -205,6 +209,19 @@ def test_auto_picks_the_first_available(monkeypatch):
 def test_curl_backend_downloads(server):
     path = _fetch.fetch(server, backend="curl")
     assert path.read_bytes() == BODY
+
+
+def test_curl_reads_the_last_response_in_the_dump():
+    """A redirect or a retry appends another block; only the last one
+    describes the bytes that landed in the file."""
+    dump = (
+        'HTTP/1.1 301 Moved Permanently\r\nETag: "old"\r\nLocation: /x\r\n\r\n'
+        'HTTP/1.1 200 OK\r\nETag: "new"\r\nLast-Modified: Mon, 01 Jan 2035\r\n\r\n'
+    )
+    code, headers = _fetch._last_response(dump)
+    assert code == 200
+    assert headers["etag"] == '"new"'
+    assert headers["last-modified"] == "Mon, 01 Jan 2035"
 
 
 def test_backend_comes_from_the_config_ladder(server, monkeypatch):
