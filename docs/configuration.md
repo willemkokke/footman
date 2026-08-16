@@ -79,6 +79,7 @@ build, so this table can neither invent a key nor miss one:
 | `FOOTMAN_NO_UV`     | Disables both uv handoffs (project and script environment), regardless of any config. |
 | `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
 | `FOOTMAN_CASCADE`   | Overrides the `cascade` key for one invocation (`none` / `repo` / `filesystem`). |
+| `FOOTMAN_STACKS_AFTER` | Seconds between stack dumps to stderr, for a run that stops moving ([Troubleshooting](troubleshooting.md#when-a-run-stops-moving)). |
 | `NO_COLOR` / `TERM=dumb` | Disable ANSI styling, for footman and for every tool it spawns, which footman tells to stay monochrome too. |
 | `FORCE_COLOR`       | Force ANSI styling on, even piped (below `--color` and `[tool.footman] color` in the ladder). |
 

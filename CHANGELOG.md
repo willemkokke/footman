@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Stack dumps for a run that has stopped moving.** `Ctrl-\` (`SIGQUIT`)
+  writes every thread's stack to stderr and lets the run carry on, so
+  pressing it twice and watching whether the frames moved is how you tell a
+  deadlock from slow progress. Nobody is at a keyboard when CI hangs, and
+  Windows has no `SIGQUIT`, so `FOOTMAN_STACKS_AFTER=30` arms the same dump
+  on a timer that repeats every 30 seconds. Both write to stderr, so a
+  `--json` run keeps its document.
+
 ### Fixed
 
 - **The cache collector sweeps downloads abandoned mid-flight.** It globbed
@@ -57,6 +67,16 @@ versions may include breaking changes.
   Interpolation is unchanged and still deliberate: a `str` operation on a
   `Secret` yields a plain `str`, so `run(f"login {token}")` and `reveal()`
   emit the real value with no switch to disarm.
+- **A supervisor's stop signal stops the run cleanly.** `SIGTERM` — what
+  `timeout`, `docker stop`, `kill`, systemd, Kubernetes and a cancelled CI
+  job all send — arrived at its default disposition, so footman died where it
+  stood: no receipt, no `--json` envelope, and every subprocess tree left
+  running, since a spawned child leads its own process group precisely so the
+  terminal's signals cannot reach it. A stop now unwinds where Ctrl-C does,
+  which is what reaps those trees; stderr says `terminated` and the exit code
+  is 143 (`hung up` and 129 for `SIGHUP`, and Windows binds `SIGBREAK` to the
+  same meaning as `SIGTERM`). `SIGKILL` and `taskkill /F` stay uncatchable, by
+  anyone.
 - **Ctrl-C during an in-body `parallel()` stops the run instead of waiting
   it out.** The fan-out entered its pool with no abort arm, so the interrupt
   unwound in the main thread and then blocked joining workers that were

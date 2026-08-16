@@ -76,6 +76,7 @@ src/footman/
   app.py          App / Brand: a branded CLI's names, version, and folders
   _app.py         execution path: _run → _execute → _run_tree / run_group
   _script.py      PEP 723 script blocks + the uv handoff argvs
+  _signals.py     stop signals (SIGTERM/SIGHUP/SIGBREAK) + the SIGQUIT stack dump
   _config.py      the config cascade ([tool.<brand>], <brand>.toml, user-level)
   _discover.py    the monorepo tasks.py cascade (per-file import isolation)
   compose.py      include() / plugin() (footman.tasks entry points)

@@ -75,7 +75,8 @@ fm --json check | jq -e '.error == null and ([.items[] | select(.task)] | all(.o
 
 `0` all green · `1` a task raised · `N` a task (or its `run()` command)
 exited N · `64` footman refused (a taught message says why) · `130`
-interrupted. The full table is part of the machine contract:
+interrupted · `143` a supervisor asked it to stop (a cancelled job, a
+`timeout`, `docker stop`). The full table is part of the machine contract:
 [JSON output § exit codes](json.md#exit-codes).
 
 Exit 64 before anything runs is a *feature* in CI: a typo'd workflow fails in

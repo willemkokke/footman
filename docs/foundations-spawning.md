@@ -33,8 +33,9 @@ fork-with-threads; the safe shape is always "spawn a fresh program".
 Everything a task runner does ends in spawns, so the spawn moment is where
 per-task worlds become real: the child's `cwd=` and `env=` are set
 race-free even while twenty other tasks run. It is also where cleanup
-lives — fail-fast and Ctrl-C must reap process *trees*, not just direct
-children, or a killed build leaves its compiler grandchildren running.
+lives — fail-fast, Ctrl-C and a supervisor's stop signal must reap process
+*trees*, not just direct children, or a killed build leaves its compiler
+grandchildren running.
 
 ## What footman does about it
 

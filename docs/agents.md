@@ -50,7 +50,8 @@ interleaves). Everything after `--` passes through to the task's
 `*args`.
 
 Exit codes: 0 all ok · 1 a task raised · N a task exited N · 64 footman
-refused the line (the stderr message states the fix) · 130 interrupted.
+refused the line (the stderr message states the fix) · 130 interrupted ·
+143 a signal stopped the run.
 
 To add or change tasks, edit `tasks.py`: the signature is the CLI.
 Never edit the completion cache under `~/.cache/footman/`; it's derived.
