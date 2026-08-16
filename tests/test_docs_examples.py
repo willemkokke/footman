@@ -723,6 +723,22 @@ def test_playground_hover_help_answers_signatures(tmp_path: Path):
     # Hovering a keyword ARGUMENT answers about that argument — its
     # declaration as the label, its Args entry as the doc — never the
     # whole signature (Willem: "the documentation for fix").
+    # A @task-decorated function in the buffer answers with ITS signature
+    # and docstring — not the TaskFn protocol the decorator's static
+    # annotation says it is (Willem's screenshot: hovering `test` showed
+    # TaskFn(*args, **kwargs) and the protocol's prose).
+    own = (
+        "from footman import task\n"
+        "\n"
+        "@task\n"
+        "def build(target: str = 'app'):\n"
+        '    "Compile the thing."\n'
+    )
+    help_, err = _editor_help(tmp_path, own, 4, 5)
+    assert help_ is not None, err
+    assert help_["label"].startswith("build("), help_
+    assert "Compile the thing" in help_["doc"], help_
+
     on_keyword = "from toolroom import ruff\nruff.check('src', fix=True)"
     col = on_keyword.split("\n")[1].index("fix=") + 1
     help_, err = _editor_help(tmp_path, on_keyword, 2, col)

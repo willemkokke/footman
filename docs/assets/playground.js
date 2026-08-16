@@ -675,6 +675,23 @@ def _fm_editor_help(files_json, source, line, column):
         # the variable, not recite the callee's whole signature.
         names = script.help(int(line), int(column))
         names = [n for n in names if n.type != "keyword"]
+        # A definition in the user's own buffer outranks the inferred
+        # type: a @task-decorated function is statically a TaskFn (the
+        # decorator's annotation), but hovering it should answer with
+        # ITS signature and ITS docstring, not the protocol's.
+        local_def = False
+        try:
+            here = str(Path("editing.py").resolve())
+            local = [
+                n
+                for n in script.goto(int(line), int(column))
+                if n.type == "function" and str(n.module_path or "") == here
+            ]
+            if local:
+                names = local
+                local_def = True
+        except Exception:
+            pass
         if names and names[0].type == "instance" and (
             (names[0].full_name or "").startswith("builtins.")
         ):
@@ -732,7 +749,8 @@ def _fm_editor_help(files_json, source, line, column):
                 return json.dumps({"label": label, "doc": doc})
             call_sigs = []
             try:
-                call_sigs = head.get_signatures()
+                if not local_def:
+                    call_sigs = head.get_signatures()
             except Exception:
                 call_sigs = []
             if call_sigs and (call_sigs[0].name or "").startswith("_"):
@@ -805,6 +823,30 @@ def _fm_editor_help(files_json, source, line, column):
                 head.name.startswith("_")
             ):
                 label = head.name  # a private synthesized shape hides the real name
+            if local_def and head.line:
+                # jedi bakes the inferred type into every render -- a
+                # @task def answers TaskFn even through its own
+                # docstring -- but the source header has the truth.
+                dln = head.line - 1
+                if 0 <= dln < len(src_all):
+                    header = ""
+                    depth = 0
+                    seen = False
+                    for ln2 in src_all[dln : dln + 12]:
+                        header = header + (" " if header else "") + ln2.strip()
+                        for ch in ln2:
+                            if ch in "([{":
+                                depth += 1
+                                seen = True
+                            elif ch in ")]}":
+                                depth -= 1
+                        if seen and depth <= 0:
+                            break
+                    if header.startswith("def "):
+                        header = header[4:]
+                    header = header.rstrip(":").strip()
+                    if header:
+                        label = header
         # The tooltip scrolls, so the budget is generous: an Args section
         # documenting thirty flags is the payload, not an overflow.
         paragraphs = [p for p in doc.split(chr(10) + chr(10)) if p.strip()]
