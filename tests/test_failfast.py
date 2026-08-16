@@ -7,7 +7,8 @@ import sys
 import pytest
 
 from footman import _manifest
-from footman._schedule import resolve_keep_going
+from footman._executor import EX_USAGE
+from footman._schedule import dag_wants_progress, resolve_keep_going
 from footman._split import _parse_globals, split_chain
 from footman.registry import Group
 
@@ -49,6 +50,44 @@ def test_fail_fast_is_a_recognised_global():
     # It parses as a leading global (before the first task), like --keep-going.
     globals_, i = _parse_globals(["--fail-fast", "check"], 0)
     assert globals_ == ["--fail-fast"] and i == 1
+
+
+def test_run_summaries_are_inert_on_a_malformed_chain(fm_project):
+    # M16: both pre-run summaries build the DAG speculatively, so a chain that
+    # is about to be refused must not blow up in them — the taught refusal is
+    # run_plan's to give. `dag_wants_progress` raised the ChainError as a
+    # traceback (exit 1) on the default path; only `-f` and `--no-progress`,
+    # which skip the call, ever showed the real message.
+    def tasks(reg):
+        lint = reg.group("lint")  # no @lint.default: unusable as a prerequisite
+
+        @lint.task
+        def ruff(): ...
+
+        @reg.task(pre=[lint])
+        def build(): ...
+
+    reg, tree = _tree(tasks)
+    segs = _segs(tree, "build")
+    assert resolve_keep_going(reg, segs, None) is False
+    assert dag_wants_progress(reg, segs) is False
+
+    fm = fm_project(
+        """
+        from footman import task, group
+
+        lint = group("lint")
+
+        @lint.task
+        def ruff(): ...
+
+        @task(pre=[lint])
+        def build(): ...
+        """
+    )
+    result = fm.invoke("build")  # the default path: cascade + progress on
+    assert result.exit_code == EX_USAGE
+    assert "group 'lint' is a prerequisite but has no @group.default" in result.stderr
 
 
 # --- per-subtree scoping ------------------------------------------------------
