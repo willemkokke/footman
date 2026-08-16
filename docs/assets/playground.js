@@ -514,11 +514,13 @@ def _fm_invoke(files_json, line, columns=80):
             if file and str(Path(file).resolve()) in written:
                 del sys.modules[mod_name]
 
-def _fm_wrap_signature(sig):
+def _fm_wrap_signature(sig, force=False):
     # One parameter per line once a signature outgrows one: split at the
     # outermost parens' depth-zero commas. String-level on purpose -- the
     # name branch only ever has the stub's rendered line to work with.
-    if len(sig) <= 60:
+    # Signature help forces the split -- the active parameter is
+    # highlighted by line, so every parameter needs one.
+    if len(sig) <= 60 and not force:
         return sig
     open_i = sig.find("(")
     close_i = sig.rfind(")")
@@ -829,6 +831,94 @@ def _fm_editor_help(files_json, source, line, column):
         if not label and not doc:
             return json.dumps(None)
         return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
+    except Exception:
+        if os.environ.get("_FM_PLAYGROUND_SIM"):
+            traceback.print_exc(file=sys.stderr)
+        return json.dumps(None)
+
+def _fm_editor_sighelp(files_json, source, line, column):
+    # Signature help, the IDE gesture: typing ( or , inside a call asks
+    # which signature encloses the cursor and which parameter it is on.
+    # jedi's Signature.index is exactly that; the active parameter's
+    # Args prose rides along, reprobed through __call__ like the hover.
+    try:
+        import jedi
+    except Exception:
+        return json.dumps(None)
+    files = json.loads(files_json)
+    files.pop("stdin", None)
+    for name, content in files.items():
+        Path(name).write_text(content, encoding="utf-8")
+    try:
+        # A comma inside a string literal is prose, not an argument
+        # boundary: an odd number of quotes left of the cursor means
+        # the cursor sits inside one, and the panel stays shut.
+        src_all = source.split(chr(10))
+        li0 = int(line) - 1
+        if 0 <= li0 < len(src_all):
+            left = src_all[li0][: int(column)]
+            for q in (chr(34), chr(39)):
+                if left.count(q) % 2 == 1:
+                    return json.dumps(None)
+        script = jedi.Script(
+            code=source,
+            path=str(Path("editing.py").resolve()),
+            environment=jedi.InterpreterEnvironment(),
+        )
+        signatures = script.get_signatures(int(line), int(column))
+        if not signatures:
+            return json.dumps(None)
+        head = signatures[0]
+        label = ""
+        try:
+            label = head.to_string() or ""
+        except Exception:
+            label = ""
+        if not label:
+            return json.dumps(None)
+        # The callee as the user spelled it: a tool handle's synthesized
+        # signature renders its class (Check, not check), so the head is
+        # rebuilt from the identifier before the bracket in the source.
+        try:
+            bline, bcol = head.bracket_start
+            btxt = src_all[bline - 1]
+            e0 = bcol
+            a1 = e0
+            while a1 > 0 and (btxt[a1 - 1].isalnum() or btxt[a1 - 1] == "_"):
+                a1 -= 1
+            spelled = btxt[a1:e0]
+            paren = label.find("(")
+            if spelled and paren > 0:
+                label = spelled + label[paren:]
+        except Exception:
+            pass
+        active = ""
+        doc = ""
+        idx = head.index
+        params = list(head.params)
+        prose = _fm_call_doc(source, head)
+        # The docstring's opening paragraph: the fallback when the
+        # active parameter carries no Args entry of its own (a variadic
+        # positional usually rides on the summary line).
+        summary = prose.split(chr(10) + "Args:")[0].strip()
+        summary = summary.split(chr(10) + chr(10))[0].strip()
+        if idx is not None and 0 <= idx < len(params):
+            active = params[idx].name or ""
+            if active:
+                star = chr(42)
+                doc = (
+                    _fm_arg_doc(prose, active)
+                    or _fm_arg_doc(prose, star + active)
+                    or _fm_arg_doc(prose, star + star + active)
+                )
+        return json.dumps(
+            {
+                "label": _fm_wrap_signature(label, force=len(params) > 1),
+                "active": active,
+                "doc": doc,
+                "summary": summary,
+            }
+        )
     except Exception:
         if os.environ.get("_FM_PLAYGROUND_SIM"):
             traceback.print_exc(file=sys.stderr)
@@ -1463,6 +1553,10 @@ function initPlayground() {
         hoverTooltip,
         tooltips,
         highlightPython,
+        showTooltip,
+        StateField,
+        StateEffect,
+        Prec,
       } = await import(CM_URL.href);
 
       /* Signature help on hover: rest the pointer on a name (or inside a
@@ -1552,6 +1646,129 @@ function initPlayground() {
         };
       });
 
+      /* Parameter hints, the IDE gesture: typing ( or , inside a call
+       * opens a panel above the cursor — the signature one parameter per
+       * line, the active one highlighted, its documentation beneath —
+       * and the highlight follows the cursor across commas. Escape
+       * closes it; Mod-Shift-Space summons it. A typed paren never
+       * starts the runtime download (the dot rule); the explicit
+       * keybinding may. */
+      const setParamHints = StateEffect.define();
+      const paramHintsField = StateField.define({
+        create: () => null,
+        update(value, tr) {
+          for (const e of tr.effects) if (e.is(setParamHints)) value = e.value;
+          if (value && (tr.docChanged || tr.selection))
+            value = { ...value, pos: tr.state.selection.main.head };
+          return value;
+        },
+        provide: (f) => showTooltip.from(f),
+      });
+      const buildHintsDom = (help) => {
+        const dom = document.createElement("div");
+        dom.className = "fmp-signature";
+        for (const lineText of help.label.split("\n")) {
+          const lineEl = document.createElement("div");
+          lineEl.className = "fmp-sig-line";
+          const bare = lineText.trimStart().replace(/^\*+/, "");
+          if (
+            help.active &&
+            (bare === help.active ||
+              bare.startsWith(help.active + ":") ||
+              bare.startsWith(help.active + "=") ||
+              bare.startsWith(help.active + ","))
+          )
+            lineEl.classList.add("fmp-sig-active");
+          lineEl.appendChild(highlightPython(lineText));
+          dom.appendChild(lineEl);
+        }
+        const text = help.doc || help.summary;
+        if (text) {
+          const docEl = document.createElement("div");
+          docEl.className = "fmp-signature-doc";
+          const row = document.createElement("div");
+          row.className = "fmp-arg";
+          if (help.doc && help.active) {
+            const nameEl = document.createElement("strong");
+            nameEl.textContent = help.active;
+            row.appendChild(nameEl);
+            row.appendChild(document.createTextNode(" " + help.doc));
+          } else {
+            row.textContent = text;
+          }
+          docEl.appendChild(row);
+          dom.appendChild(docEl);
+        }
+        return dom;
+      };
+      let hintsSeq = 0;
+      const paramHintsProbe = async (view) => {
+        const seq = ++hintsSeq;
+        const pyodide = await loadRuntime(setStatus);
+        await ensurePackages(pyodide, ["jedi>=0.20"], setStatus);
+        syncFiles();
+        const doc = view.state.doc;
+        const pos = view.state.selection.main.head;
+        const lineObj = doc.lineAt(pos);
+        const fn = pyodide.globals.get("_fm_editor_sighelp");
+        const raw = fn(
+          JSON.stringify(files),
+          doc.toString(),
+          lineObj.number,
+          pos - lineObj.from,
+        );
+        fn.destroy?.();
+        if (seq !== hintsSeq) return;
+        const help = JSON.parse(raw);
+        view.dispatch({
+          effects: setParamHints.of(
+            help
+              ? {
+                  pos: view.state.selection.main.head,
+                  above: true,
+                  create: () => ({ dom: buildHintsDom(help) }),
+                }
+              : null,
+          ),
+        });
+      };
+      const paramHintsWatch = EditorView.updateListener.of((update) => {
+        const open = update.state.field(paramHintsField, false);
+        if (update.docChanged) {
+          let typed = "";
+          update.changes.iterChanges((fa, ta, fb, tb, ins) => {
+            const t = ins.toString();
+            if (t) typed = t.slice(-1);
+          });
+          if ((typed === "(" || typed === ",") && pyodideReady) {
+            paramHintsProbe(update.view);
+            return;
+          }
+        }
+        if (open && (update.docChanged || update.selectionSet))
+          paramHintsProbe(update.view);
+      });
+      const paramHintsKeys = Prec.high(
+        keymap.of([
+          {
+            key: "Mod-Shift-Space",
+            run: (v) => {
+              paramHintsProbe(v);
+              return true;
+            },
+          },
+          {
+            key: "Escape",
+            run: (v) => {
+              if (!v.state.field(paramHintsField, false)) return false;
+              hintsSeq++; // drop any in-flight answer
+              v.dispatch({ effects: setParamHints.of(null) });
+              return true;
+            },
+          },
+        ]),
+      );
+
       const host = document.createElement("div");
       host.className = "fmp-cm";
       code.after(host);
@@ -1564,6 +1781,9 @@ function initPlayground() {
           autocompletion({ override: [editorCompletions] }),
           keymap.of(completionKeymap),
           signatureHelp,
+          paramHintsField,
+          paramHintsWatch,
+          paramHintsKeys,
           // Tooltips live on document.body: fixed positioning alone
           // still clipped at the pane's edges (an ancestor kept acting
           // as the containing block), and a body parent is the one
