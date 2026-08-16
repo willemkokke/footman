@@ -263,7 +263,10 @@ def test_a_path_requirement_runs_on_a_piped_list(piped, tmp_path):
     piped('["/nope/one", "/nope/two"]')
     results = run(tasks, "scan")
     assert results[0].code == EX_USAGE
-    assert "/nope/one" in str(results[0].error)
+    # The refusal names the offending element, spelled the way the platform
+    # spells it — `Path("/nope/one")` is `\nope\one` on Windows, so comparing
+    # against the literal would test the separator, not the refusal.
+    assert str(Path("/nope/one")) in str(results[0].error)
 
     real = tmp_path / "one.txt"
     real.write_text("x")
