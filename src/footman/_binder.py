@@ -20,6 +20,7 @@ serialises the way out). Structural rules, in priority order:
 from __future__ import annotations
 
 import dataclasses
+import enum
 import typing
 from typing import Any
 
@@ -200,7 +201,30 @@ def _leaf(value: Any, target: Any, path: str) -> Any:
         )
         if any(value is lit or value == lit for lit in literal_values):
             return value
+        found = _enum_member(member, value)
+        if found is not None:
+            return found
     raise ValueError(f"{path}: expected {_phrase(target)}, got {_json_name(value)}")
+
+
+def _enum_member(member: Any, value: Any) -> Any:
+    """The member of *member* whose value a JSON number or bool **is**, or
+    None when *member* is not an enum or nothing matches.
+
+    `json_default` writes an enum out as its `.value`, so a numeric-valued
+    enum arrives back as a number and has to bind — footman has to be able
+    to read the document it just wrote. Matching goes by value *and* type,
+    because `1 == True` in Python: a JSON `true` must not answer an
+    int-valued member, nor a JSON `1` a bool-valued one.
+    """
+    if not (isinstance(member, type) and issubclass(member, enum.Enum)):
+        return None
+    for candidate in member:
+        if isinstance(candidate.value, bool) != isinstance(value, bool):
+            continue
+        if candidate.value == value:
+            return candidate
+    return None
 
 
 def _phrase(target: Any) -> str:
