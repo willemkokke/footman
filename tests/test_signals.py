@@ -243,8 +243,18 @@ def test_the_timer_dumps_where_there_is_no_key_to_press(tmp_path):
             tmp_path, "wait", stderr=sink, env={"FOOTMAN_STACKS_AFTER": "0.25"}
         )
         try:
-            _await(lambda: "Timeout" in err_file.read_text(), "the timer dumped stacks")
-            assert "in wait" in err_file.read_text()
+            # Wait for a dump that names the task's own frame, not merely for
+            # the first dump. The timer is armed at startup and repeats, so on
+            # a runner slower than the interval the first one fires while the
+            # interpreter is still in `runpy` and names nothing useful — which
+            # is not a failure, it is the timer doing its job before there was
+            # anything to see. The task blocks until released below, so dumps
+            # keep coming until one lands inside it. (Free-threaded Windows
+            # found this: 250 ms is less than its startup.)
+            _await(
+                lambda: "in wait" in err_file.read_text(),
+                "a dump naming the task's own frame",
+            )
             go.write_text("go")
             assert runner.wait(timeout=30) == 0
         finally:
