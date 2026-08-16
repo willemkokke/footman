@@ -129,6 +129,17 @@ def test_branded_prog_threads_through(home):
     assert "_acme_tool_complete" in body  # function names sanitised
 
 
+@pytest.mark.parametrize("shell", _shellcomp.SHELLS)
+def test_the_header_names_a_command_footman_accepts(shell):
+    """Every hook's first line credits the command that wrote it, and it
+    spelled the value with a space — the one form footman refuses (exit 64;
+    see test_app's detached-value test). A file we write into someone's
+    shell config has to name a command that runs when they retype it."""
+    body = _shellcomp.script_for(shell, "fm")
+    assert f"--install-completion={shell}" in body
+    assert "--install-completion " not in body
+
+
 # The resolver exits 100 at a path value (`-f <TAB>`, a Path-typed option); each
 # hook reads that and hands off to the shell's own file completion.
 _FILE_HANDOFF = {
