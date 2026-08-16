@@ -1321,7 +1321,24 @@ def _call(
         # A `run()` command failed: propagate its own exit code, not a flat 1,
         # so `fm` mirrors the command's code (docs/ci.md's "exited N" contract).
         return (exc.result.code or 1), None, exc
-    except Exception as exc:  # a failed task must not crash the runner
+    except (KeyboardInterrupt, GeneratorExit):
+        # The two that are not the task failing, so neither becomes a receipt.
+        # A Ctrl-C is the user stopping the process: it arrives asynchronously
+        # wherever it lands, and the task it interrupted is incidental — the app
+        # layer answers it with "interrupted" and 130. A GeneratorExit is the
+        # interpreter tearing a frame down (the step pump closes generators to
+        # cancel them), and a frame that swallows one is handed a RuntimeError
+        # in place of the exit it refused.
+        raise
+    except BaseException as exc:  # a failed task must not crash the runner
+        # Everything else leaving the body is the task failing, whichever side
+        # of `Exception` it sits on — `sys.exit("reason")` is a BaseException
+        # and has always been read that way. `asyncio.CancelledError` is the
+        # one that turns up in practice: it inherits BaseException and leaves
+        # `asyncio.run()` when a task cancels itself. Catching only `Exception`
+        # let it past the report entirely — no row, no `--json` envelope, and a
+        # sibling that succeeded went unreported too — while the once-cell
+        # already failed a sharer with it, so the runner disagreed with itself.
         return 1, None, exc
     if isinstance(returned, int) and not isinstance(returned, bool) and not as_call:
         # An int return is the exit-code channel — unless the signature

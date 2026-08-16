@@ -98,7 +98,10 @@ least deliberate:
   reason surfaces like `fail()`'s, an int is the code.
 - **raise any exception** — a *crash*. Its type and message show
   (`RuntimeError: …`), signalling a bug rather than a chosen stop; the exit code
-  is 1.
+  is 1. Anything leaving the body counts, `BaseException` included, with two
+  reserved: `KeyboardInterrupt` and `GeneratorExit` are the process being
+  stopped and a frame being torn down, not the task failing, so they end the
+  run rather than one task.
 
 ```python
 from footman import task, fail
