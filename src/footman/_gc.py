@@ -19,7 +19,11 @@ a rebuild. Two rules, in order:
    keyed by URL — no ``cwd`` to test, so idleness is the whole rule. A cache
    serve touches the pair's mtimes (`_fetch._touch`), so idle genuinely means
    nothing asked in `IDLE_DAYS`, and the worst outcome of a deletion stays a
-   re-download.
+   re-download. Downloads in flight land there too, as ``.part`` files that
+   `_fetch` renames onto the cache path when they complete. One left behind
+   by a killed process is nobody's cache — it is read by no one and can be
+   gigabytes — so it ages on `PART_DAYS`, a far shorter clock. A download
+   that is still running is writing, which keeps its own mtime fresh.
 
 The invoking directory's own pair is never touched, and every failure is
 silent — a concurrently-reading completion child on Windows may hold a file
@@ -35,6 +39,7 @@ import time
 from pathlib import Path
 
 IDLE_DAYS = 90
+PART_DAYS = 1
 STAMP = "gc.stamp"
 
 
@@ -85,8 +90,7 @@ def collect(cache_dir: Path, skip_stem: str = "") -> int:
             unlink(times_path)
 
     # Rule 3, the fetch room: a body and its validator sidecar age as a
-    # pair; a sidecar whose body is already gone ages alone. A mid-flight
-    # download is never at risk — its mtime is seconds old.
+    # pair; a sidecar whose body is already gone ages alone.
     fetch_room = cache_dir / "fetch"
     for body in fetch_room.glob("*.bin"):
         sidecar = fetch_room / f"{body.stem}.meta.json"
@@ -99,6 +103,11 @@ def collect(cache_dir: Path, skip_stem: str = "") -> int:
             continue
         if _idle(now, sidecar):
             unlink(sidecar)
+    # A download in flight keeps its own mtime fresh; one that stopped
+    # writing a day ago belongs to a process that is not coming back.
+    for part in fetch_room.glob("*.part"):
+        if _idle(now, part, days=PART_DAYS):
+            unlink(part)
 
     return removed
 
@@ -118,13 +127,13 @@ def _baked_cwd(data: object) -> str:
     return cwd if isinstance(cwd, str) else ""
 
 
-def _idle(now: float, *paths: Path) -> bool:
+def _idle(now: float, *paths: Path, days: float = IDLE_DAYS) -> bool:
     """Whether the newest of *paths* is older than the idle window."""
     newest = 0.0
     for path in paths:
         with contextlib.suppress(OSError):
             newest = max(newest, path.stat().st_mtime)
-    return newest > 0 and (now - newest) > IDLE_DAYS * 86400
+    return newest > 0 and (now - newest) > days * 86400
 
 
 def main() -> None:

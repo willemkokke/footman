@@ -9,6 +9,12 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The cache collector sweeps downloads abandoned mid-flight.** It globbed
+  only bodies and sidecars, so a `.part` file left behind by a killed
+  process — a multi-gigabyte tarball, possibly — sat in the cache forever.
+  It ages on its own short clock: one still being written keeps its own
+  mtime fresh, and one that stopped a day ago belongs to a process that is
+  not coming back.
 - **A `fetch()` lands on its cache path whole, or not at all.** Every backend
   downloaded straight onto the cached file, so two tasks fetching the same
   cold URL truncated each other — one caller was handed a zero-byte file and
