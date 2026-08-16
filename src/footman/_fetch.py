@@ -266,6 +266,16 @@ def _download_lib(
     import importlib
 
     client = importlib.import_module(name)
+    # Each library's own error base, reached through the module object that is
+    # already in hand. Naming them costs no import up here — which is the one
+    # thing this file may not do — and `except Exception` was too much net: it
+    # dressed footman's own bugs as network failures and then served a stale
+    # cached copy on the strength of it. Both bases cover the transport
+    # failures that matter (httpx's RemoteProtocolError, requests'
+    # ChunkedEncodingError) and nothing else.
+    transport_error: type[BaseException] = (
+        client.HTTPError if name == "httpx" else client.exceptions.RequestException
+    )
     try:
         response = (
             client.get(url, headers=_conditional_headers(meta), follow_redirects=True)
@@ -281,11 +291,9 @@ def _download_lib(
         payload = response.content
     except FetchError:
         raise
-    except Exception as exc:
-        # Broad on purpose: httpx and requests each raise their own transport
-        # types, and naming them would mean importing the library up here —
-        # which is the one thing this file may not do. A dropped connection
-        # has to arrive as a FetchError or the cached copy never gets its say.
+    except transport_error as exc:
+        # A dropped connection has to arrive as a FetchError, or the cached
+        # copy never gets its say.
         raise FetchError(f"fetch: {url} — {type(exc).__name__}: {exc}") from exc
     dest.write_bytes(payload)
     return True, {
