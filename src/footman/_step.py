@@ -402,7 +402,18 @@ def _pump(item: WorkItem[Any]) -> Any:
         # like an internal error. The reason reaches the report through the
         # sealed record, so it is not written twice.
         error = exc
-    except Exception as exc:  # the body failed; the record still seals
+    except (KeyboardInterrupt, GeneratorExit):
+        # Control flow, not a failing step — the same two `_call` re-raises, for
+        # the same reasons. GeneratorExit especially: the pump below raises it
+        # into a step to cancel one, so sealing a record around it here would
+        # swallow footman's own cancellation.
+        raise
+    except BaseException as exc:  # the step failed; the record still seals
+        # Everything else that leaves a step body is that step failing, which
+        # is the rule tasks already follow. `except Exception` let a
+        # BaseException past the record, so no step row sealed and the receipt
+        # was lost — the task still failed, correctly, but with nothing to say
+        # which step did it.
         error = exc
         # Trimmed of footman's own leading frames, so the first line is the one
         # somebody wrote. It goes into the record unconditionally — `--json`

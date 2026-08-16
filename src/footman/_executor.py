@@ -1322,13 +1322,22 @@ def _call(
         # so `fm` mirrors the command's code (docs/ci.md's "exited N" contract).
         return (exc.result.code or 1), None, exc
     except (KeyboardInterrupt, GeneratorExit):
-        # The two that are not the task failing, so neither becomes a receipt.
-        # A Ctrl-C is the user stopping the process: it arrives asynchronously
-        # wherever it lands, and the task it interrupted is incidental — the app
-        # layer answers it with "interrupted" and 130. A GeneratorExit is the
-        # interpreter tearing a frame down (the step pump closes generators to
-        # cancel them), and a frame that swallows one is handed a RuntimeError
-        # in place of the exit it refused.
+        # Neither is the task failing, so neither becomes a receipt: both are
+        # control flow, and the layer that owns each must be the one to see it.
+        #
+        # A Ctrl-C is the user stopping the process. It arrives asynchronously
+        # wherever it lands, so the task it interrupted is incidental — the app
+        # layer answers it with "interrupted" and 130.
+        #
+        # A GeneratorExit is *footman's own cancellation signal*, not a stray:
+        # `_step`'s pump raises it by calling `gen.close()` on a step that timed
+        # out, that an abort caught, or that misused the yield channel. It
+        # arrives INTO a step to unwind it, so the generator's own try/finally
+        # runs and nothing is left half-held. Turning it into a task receipt
+        # would swallow the cancellation the pump just issued — the same
+        # mistake as catching SystemExit up in `_app.run`, where it is the uv
+        # handoff. The language agrees: a frame that swallows a GeneratorExit
+        # is handed a RuntimeError in place of the exit it refused.
         raise
     except BaseException as exc:  # a failed task must not crash the runner
         # Everything else leaving the body is the task failing, whichever side
