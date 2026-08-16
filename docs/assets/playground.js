@@ -1148,7 +1148,7 @@ function initPlayground() {
   // editor helps immediately; the status line narrates, and a failed
   // load may be retried by the next Run exactly as before.
   loadRuntime(setStatus)
-    .then((pyodide) => ensurePackages(pyodide, ["jedi"], setStatus))
+    .then((pyodide) => ensurePackages(pyodide, ["jedi>=0.20"], setStatus))
     .then(() => setStatus("ready"))
     .catch(() => {});
 
@@ -1340,7 +1340,7 @@ function initPlayground() {
     // Ctrl-Space may pay that cost; after that, dots complete freely.
     if (!context.explicit && !pyodideReady) return null;
     const pyodide = await loadRuntime(setStatus);
-    await ensurePackages(pyodide, ["jedi"], setStatus);
+    await ensurePackages(pyodide, ["jedi>=0.20"], setStatus);
     setStatus("ready");
     syncFiles();
     const pos = context.pos;
@@ -1385,7 +1385,7 @@ function initPlayground() {
       const signatureHelp = hoverTooltip(async (view, pos) => {
         if (!pyodideReady) return null;
         const pyodide = await loadRuntime(setStatus);
-        await ensurePackages(pyodide, ["jedi"], setStatus);
+        await ensurePackages(pyodide, ["jedi>=0.20"], setStatus);
         syncFiles();
         const doc = view.state.doc;
         const lineObj = doc.lineAt(pos);

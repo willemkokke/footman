@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The page's jedi matches the rehearsals'.** Pyodide bundles jedi
+  0.19.2 and micropip prefers bundled wheels over PyPI, so the browser
+  ran a different jedi than every CPython rehearsal — and 0.19.2
+  resolves footman's annotated `task` to a bare name, no signature, no
+  docstring (Willem's screenshot, again). The install now floors at
+  `jedi>=0.20`, which the bundled wheel cannot satisfy, forcing the
+  PyPI line both worlds share. The hover tooltip also stops inflating
+  small answers — the minimum width was a leftover cure for a clipping
+  problem the body-parented tooltips no longer have.
 - **The simulated child honours Popen's bytes contract.** A real Popen
   answers in bytes unless text mode was asked for; the playground's
   stand-in answered `str` unconditionally, and `platform.platform()`
