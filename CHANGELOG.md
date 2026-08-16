@@ -7,6 +7,58 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An exception escaping a task body says where it came from.** A task
+  that raised reported the type and the message and no location at all —
+  on a run of any size, finding the line meant guessing. The receipt now
+  carries `file:line`, taken from the innermost frame that is *yours*:
+  footman's own frames are dropped wherever they sit, including the middle
+  of a step's stack, so what is left is the code you wrote. The full
+  traceback comes with `-v`, and whenever stderr is not a terminal — a CI
+  log keeps everything without anyone having to remember the flag. A
+  deliberate stop (`fail()`, `sys.exit("…")`) still renders as its reason
+  alone; there is no crash to place. `--json` rows carry a `traceback`
+  field under the same rule.
+- **`--keep-going` reports every failure, not just the first.** The flag
+  exists to collect them all, and reported one. The abort latch is
+  process-wide but fail-fast's abort is per-subtree, so a keep-going task
+  — deliberately spared the reap — ran on, failed on its own terms, and
+  was still stamped "cancelled — fail-fast stopped the run". The label
+  replaces the error rather than joining it, so each real failure after
+  the first was hidden behind a cancellation that never happened. It also
+  skewed the exit code, which is drawn from the first genuine failure.
+  Fail-fast is unchanged: a task cut off mid-flight still reports `cut`.
+- **A `Secret` inside a returned document redacts.** `Secret` promises to
+  redact on every structured surface, and a `Stdout[…]` document printed
+  it in the clear. Two holes compounded: the redaction walk stepped over
+  dataclasses — the shape a structured return usually arrives in, and one
+  that survives `asdict` with the marker intact — and the document surface
+  never called the walk at all. `Stdout[dict]` redacted while
+  `Stdout[Credentials]` did not. `reveal()` is unaffected: it is still how
+  you say a secret is meant to leave.
+- **An `async def` task or step is refused, not silently skipped.**
+  footman has no event loop, so calling an async body returned a coroutine
+  that was never awaited: the body never ran and the task reported
+  success. Both now refuse by name, pointing at the definition's
+  `file:line`, and the coroutine is closed rather than left to warn at
+  some unrelated moment.
+- **Ctrl-C reaps the running child.** Interrupting a task blocked in
+  `run()` left the subprocess tree alive: the kill was wired to the
+  ordinary failure paths, and an interrupt takes neither. The child now
+  dies on the way out, on any exception, and is unregistered exactly once.
+- **A `KeyboardInterrupt` mid-task no longer wedges the run.** A task
+  reached as a scheduler node holds the run's once-cell for that work, and
+  leaving by `BaseException` walked past the resolve. Anything sharing
+  that work then waited on a cell nobody would fill — not until the task
+  ended, but for the rest of the process, and past a second Ctrl-C. The
+  sharer is now failed by the same thing that failed the claimant.
+- **Two lane deadlocks.** A task waiting for a named lane did not count
+  itself as parked, so the arbiter could not see that everyone was
+  waiting; and a task holding the serial lane blocked on itself when it
+  asked for another lane from inside. Lineage is now exempt, and the wait
+  is parked.
+
 ### Documentation
 
 - **The playground shows parameter hints.** Positionals have
