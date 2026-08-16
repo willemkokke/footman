@@ -945,7 +945,7 @@ def test_resolve_shell_kinds_and_strategies(monkeypatch):
     from footman.context import _resolve_shell
 
     monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)  # no hints
-    monkeypatch.setattr("footman.context.shutil.which", lambda n: f"/usr/bin/{n}")
+    monkeypatch.setattr("shutil.which", lambda n: f"/usr/bin/{n}")
     monkeypatch.setattr(sys, "platform", "linux")
     assert _resolve_shell(True) == ["/usr/bin/bash", "-c"]  # posix policy → bash
     assert _resolve_shell("posix") == ["/usr/bin/bash", "-c"]
@@ -963,12 +963,10 @@ def test_resolve_shell_posix_falls_back_to_sh_then_teaches(monkeypatch):
 
     monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)
     # No bash, but sh exists → sh.
-    monkeypatch.setattr(
-        "footman.context.shutil.which", lambda n: "/bin/sh" if n == "sh" else None
-    )
+    monkeypatch.setattr("shutil.which", lambda n: "/bin/sh" if n == "sh" else None)
     assert _resolve_shell(True) == ["/bin/sh", "-c"]
     # Nothing at all → a taught error, never a silent wrong shell.
-    monkeypatch.setattr("footman.context.shutil.which", lambda n: None)
+    monkeypatch.setattr("shutil.which", lambda n: None)
     with pytest.raises(ValueError, match="needs a POSIX shell"):
         _resolve_shell(True)
 
@@ -989,7 +987,7 @@ def test_resolve_shell_named_shell_missing_is_taught(monkeypatch):
     from footman.context import _resolve_shell
 
     monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)  # no hints
-    monkeypatch.setattr("footman.context.shutil.which", lambda n: None)
+    monkeypatch.setattr("shutil.which", lambda n: None)
     with pytest.raises(ValueError, match="'zsh' was not found on PATH"):
         _resolve_shell("zsh")
     with pytest.raises(ValueError, match="'pwsh' was not found on PATH"):
@@ -1010,7 +1008,7 @@ def test_run_shell_true_actually_pipes():
 def test_run_shell_true_reads_the_configured_policy(monkeypatch):
     # `[shell] default` flows into ctx.shell_default; run(shell=True) resolves it.
     monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)
-    monkeypatch.setattr("footman.context.shutil.which", lambda n: f"/bin/{n}")
+    monkeypatch.setattr("shutil.which", lambda n: f"/bin/{n}")
     captured = {}
 
     def fake(argv, *a, **k):

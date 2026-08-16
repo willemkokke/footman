@@ -11,7 +11,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -405,6 +404,8 @@ def _print_two_band(rows: list[tuple[str, int, str]]) -> None:
 
     width = max(plain for _, plain, _ in rows)
     desc_col = width + 2
+    import shutil  # ~1.7 ms of archive codecs for one terminal width
+
     avail = max(24, shutil.get_terminal_size().columns - desc_col)
     for cell, plain, help_text in rows:
         if not help_text:
@@ -1589,9 +1590,7 @@ def _script_source(g: dict[str, object], probe: Path) -> Path | None:
     return candidates[0] if len(candidates) == 1 else None
 
 
-def _script_handoff(
-    argv: list[str], g: dict[str, object], probe: Path, uv: str | None
-) -> int | None:
+def _script_handoff(argv: list[str], g: dict[str, object], probe: Path) -> int | None:
     """Hand off to a tasks file's own PEP 723 script environment.
 
     A tasks file that declares `dependencies` carries its own world: uv
@@ -1644,6 +1643,10 @@ def _script_handoff(
             f"the script block and run inside a project."
         )
         return EX_USAGE
+    # Resolved here, not by the caller: `shutil.which` is a PATH walk (and
+    # `shutil` itself ~1.9 ms of archive codecs), and every return above this
+    # line is a run that never needed uv at all — which is most of them.
+    uv = _find_uv()
     if uv is None:
         return None  # nothing to build the environment with: run as-is
     verbose = bool(g.get("verbose"))
@@ -1717,17 +1720,17 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
         # runs anyway: its note about an ignored script block is exactly
         # what someone asking to see everything is asking for.
         return None
-    uv = _find_uv()
     if root is None or not _pins_the_runner(root):
         # Nobody has declared what the runner means here, so a tasks file
         # may declare it for itself.
-        return _script_handoff(argv, g, probe, uv)
+        return _script_handoff(argv, g, probe)
     # A pinned project has already declared what the runner means here, so
     # a tasks file's own script block is simply not this run's business —
     # not a warning, not a refusal; visible under -v and nowhere else.
     _note_ignored_block(g, probe)
     if _inside(root / ".venv"):
         return None  # already the project's environment (the -v path lands here)
+    uv = _find_uv()
     if uv is None:
         return None
     try:

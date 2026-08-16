@@ -18,7 +18,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import threading
 import time
 from dataclasses import dataclass
@@ -373,6 +372,8 @@ class StatusLine:
             if len(self.running) > 4:
                 names += " ..."
             line += f"  running: {names}"
+        import shutil
+
         from footman._describe import fit
 
         # The line carries ANSI when a failure is counted, so `len()` reads
