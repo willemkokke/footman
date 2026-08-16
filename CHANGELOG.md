@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground shows parameter hints.** Positionals have
+  documentation but completion cannot offer them — the value is yours
+  to type — so the editor now does what every IDE does: typing `(` or
+  `,` inside a call opens a panel above the cursor with the signature,
+  one parameter per line, the active one highlighted and tracking the
+  cursor across commas. The active parameter's Args prose shows
+  beneath; a parameter without its own entry falls back to the
+  docstring's summary, which is where a variadic positional is usually
+  described. The callee keeps the spelling you typed — a tool handle's
+  synthesized signature renders its class (`Check`, not `check`) and
+  the panel corrects it from the source. Escape closes the panel,
+  Ctrl/Cmd-Shift-Space summons it, a comma inside a string literal
+  never triggers it, and a typed paren never starts the runtime
+  download — only the explicit keybinding may.
 - **The playground completes in IDE order.** Ctrl-Space inside a call
   used to answer an alphabetical soup starting at `abs`: jedi drops its
   native parameter completions when the callee is a tool handle's

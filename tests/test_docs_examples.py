@@ -775,6 +775,82 @@ def test_playground_hover_help_answers_signatures(tmp_path: Path):
     assert "Apply fixes" in help_["doc"], help_
 
 
+def _editor_sighelp(
+    tmp_path: Path, source: str, line: int, column: int
+) -> tuple[dict[str, Any] | None, str]:
+    """Drive the shipped parameter-hints answerer in CPython. Source by
+    file for the same Windows argv-newline reason as `_editor_complete`."""
+    probe = tmp_path / "sighelp_probe.py"
+    probe.write_text(
+        _js_bootstrap()
+        + "\nimport sys\nfrom pathlib import Path as _P\n"
+        # Same private parso cache as `_editor_complete`, same race.
+        + "import jedi.settings\n"
+        + "jedi.settings.cache_directory = str(_P.cwd() / 'jedi-cache')\n"
+        + "a = sys.argv\n"
+        + "src = _P(a[2]).read_text(encoding='utf-8')\n"
+        + "print(_fm_editor_sighelp(a[1], src, a[3], a[4]))\n",
+        encoding="utf-8",
+    )
+    src = tmp_path / "buffer.py"
+    src.write_text(source, encoding="utf-8")
+    work = Path(tempfile.mkdtemp(dir=tmp_path))
+    out = subprocess.run(
+        [sys.executable, str(probe), "{}", str(src), str(line), str(column)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=work,
+        env={**os.environ, "_FM_PLAYGROUND_SIM": "1"},
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    answer: dict[str, Any] | None = json.loads(out.stdout)
+    return answer, out.stderr
+
+
+def test_playground_parameter_hints_track_the_cursor(tmp_path: Path):
+    """The IDE gesture for positionals: typing ( or , asks which parameter
+    the cursor is on (jedi's Signature.index), and the panel answers with
+    the signature — the callee spelled as the user typed it, never the
+    tool handle's class — the active parameter named, and its prose: the
+    Args entry when it has one, the docstring's summary when it doesn't
+    (a variadic positional rides on the summary line)."""
+    pre = "ruff.check("
+    help_, err = _editor_sighelp(
+        tmp_path, "from toolroom import ruff\n" + pre, 2, len(pre)
+    )
+    assert help_ is not None, err
+    assert help_["label"].startswith("check("), help_
+    assert help_["active"] == "args", help_
+    assert "Run Ruff" in help_["summary"], help_
+
+    # Past the comma the highlight moves to the next parameter, and a
+    # documented one answers with its own Args prose.
+    src = 'def deploy(target, region="eu"):\n    pass\n\ndeploy("prod", '
+    help_, err = _editor_sighelp(tmp_path, src, 4, len('deploy("prod", '))
+    assert help_ is not None, err
+    assert help_["active"] == "region", help_
+    assert "\n    " in help_["label"], help_  # forced one-param-per-line
+    pre = 'ruff.check("src", fix='
+    help_, err = _editor_sighelp(
+        tmp_path, "from toolroom import ruff\n" + pre, 2, len(pre)
+    )
+    assert help_ is not None, err
+    assert help_["active"] == "fix", help_
+    assert "Apply fixes" in help_["doc"], help_
+
+    # Outside a call there is nothing to say, and a comma inside a
+    # string literal is prose, not an argument boundary.
+    help_, err = _editor_sighelp(tmp_path, "x = 1\n", 1, 5)
+    assert help_ is None, help_
+    pre = 'run("git commit -m foo, bar'
+    help_, err = _editor_sighelp(
+        tmp_path, "from footman import run\n" + pre, 2, len(pre)
+    )
+    assert help_ is None, help_
+
+
 def test_example_markers_are_spent():
     """Every example marker sits directly above a ```python fence — a
     marker that drifted away from its fence would silently stop exempting

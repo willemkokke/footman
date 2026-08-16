@@ -492,6 +492,13 @@ body .cm-tooltip.cm-tooltip.cm-completionInfo {
   text-indent: -8ch;
 }
 
+/* Parameter hints: the active parameter's line, highlighted the way the
+ * site highlights a code line (the low-alpha hll background). */
+.fmp-sig-active {
+  background: var(--md-code-hl-color--light);
+  border-radius: 0.1rem;
+}
+
 .fmp-signature-doc {
   margin-top: 0.3rem;
   color: var(--md-default-fg-color--light);

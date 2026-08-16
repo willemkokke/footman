@@ -188,4 +188,11 @@ export function highlightPython(code) {
 
 export { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 export { python } from "@codemirror/lang-python";
-export { EditorView, hoverTooltip, keymap, tooltips } from "@codemirror/view";
+export { Prec, StateEffect, StateField } from "@codemirror/state";
+export {
+  EditorView,
+  hoverTooltip,
+  keymap,
+  showTooltip,
+  tooltips,
+} from "@codemirror/view";
