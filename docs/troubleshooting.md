@@ -56,7 +56,7 @@ failed task result with the same wording, plus the source:
 | `dynamic choices from projects() failed: FileNotFoundError: ... — fix the completer, or pass suggest(fn, strict=False) if this data is best-effort` | a strict completer raised | strict promises validation, so it fails loudly rather than validating nothing |
 | `include('shared_tasks'): the module was already imported outside include(), so its tasks were never captured — ...` | a bare `import` beat your `include()` | `include()` first, or expose an explicit `Group` |
 | `include(): 'shared_tasks' has no task or group named 'lnt' (has: fmt, lint)` | a typo in `only=`/`exclude=` | the message lists what the provider has |
-| `plugin 'mkdocs': no 'footman.tasks' entry point found (installed: none)` | a configured plugin isn't installed | install it, or drop it from `[tool.footman] plugins` |
+| `plugin('mkdocs'): no 'footman.tasks' entry point matches (installed: footman.docs, footman.env_files, ...)` | the mounted plugin isn't installed | install the package that advertises it, or drop the `plugin("mkdocs")` line from your tasks file — mounts are authored there, never in config |
 | `plugin 'mkdocs': failed to import (ModuleNotFoundError: ...)` | the plugin is installed but its own import failed (a missing optional dep) | install what the plugin needs, or drop it — footman names the cause, never a traceback |
 
 A parameter whose annotation footman can't use (an unresolved name, a

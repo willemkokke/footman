@@ -126,8 +126,8 @@ environment router:
   key for this task and the children it spawns after, leaving a sibling's
   copy untouched — which matters for variables read by *presence* rather
   than value.
-- `os.putenv`/`os.unsetenv` error too, because they bypass `os.environ` even in
-  plain Python.
+- **`os.putenv`/`os.unsetenv` are taught errors**, because they bypass
+  `os.environ` even in plain Python, so nothing could scope them.
 
 Outside a run, `os.environ` behaves exactly as stock Python.
 

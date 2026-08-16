@@ -57,9 +57,12 @@ they never cost you the signature — whichever side of `@task` they stand on.
 
 **The rest of the surface states its types.** `run()` returns a `Result`
 (`.code`, `.ok`, `.stdout`, `.stderr`); `parallel(*calls)` returns
-`list[int]` and the `with parallel() as p:` block is typed; `select()`
-answers a string menu with `str` and `(label, value)` pairs with the
-value's type; `prompt()`/`confirm()` return `str`/`bool`; the testing
+`list[Result]` — a record per call, and since `Result` subclasses `int`,
+reading one as its exit code still checks — and a `with parallel() as p:`
+block *is* that list, so `p[0]` is a `Result` too (`p.results`, the values
+the queued calls returned, is heterogeneous by nature and typed to say so);
+`select()` answers a string menu with `str` and `(label, value)` pairs with
+the value's type; `prompt()`/`confirm()` return `str`/`bool`; the testing
 `Runner` returns a typed `InvokeResult`. Registering a lifecycle hook
 returns the hook unchanged, type included.
 
