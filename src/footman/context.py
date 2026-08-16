@@ -2355,6 +2355,22 @@ def _run_subprocess(
             except subprocess.TimeoutExpired:
                 _kill_tree(proc, force=True)
                 out, err = proc.communicate()
+        except BaseException:
+            # An abort unwinding through here — Ctrl-C, most of the time. The
+            # `finally` below runs on the way out and takes this child off the
+            # registry, so by the time the abort handler upstairs calls
+            # `terminate_live_children` there is nothing left to reap and the
+            # child outlives the run: `fm` exits 130 while the thing it started
+            # keeps going. (Measured: register, forget, then a reaper finding an
+            # empty registry.)
+            #
+            # Killed here instead, by the frame that owns it and knows which
+            # one it is. `killable` is the same gate registration used, so an
+            # `@task(atomic=True)` child still opts out — a formatter mid-write
+            # is exactly what that promise is for.
+            if killable:
+                _kill_tree(proc, force=False)
+            raise
     finally:
         if killable:
             _forget_child(proc)

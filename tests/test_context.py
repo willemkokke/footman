@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import sys
+import textwrap
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -2720,6 +2721,78 @@ def test_the_json_row_carries_a_stack_only_for_a_real_bug(fm_project):
     assert "src/footman" not in trace  # never the plumbing that called it
     assert "traceback" not in rows["stopped"]  # a chosen stop
     assert "traceback" not in rows["command-failed"]  # a command's exit code
+
+
+def test_ctrl_c_reaps_the_child_a_task_was_waiting_on(tmp_path):
+    """`fm` exited 130 while the thing it started kept running.
+
+    The child is spawned into its own process group on purpose, so the
+    terminal's SIGINT never reaches it and footman must reap it by hand — but
+    the `finally` that unregisters it ran first, as the interrupt unwound, so
+    the reaper upstairs found an empty registry.
+
+    Driven as a real process in its own session: the bug is entirely about
+    which signal reaches whom, and nothing in-process can pose that question.
+    """
+    import os
+    import signal
+    import subprocess
+    import time
+
+    if sys.platform == "win32":
+        # In the body rather than a decorator: `killpg`/`SIGKILL` do not exist
+        # on Windows, and the checkers read this narrowing the same way the
+        # source's own `_kill_tree` relies on.
+        pytest.skip("POSIX process groups and SIGINT")
+
+    pid_file = tmp_path / "child.pid"
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(f"""
+        import sys
+        from footman import run, task
+
+        @task
+        def slow():
+            run([sys.executable, "-c",
+                 "import os, time;"
+                 "open({str(pid_file)!r}, 'w').write(str(os.getpid()));"
+                 "time.sleep(120)"])
+        """)
+    )
+    env = {**os.environ, "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache")}
+    env.pop("VIRTUAL_ENV", None)
+    runner = subprocess.Popen(
+        [sys.executable, "-m", "footman", "slow"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        deadline = time.time() + 30
+        while time.time() < deadline and not pid_file.exists():
+            time.sleep(0.05)
+        assert pid_file.exists(), "the child never started; the test proves nothing"
+        child = int(pid_file.read_text())
+
+        os.killpg(runner.pid, signal.SIGINT)  # what a terminal does
+        runner.wait(timeout=30)
+
+        gone_by = time.time() + 15
+        while time.time() < gone_by:
+            try:
+                os.kill(child, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:
+            os.kill(child, signal.SIGKILL)  # do not leak it into the suite
+            pytest.fail("the child outlived the interrupt")
+    finally:
+        if runner.poll() is None:  # pragma: no cover - only on a regression
+            runner.kill()
 
 
 def test_the_stack_rule_reads_verbose_or_a_log():
