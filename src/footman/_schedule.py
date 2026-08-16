@@ -1050,6 +1050,32 @@ def _run_parallel(
                 real.write(blob)
                 real.flush()
 
+    # A one-node plan has no sibling to overlap with, so the pool would be a
+    # thread to wait on and nothing to gain. Run it on this thread instead and
+    # skip the import below entirely — the single most common shape (`fm test`,
+    # a bare task with no prerequisites) stops paying `concurrent.futures`.
+    # The *regime* is unchanged: run_node still builds a parallel context, so a
+    # task behaves the same whether it was named alone or in a chain.
+    if len(nodes) == 1:
+        node = nodes[0]
+        if node.result is None and not failed:
+            node.state = "running"
+            if status is not None:
+                status.unit_started(node.seg.task)
+            try:
+                run_node(node)
+            except BaseException:
+                # Same reap as the pool's abort path: the child is
+                # group-isolated and missed the terminal's SIGINT.
+                context.terminate_live_children()
+                raise
+            node.state = "done"
+            if status is not None:
+                status.unit_finished(
+                    node.seg.task, bool(node.result and node.result.ok)
+                )
+        return
+
     # Imported at the pool, not at module scope: `concurrent.futures` costs
     # ~5.9 ms (it drags `logging` through `traceback`), and a line that never
     # runs a plan — `--list`, `--help`, a refusal — should not pay it.

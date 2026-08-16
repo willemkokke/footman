@@ -477,6 +477,11 @@ _mp_saved: Any = None
 
 def _install_multiprocessing() -> None:
     global _mp_saved
+    if "multiprocessing.process" not in sys.modules:
+        # Nothing has imported multiprocessing, so no task can have spawned a
+        # worker for the note to describe. Importing it here purely to install
+        # a diagnostic costs ~2.5 ms of every run's startup.
+        return
     try:
         from multiprocessing import process as mp_process
     except Exception:  # a stripped-down build without multiprocessing
