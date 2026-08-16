@@ -402,8 +402,10 @@ def example_parts(
         if kind in ("positional", "variadic"):
             parts.append(("value", sample_value(p)))
         elif kind == "option" and p.get("required"):
-            parts.append(("flag", f"--{p['name']}"))
-            parts.append(("value", sample_value(p)))
+            # One attached token, because that is the only spelling footman
+            # accepts: `--out <file>` is exit 64 with "did you mean --out=…?".
+            # An example is a line to copy, so it has to be a line that runs.
+            parts.append(("value", f"--{p['name']}={sample_value(p)}"))
         elif kind == "flag" and (p.get("required") or not flag_shown):
             parts.append(("flag", f"--{p['name']}"))
             flag_shown = True
