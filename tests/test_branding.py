@@ -541,6 +541,33 @@ def test_the_user_rung_overlays_the_builtins(tmp_path, monkeypatch):
     assert "mine" in out and "new" in out
 
 
+def test_a_builtin_carries_no_folder_from_an_earlier_invocation(tmp_path, monkeypatch):
+    # The stamp lives on the function, and a built-in is the same object every
+    # time it is mounted — so mounting `footman.new` from inside a project
+    # stamped it with that project, and the next invocation in an EMPTY
+    # directory kept believing it was there. `fm new` then refused with
+    # "tasks.py already exists here" and wrote nothing. The base is built only
+    # when discovery finds no task files, so no overlay ever corrected it.
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text("[project]\nname='p'\n")
+    (project / "tasks.py").write_text(
+        "from footman import plugin\nplugin('footman.new')\n"
+    )
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
+
+    monkeypatch.chdir(project)
+    assert acme.invoke("--list").exit_code == 0  # stamps the shared fn
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(empty)
+    result = acme.invoke("new")
+    assert result.exit_code == 0, result.stderr
+    assert (empty / "tasks.py").exists()  # scaffolded HERE, not in the project
+
+
 def test_an_uninstalled_builtin_refuses_naming_the_brand(tmp_path, monkeypatch):
     empty = tmp_path / "empty"
     empty.mkdir()

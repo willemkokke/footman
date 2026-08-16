@@ -192,6 +192,79 @@ def test_cascade_tags_defining_dir(tmp_path):
     assert _discover.defining_dir(merged.tasks["b"]) == str(tmp_path / "svc")
 
 
+SHARED = "from footman import context, task\n@task\ndef where():\n    pass\n"
+
+
+def test_one_task_at_two_addresses_with_two_folders_is_refused(tmp_path):
+    # The stamp lives on the function, so one function can only answer with
+    # one folder. Mounted from two cascade levels under different names, the
+    # last stamp wins and the other address silently runs somewhere its own
+    # tasks file never named. Refused, because no rule about which stamp wins
+    # can be right for both addresses.
+    _write(tmp_path / "shared.py", SHARED)
+    root = _write(
+        tmp_path / "tasks.py",
+        "from footman import include\ninclude('shared', into='rootside')\n",
+    )
+    sub = _write(
+        tmp_path / "svc" / "tasks.py",
+        "from footman import include\ninclude('shared', into='svcside')\n",
+    )
+    with pytest.raises(_discover.TasksImportError) as caught:
+        _discover.load_tree([root, sub])
+    said = str(caught.value.original)
+    assert "'rootside.where'" in said  # the mount that was already there
+    assert "two defining directories" in said
+    assert 'cwd="asinvoked"' in said  # the goal the second mount probably had
+    assert caught.value.path == sub  # the nearer file, the one to edit
+
+
+def test_a_nearer_file_may_shadow_the_same_task_with_itself(tmp_path):
+    # The same function, the same address, a new folder: not a conflict but
+    # the cascade's whole point — the nearer file wins and its directory is
+    # the right answer, because it is the file that defined the address.
+    _write(tmp_path / "shared.py", SHARED)
+    root = _write(
+        tmp_path / "tasks.py", "from footman import include\ninclude('shared')\n"
+    )
+    sub = _write(
+        tmp_path / "svc" / "tasks.py",
+        "from footman import include\ninclude('shared')\n",
+    )
+    merged = _discover.load_tree([root, sub])
+    assert _discover.defining_dir(merged.tasks["where"]) == str(tmp_path / "svc")
+
+
+def test_two_providers_may_share_a_helper(tmp_path):
+    # Two addresses for one function, and no disagreement: both providers sit
+    # in the same folder, so both stamps say the same thing. Nobody authored
+    # this alias and nobody can avoid it, so it must not be refused.
+    _write(tmp_path / "common.py", SHARED)
+    _write(tmp_path / "alpha.py", "from footman import include\ninclude('common')\n")
+    _write(tmp_path / "beta.py", "from footman import include\ninclude('common')\n")
+    root = _write(
+        tmp_path / "tasks.py",
+        "from footman import include\n"
+        "include('alpha', into='alpha')\ninclude('beta', into='beta')\n",
+    )
+    merged = _discover.load_tree([root])
+    assert merged.groups["alpha"].tasks["where"] is merged.groups["beta"].tasks["where"]
+    assert _discover.defining_dir(merged.groups["beta"].tasks["where"]) == str(tmp_path)
+
+
+def test_a_second_load_may_restamp_the_same_function(tmp_path):
+    # The claim is per load, not an attribute: a fresh process, the refresh
+    # child and a second in-process invocation all legitimately re-stamp the
+    # same function. Only a disagreement *within one cascade* is a conflict.
+    _write(tmp_path / "shared.py", SHARED)
+    root = _write(
+        tmp_path / "tasks.py", "from footman import include\ninclude('shared')\n"
+    )
+    assert _discover.load_tree([root]).tasks["where"] is not None
+    merged = _discover.load_tree([root])  # would refuse if the claim persisted
+    assert _discover.defining_dir(merged.tasks["where"]) == str(tmp_path)
+
+
 def test_load_tree_leaves_no_global_state(tmp_path):
     from footman import registry
 

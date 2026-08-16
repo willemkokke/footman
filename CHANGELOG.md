@@ -19,6 +19,24 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **One task mounted from two cascade levels is now refused.** A task runs
+  in the directory of the tasks file that defined it, and that folder is
+  recorded on the function — so mounting one provider at two addresses from
+  two different directories (`include("shared", into="rootside")` at the
+  root, `into="svcside"` in a subfolder) gave one function two answers. The
+  last mount won, and the *other* address then ran somewhere its own tasks
+  file never named, silently. The two addresses also collapsed into a single
+  execution, so asking for both ran one. footman now refuses at load time,
+  naming the mount to drop and the task that already holds the address.
+  Shadowing is untouched: a nearer file may still mount the same task at the
+  same address, which is the cascade working, and two providers that both
+  include a common helper are fine because they agree about the folder.
+- **A built-in task no longer inherits a folder from an earlier run.** The
+  brand's built-ins are mounted from the same function objects every time,
+  and the folder stamp stayed on them — so a host that ran once inside a
+  project (the test `Runner`, the pytest fixtures, an embedder) left that
+  project's directory behind, and the next `fm new` in an empty directory
+  refused with "tasks.py already exists here" and wrote nothing.
 - **A `footman.py` in the directory you press Tab in no longer runs.** The
   children the completion path detaches — the manifest rebuild, a dynamic
   completer, the cache collector — were spawned with `python -c …` and

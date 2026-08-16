@@ -108,17 +108,89 @@ def _evict_siblings(before: set[str], parent: Path) -> None:
             del sys.modules[name]
 
 
-def _tag(group: Group, directory: str) -> None:
+class AliasError(Exception):
+    """One function reached from two addresses that disagree about its folder."""
+
+
+def _alias_error(
+    path: Path, address: str, directory: str, seen_address: str, seen_directory: str
+) -> TasksImportError:
+    """The refusal for one task mounted twice with two different folders.
+
+    It names the file being loaded *now* — the last one in cascade order, and
+    the nearer one to the user. That is deliberately not symmetric: the two
+    mounts are equally "the other one", but the farther mount is the shared
+    one, serving every sibling directory, so dropping it is the change with
+    reach. The local addition is the one to take back.
+    """
+    task = address.rpartition(".")[2]
+    # A RegistrationError, not a bare exception: `_app` renders that shape as
+    # "a user mistake, not a crash" and prefixes it with this file, so the
+    # message does not repeat the path it is already shown under.
+    #
+    # The hint answers the goal somebody probably had, not the collision --
+    # `asinvoked` never resolves it, and joining the two with "or" would read
+    # as though it did.
+    return TasksImportError(
+        path,
+        registry.RegistrationError(
+            f"{task!r} is already mounted as {seen_address!r} by "
+            f"{seen_directory} — one task cannot have two defining "
+            f"directories. Drop this mount.\n  If you mounted it here to run "
+            f'it in this directory, set cwd="asinvoked" on {seen_address!r} '
+            f"instead."
+        ),
+    )
+
+
+def _claim(
+    stamps: dict[int, dict[str, str]], fn: Task, address: str, directory: str
+) -> None:
+    """Record that *address* stamps *fn* with *directory*, or refuse.
+
+    A task runs in the directory of the tasks file that defined it, and that
+    is stored on the function — so one function can only ever answer with one
+    folder. A cascade may stamp the same function more than once and be
+    perfectly well formed: a nearer file *shadowing* a farther one reuses the
+    same address, and two providers that both include a common helper land it
+    at two addresses with the *same* folder. Neither is a conflict, so the
+    claim is keyed by address and compared by folder.
+
+    What cannot work is one function at two addresses whose folders differ:
+    whichever stamp lands last wins, and the other address then silently runs
+    somewhere its own tasks file never named. The refusal is not conditional
+    on the task's `cwd` policy, deliberately — `cwd` is a default, and
+    `.opts(cwd=…)` re-resolves it per use, so a task that looks immune today
+    is one call site away from caring.
+    """
+    claims = stamps.setdefault(id(fn), {})
+    for seen_address, seen_directory in claims.items():
+        if seen_address != address and seen_directory != directory:
+            raise AliasError(address, directory, seen_address, seen_directory)
+    claims[address] = directory
+
+
+def _tag(
+    group: Group, directory: str, stamps: dict[int, dict[str, str]], prefix: str = ""
+) -> None:
     """Stamp every task in *group* (recursively) with its defining directory."""
-    for fn in group.tasks.values():
+    for name, fn in group.tasks.items():
+        _claim(stamps, fn, f"{prefix}{name}", directory)
         setattr(fn, DEFINING_DIR, directory)
-    for sub in group.groups.values():
-        _tag(sub, directory)
+    for name, sub in group.groups.items():
+        _tag(sub, directory, stamps, f"{prefix}{name}.")
 
 
-def _overlay(base: Group, overlay: Group, directory: str) -> None:
+def _overlay(
+    base: Group,
+    overlay: Group,
+    directory: str,
+    stamps: dict[int, dict[str, str]],
+    prefix: str = "",
+) -> None:
     """Merge *overlay* onto *base* in place: local (overlay) wins by name."""
     for name, fn in overlay.tasks.items():
+        _claim(stamps, fn, f"{prefix}{name}", directory)
         setattr(fn, DEFINING_DIR, directory)
         # Keep the task this one shadows reachable: `inherited()` calls it,
         # `--where` lists it, `--help` shows its options. Without this the
@@ -131,10 +203,10 @@ def _overlay(base: Group, overlay: Group, directory: str) -> None:
     for name, sub in overlay.groups.items():
         if name in base.groups:
             base.groups[name].help = sub.help or base.groups[name].help
-            _overlay(base.groups[name], sub, directory)
+            _overlay(base.groups[name], sub, directory, stamps, f"{prefix}{name}.")
         else:
             base.tasks.pop(name, None)  # a local group shadows an inherited task
-            _tag(sub, directory)
+            _tag(sub, directory, stamps, f"{prefix}{name}.")
             base.groups[name] = sub
 
 
@@ -148,10 +220,18 @@ def load_tree(
     exactly as nearer cascade files win over farther ones.
     """
     merged = base if base is not None else Group("root")
+    # Address -> folder, per function, for THIS load only. Not an attribute:
+    # the same function legitimately gets a fresh stamp on every load (a new
+    # process, the refresh child, a second `Runner` invocation), and only a
+    # disagreement *within one cascade* is the contradiction.
+    stamps: dict[int, dict[str, str]] = {}
     try:
         for index, path in enumerate(files):
             tree = _import_file(path, index)
-            _overlay(merged, tree, str(path.parent))
+            try:
+                _overlay(merged, tree, str(path.parent), stamps)
+            except AliasError as exc:
+                raise _alias_error(path, *exc.args) from None
             # Collect each file's lifecycle contributions in cascade order,
             # before the next _import_file resets the registry. They live on
             # the merged tree from here on, so the run can fire the per-task
@@ -187,6 +267,28 @@ def load_tree(
     # on a pool thread, a body call — sees the same invocation, unwritable.
     inv.freeze()
     return merged
+
+
+def untag(group: Group) -> None:
+    """Drop any defining-directory stamp from *group*'s tasks, recursively.
+
+    A built-in base task was not defined by a tasks file, so it has no folder
+    to name and must answer `None`, letting the cwd ladder fall through to
+    where `fm` was invoked — which is the whole point of `fm new`.
+
+    It has to be cleared rather than simply left, because the stamp lives on
+    the *function*, and a built-in is the same object every time it is
+    mounted. An earlier in-process invocation that mounted the same provider
+    from inside a project stamps it with that project; the base is built only
+    when discovery found no task files, so `load_tree(files=[], base=base)`
+    never overlays and nothing overwrites it. `fm new` in an empty directory
+    then refuses, believing it is somewhere it is not.
+    """
+    for fn in group.tasks.values():
+        if hasattr(fn, DEFINING_DIR):
+            delattr(fn, DEFINING_DIR)
+    for sub in group.groups.values():
+        untag(sub)
 
 
 def defining_dir(fn: Task) -> str | None:
