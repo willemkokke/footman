@@ -4,7 +4,7 @@ Status: EXPLORATORY — 2026-08-16, opened by Willem while the signal fixes
 (#455–#458) were still landing. Everything below was measured against
 `origin/main` at `913a59b`, in throwaway worktrees, with the reproductions
 kept in the appendix. **Nothing here is built.** One ruling has been made —
-`infinite=True` goes, see Part 1 — and five questions at the bottom are still
+`infinite=True` goes, see Part 1 — and six questions at the bottom are still
 Willem's to call, of which two gate the builds.
 
 Three parts: **services** (a node kind with an inverted contract), **sinks**
@@ -598,6 +598,14 @@ for a run-scoped service, a descriptor plus client for a daemon, the same for a
 remote one. One signature, three transports — the transport-legality ladder
 doing its job rather than a special case.
 
+**Declaring a probe is entirely optional, and the zero-declaration default has
+to be good on its own.** It can be, because the useful half needs no plugin
+input: connection refused, connection reset, a timeout and a malformed reply are
+all *structural* failures footman can classify without knowing what the daemon
+does. So a service with no `@health` at all still gets stop-respawn-retry when
+its daemon dies or wedges. A declared probe adds only what footman genuinely
+cannot see — *semantic* health, the daemon that answers promptly and wrongly.
+
 **The cheapest probe is the request you were going to make anyway.** Running a
 health round-trip before every reuse taxes the happy path for nothing. So the
 default is *no periodic probe at all*: footman classifies the failure of a real
@@ -797,7 +805,30 @@ classifying documented behaviour as a vulnerability once.
 4. **Note or refuse for the swallowed token, and does `--` get a `+` exit?**
    These are coupled: whether "note" is defensible depends on whether `--` is a
    complete escape hatch, and today it is not.
-5. **Is the remote rung in scope for this design, or explicitly deferred?**
+5. **What is it, once this lands?** Willem, 2026-08-16: *"we're turning this into
+   more of a project runner now than just a task runner. I wonder if there is a
+   better word for it."* A task runner runs tasks to completion; a service does
+   not complete, and a daemon outlives the invocation entirely.
+
+   The observation that resolves it: **the name already covers this and the
+   tagline does not.** A footman runs errands, attends the door, waits, and
+   announces callers. Errands are tasks; attending the door is a service;
+   announcing is help and completion. Nothing about the product needs renaming —
+   one sentence does.
+
+   The trap is trading discovery for accuracy. "Task runner" is a category
+   people search for and instantly place; "project runner" is not a category and
+   nobody types it. So the split worth considering is by *slot*: keep the
+   searchable category where search happens (PyPI summary, the GitHub
+   description, `comparison.md`'s framing against duty/invoke/just/typer), and
+   let the README's first sentence carry the wider claim — something in the
+   shape of *"your project's command line"*, which covers running tasks,
+   holding services, completion, branding and the remote rung without inventing
+   a category. Both slots stay honest; neither pays for the other.
+
+   Not decided here. Flagged because the design forces the question and the
+   answer is cheapest before a launch, not after.
+6. **Is the remote rung in scope for this design, or explicitly deferred?**
    Wanted (Part 3), and it fits the frame — but it crosses the local-only line
    and brings an authentication story with it. Deciding *now* costs nothing and
    changes two things: whether transport-legality is built per-marker from the
