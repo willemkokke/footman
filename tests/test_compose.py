@@ -432,6 +432,34 @@ def test_include_memoises_per_module(provider):
     assert set(a.tasks) == {"lint"} and set(b.tasks) == {"fmt"}
 
 
+def test_include_two_submodules_of_one_package(tmp_path, monkeypatch):
+    # H6: `include("pkg.alpha")` walks *through* `pkg` and memoises its empty
+    # capture. The next `include("pkg.beta")` must not stop at that shallow
+    # memo and report "no task or group at 'beta'" — the deeper module is
+    # importable, so the import walk still owns the answer.
+    pkg = tmp_path / "provpkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "alpha.py").write_text("from footman import task\n@task\ndef lint(): ...\n")
+    (pkg / "beta.py").write_text("from footman import task\n@task\ndef fmt(): ...\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    for name in [n for n in sys.modules if n == "provpkg" or n.startswith("provpkg.")]:
+        monkeypatch.delitem(sys.modules, name)
+
+    with registry.capture() as captured:
+        compose.include("provpkg.alpha")
+        compose.include("provpkg.beta")
+    assert set(captured.tasks) == {"lint", "fmt"}
+
+    # A real typo inside a memoised tree keeps its taught message.
+    with (
+        registry.capture(),
+        pytest.raises(RegistrationError, match=r"no task or group at 'gamma'"),
+    ):
+        compose.include("provpkg.gamma")
+
+
 def test_include_carries_a_providers_hook_to_the_merged_tree(tmp_path, monkeypatch):
     # An included provider's `@pre_tasks` must run over the *merged* tree — the
     # env-guard pattern the cascade relies on. include() moves the provider's
