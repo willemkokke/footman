@@ -182,6 +182,50 @@ def test_refresh_cwd_rebuilds_the_manifest(tmp_path, monkeypatch):
     assert data["completion_max_age"] == 600  # baked from the default
 
 
+def test_refresh_cwd_drops_the_manifest_when_the_cascade_empties(tmp_path, monkeypatch):
+    # Delete the last tasks file and the cached manifest must go with it.
+    # Nothing else rewrites it — global mode writes the *global* manifest —
+    # so it would otherwise offer vanished tasks the runner refuses by name,
+    # and every aged TAB bumps its mtime past the collector's idle sweep.
+    from footman import _paths, _refresh
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef hi(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    _refresh.refresh_cwd()
+    assert _paths.manifest_path(tmp_path).is_file()
+
+    (tmp_path / "tasks.py").unlink()
+    _refresh.refresh_cwd()
+    assert not _paths.manifest_path(tmp_path).exists()
+
+
+def test_refresh_cwd_keeps_the_manifest_while_a_rung_survives(tmp_path, monkeypatch):
+    # A *partial* deletion is a rebuild, not a removal: the cascade still has
+    # a rung, so the manifest is rewritten without the vanished subtask.
+    from footman import _paths, _refresh
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef hi(): ...\n"
+    )
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "tasks.py").write_text("from footman import task\n@task\ndef sub(): ...\n")
+    monkeypatch.chdir(sub)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    _refresh.refresh_cwd()
+    assert "sub" in json.loads(_paths.manifest_path(sub).read_text())["tree"]["tasks"]
+
+    (sub / "tasks.py").unlink()
+    _refresh.refresh_cwd()
+    tasks = json.loads(_paths.manifest_path(sub).read_text())["tree"]["tasks"]
+    assert "hi" in tasks and "sub" not in tasks
+
+
 def test_refresh_source_rebuilds_the_manifest(tmp_path, monkeypatch):
     # The cold-build child rebuilds one -f file's (cwd, file) manifest — keyed
     # apart from the cwd cascade, with no background refresh (max_age 0).
