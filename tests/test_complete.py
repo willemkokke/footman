@@ -1394,6 +1394,50 @@ def test_a_runnable_groups_default_options_are_described_too():
     }
 
 
+def _runnable_group_tree():
+    """A runnable group whose default action carries one of each value shape."""
+    reg = registry.Group("root")
+    ci = reg.group("ci")
+
+    @ci.default
+    def run_all(
+        mode: Literal["fast", "slow"] = "fast",
+        report: Path = Path("out.txt"),
+        branch: Annotated[str, suggest(_demo_suggest)] = "main",
+    ): ...
+
+    @ci.task
+    def lint(): ...
+
+    return _manifest.build_manifest(reg)["tree"]
+
+
+@pytest.mark.parametrize(
+    "partial",
+    ["--mode=", "--mode=f", "--report=", "--branch=", "--branch=a"],
+)
+def test_a_bare_group_completes_its_defaults_values(partial):
+    """`fm ci --mode=<Tab>` answers what `fm ci.default --mode=<Tab>` answers.
+
+    The two spellings are the same command to the runner, so they must be the
+    same command to TAB. The group spelling used to build no segment at all,
+    which is where every value behaviour lives: choices, the file hand-off and
+    the fresh-completer signal all came back empty under the bare name and
+    full under the dotted one.
+    """
+    tree = _runnable_group_tree()
+    assert complete(tree, ["ci", partial]) == complete(tree, ["ci.default", partial])
+    assert complete(tree, ["ci", partial])  # …and neither of them is silence
+
+
+def test_a_bare_group_still_offers_its_siblings():
+    """Opening the default's tail must not close the descent: the group's own
+    subtasks are still what a bare word after it could be."""
+    tree = _runnable_group_tree()
+    offered = set(_names(complete(tree, ["ci", ""])))
+    assert {"--mode=", "ci", "ci.lint"} <= offered
+
+
 # --- matching(): a path value's glob rides out to the shell -------------------
 
 

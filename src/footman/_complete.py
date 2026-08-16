@@ -347,6 +347,29 @@ def _walk_address(
     return None
 
 
+def _open_head(
+    tree: dict[str, Any], word: str
+) -> tuple[dict[str, Any], _Segment, list[str]] | None:
+    """Open one head word into `(node, segment, path)`, or None for a miss.
+
+    A runnable group *is* its default action — the runner reads `ci` and
+    `ci.default` as the same command — so the bare spelling opens the very
+    same tail. Without that the group name completed no *values* at all:
+    choices, the file hand-off and live completers all hang off a segment,
+    and the group spelling never built one. A namespace group has no action
+    to open, so the walk parks on it and the next bare word is a fresh head.
+    """
+    resolved = _walk_address(tree, word)
+    if resolved is None:
+        return None
+    kind, hit, path = resolved
+    if kind == "task":
+        return tree, _Segment(hit), path
+    if (default := hit.get("default")) is not None:
+        return tree, _Segment(default), [*path, "default"]
+    return hit, _Segment(), path
+
+
 def _leaf_fallback(tree: dict[str, Any], partial: str) -> list[str]:
     """Nested candidates whose *last* segment starts with *partial*.
 
@@ -516,17 +539,13 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             node, seg, path = tree, _Segment(), []
             continue
         if seg.task is None:
-            # A head word is one dotted address, resolved from the root —
-            # landing on a group parks there (a runnable group's options and
-            # the next head both stay reachable); landing on a task opens
-            # its tail; anything else is ignored, as the splitter would err.
-            resolved = _walk_address(tree, word)
-            if resolved is not None:
-                kind, hit, path = resolved
-                if kind == "task":
-                    seg = _Segment(hit)
-                else:
-                    node = hit
+            # A head word is one dotted address, resolved from the root — a
+            # task or a runnable group opens its tail, a namespace group
+            # parks there, anything else is ignored, as the splitter would
+            # err.
+            opened = _open_head(tree, word)
+            if opened is not None:
+                node, seg, path = opened
             continue
         # Inside a task's tail: every token is self-contained — an option
         # word (attached value or not) never consumes its neighbour.
@@ -548,33 +567,17 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         if seg.rest is not None:
             continue
         node, seg, path = tree, _Segment(), []
-        resolved = _walk_address(tree, word)
-        if resolved is not None:
-            kind, hit, path = resolved
-            if kind == "task":
-                seg = _Segment(hit)
-            else:
-                node = hit
+        opened = _open_head(tree, word)
+        if opened is not None:
+            node, seg, path = opened
 
     if seg.task is None:
         if node is not tree:
-            # A prior word parked on a group. Runnable: its default's
-            # flags/options, plus fresh heads — the default's arity is
-            # satisfied, so the next bare word starts a new segment. A
-            # namespace group has no valid continuation as a fresh word:
-            # stay silent, the way the splitter refuses it.
-            if "default" not in node:
-                return []
-            out = [
-                _cand(token, text)
-                for p in node["default"]["params"]
-                if p["kind"] in ("flag", "option")
-                and ("--" + p["name"]).startswith(partial)
-                for token, text in _opt_rows("--" + p["name"], p, p.get("doc", ""))
-            ]
-            if not partial.startswith("-"):
-                out += _address_candidates(tree, partial)
-            return out
+            # A prior word parked on a namespace group. It names no action,
+            # so there is no valid continuation as a fresh word: stay silent,
+            # the way the splitter refuses it. (A runnable group opened a
+            # segment instead, and answers through the task tail below.)
+            return []
         # Path-style over the whole word: the partial is a dotted address
         # in progress, and candidates sit one segment beyond it.
         out = [] if partial.startswith("-") else _address_candidates(tree, partial)
