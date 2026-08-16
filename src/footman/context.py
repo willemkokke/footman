@@ -1233,6 +1233,37 @@ class Failed(Exception):
         super().__init__(reason)
 
 
+def coroutine_refusal(kind: str, fn: Any = None) -> Failed:
+    """The taught refusal for an `async def` body footman would never run.
+
+    Calling an `async def` builds a coroutine and executes none of it, so a
+    body left like that reports success for work that never happened — the one
+    receipt the design refuses to mint (docs/design.md, "No fiction"). footman
+    runs no event loop on purpose, and the same page says why, so this names
+    the way in rather than pretending to be one.
+
+    The definition site is part of the message because this is a refusal about
+    a *declaration*, not about anything the run did: the answer to "which one?"
+    is a place in a file, and a chain across a cascade can hold a great many
+    bodies. `unwrap` first, so a decorated body points at the `async def`
+    somebody wrote rather than at the wrapper that returned its coroutine.
+
+    One phrasing for both callers: tasks go through `_executor`, steps through
+    `_step`'s pump, and two copies of a message drift.
+    """
+    where = ""
+    if fn is not None:
+        code = getattr(inspect.unwrap(fn), "__code__", None)
+        if code is not None:
+            where = f" at {code.co_filename}:{code.co_firstlineno}"
+    return Failed(
+        f"the {kind} body{where} is an `async def` and footman runs no event "
+        f"loop, so calling it builds a coroutine and executes nothing. Make "
+        f"it a plain `def` and drive the async work from inside it "
+        f"(`asyncio.run(...)`)."
+    )
+
+
 def fail(reason: str = "", *, code: int = 1) -> NoReturn:
     """Fail the current task with a *reason* (and exit *code*, default 1).
 
@@ -1261,6 +1292,19 @@ def _is_deliberate_stop(err: BaseException) -> bool:
     """Whether *err* is a chosen stop with a message (`fail()`/`sys.exit("…")`)
     rather than a crash — so its reason renders verbatim, no type prefix."""
     return isinstance(err, (SystemExit, Failed))
+
+
+def _was_expected(err: BaseException) -> bool:
+    """Whether footman saw *err* coming — so no stack belongs with it.
+
+    A chosen stop, and a command that exited non-zero or ran out of time: three
+    outcomes the runner has words for, where a traceback would describe
+    footman's own plumbing rather than anything the reader did. Everything else
+    is an exception nobody planned — a bug in the tasks file — and the one
+    question it raises is *where*, which is why those carry a location and,
+    off a terminal, the stack.
+    """
+    return isinstance(err, (SystemExit, Failed, RunFailed, RunTimeout))
 
 
 def context_param_name(sig: inspect.Signature) -> str | None:
@@ -2097,6 +2141,22 @@ _aborting = threading.Event()  # set once *any* termination (fail-fast/Ctrl-C) f
 _abort_full = threading.Event()  # set when the abort spares nothing (Ctrl-C, error)
 
 
+def abort_reaches(keep_going: bool) -> bool:
+    """Does the live abort reach work under this failure policy?
+
+    The abort flags are process-wide latches, but fail-fast's abort is
+    per-subtree: a keep-going subtree is not doomed by a sibling's failure, so
+    nothing about it — its children, its verdicts — belongs to that abort. A
+    *full* abort (Ctrl-C, an internal error) spares nothing.
+
+    Every reader of the latches asks this question, so it is answered here
+    once. `_register_child` calls it under `_children_lock` to keep its
+    snapshot atomic; the executor calls it to decide whether a failure was
+    genuine or cut off.
+    """
+    return _aborting.is_set() and (_abort_full.is_set() or not keep_going)
+
+
 def _kill_tree(proc: subprocess.Popen[str], *, force: bool) -> None:
     """Signal a spawned child *and its descendants*, not just the child itself.
 
@@ -2136,12 +2196,13 @@ def _register_child(proc: subprocess.Popen[str], keep_going: bool = False) -> No
     # a child is killed either by that sweep or by this check, never missed.
     with _children_lock:
         _live_children[proc] = keep_going
-        aborting = _aborting.is_set()
-        full = _abort_full.is_set()
+        # Read inside the lock, so the answer belongs to the same instant as
+        # the registration above.
+        doomed = abort_reaches(keep_going)
     # A child spawned after an abort fired self-terminates, so the doomed run
     # can't outrun the kill — but a keep-going child spawned after a *fail-fast*
     # abort (not a full Ctrl-C) is spared, matching the per-subtree policy.
-    if aborting and (full or not keep_going):
+    if doomed:
         _kill_tree(proc, force=False)
 
 
@@ -2311,6 +2372,22 @@ def _run_subprocess(
             except subprocess.TimeoutExpired:
                 _kill_tree(proc, force=True)
                 out, err = proc.communicate()
+        except BaseException:
+            # An abort unwinding through here — Ctrl-C, most of the time. The
+            # `finally` below runs on the way out and takes this child off the
+            # registry, so by the time the abort handler upstairs calls
+            # `terminate_live_children` there is nothing left to reap and the
+            # child outlives the run: `fm` exits 130 while the thing it started
+            # keeps going. (Measured: register, forget, then a reaper finding an
+            # empty registry.)
+            #
+            # Killed here instead, by the frame that owns it and knows which
+            # one it is. `killable` is the same gate registration used, so an
+            # `@task(atomic=True)` child still opts out — a formatter mid-write
+            # is exactly what that promise is for.
+            if killable:
+                _kill_tree(proc, force=False)
+            raise
     finally:
         if killable:
             _forget_child(proc)

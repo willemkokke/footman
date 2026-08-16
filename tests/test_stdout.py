@@ -17,7 +17,7 @@ import pytest
 from footman import _manifest
 from footman._coerce import emission_mode, emitted
 from footman._executor import EX_USAGE
-from footman.params import Stdout, stdin, stdout
+from footman.params import Secret, Stdout, stdin, stdout
 from footman.registry import Group
 from footman.testing import Runner
 
@@ -26,6 +26,14 @@ from footman.testing import Runner
 class Report:
     branch: str
     dirty: bool = False
+
+
+@dataclass
+class Credentials:
+    """Module level, or `eval_str` cannot resolve `Stdout[Credentials]`."""
+
+    user: str
+    token: Secret
 
 
 def invoke(build, line, **kw):
@@ -223,6 +231,29 @@ def test_interactive_and_stdout_cannot_both_hold():
 
     with pytest.raises(_manifest.SpecError, match="interactive"):
         _manifest.build_manifest(reg)
+
+
+def test_a_secret_inside_a_document_redacts_on_both_surfaces():
+    # `_emit_document` said in its own docstring that `Secret` "redacts
+    # identically on both surfaces", and never called the walk that does it —
+    # so a document printed the value while `--json` for the same task did
+    # not. `Secret` is a `str` subclass, so it rides `json.dumps`' fast path
+    # and the `default` hook it shares with `--json` never sees it.
+    reg = Group("root")
+
+    @reg.task
+    def creds() -> Stdout[Credentials]:
+        return Credentials(user="alice", token=Secret("hunter2"))
+
+    document = Runner().invoke("creds", tasks=reg)
+    assert document.ok, document.stderr
+    assert "hunter2" not in document.stdout
+    assert json.loads(document.stdout)["token"] == "***"
+
+    envelope = Runner().invoke("--json creds", tasks=reg)
+    assert "hunter2" not in envelope.stdout
+    row = next(i for i in json.loads(envelope.stdout)["items"] if i.get("task"))
+    assert row["returned"]["token"] == "***"
 
 
 def test_the_manifest_marks_an_emitting_task():

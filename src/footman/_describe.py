@@ -17,7 +17,7 @@ import re
 import unicodedata
 import uuid
 from collections.abc import Callable, Iterator
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import Any
 
 TYPE_WORD = {
@@ -861,6 +861,17 @@ def redact(value: Any) -> Any:
         return "***"
     if isinstance(value, dict):
         return {redact(k): redact(v) for k, v in value.items()}
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        # The shape a structured return is most likely to arrive in, and the
+        # one this walk used to step straight over: `json_default` turns a
+        # dataclass into a dict with `asdict`, which deep-copies — so a
+        # `Secret` field survived as the str subclass it is, rode `json.dumps`'
+        # fast path, and printed in the clear. A dict here is what the encoder
+        # would have produced anyway, now with the fields walked first.
+        return {
+            field.name: redact(getattr(value, field.name))
+            for field in dataclasses.fields(value)
+        }
     if isinstance(value, tuple):
         return tuple(redact(v) for v in value)
     if isinstance(value, list):
@@ -878,6 +889,89 @@ def jsonable(value: Any) -> tuple[bool, Any]:
         return True, json.loads(json.dumps(redact(value), default=json_default))
     except (TypeError, ValueError):
         return False, None
+
+
+# --- where user code lives ----------------------------------------------------
+#
+# One answer to "where is this?", for every message that needs it: the refusals
+# that name a declaration, the shadow chain in `--help`, and the failure line
+# for an exception nobody expected. Kept here, with the rest of the phrasing,
+# because three copies of `co_filename:co_firstlineno` is how they drift.
+
+_OURS = str(Path(__file__).resolve().parent)
+
+
+def source_of(fn: Any) -> str:
+    """`file:line` where *fn* is written, or `""` when it cannot be told.
+
+    `unwrap` first: a decorated body should point at what somebody wrote, not
+    at the wrapper standing in front of it.
+    """
+    import inspect
+
+    code = getattr(inspect.unwrap(fn), "__code__", None) if fn is not None else None
+    return f"{code.co_filename}:{code.co_firstlineno}" if code is not None else ""
+
+
+def _is_ours(filename: str) -> bool:
+    return str(Path(filename).resolve()).startswith(_OURS)
+
+
+def user_frame(exc: BaseException) -> str:
+    """`file:line in name` for the innermost frame that is the caller's code.
+
+    Innermost *user* frame, not innermost frame: a body that calls `run()` with
+    a callable ends its traceback inside footman, and naming that would answer
+    a question nobody asked. Empty when every frame is footman's own.
+    """
+    import traceback
+
+    for frame in reversed(traceback.extract_tb(exc.__traceback__)):
+        if not _is_ours(frame.filename):
+            return f"{frame.filename}:{frame.lineno} in {frame.name}"
+    return ""
+
+
+def stack_wanted(verbose: bool, is_terminal: bool) -> bool:
+    """Whether an unexpected exception should show its whole stack.
+
+    Under `-v`, or whenever the failure is headed somewhere nobody is
+    watching: a log, a redirect, CI, cron. There is no second run *there* to
+    add `-v` to — the artifact is what you get — and the progress estimate
+    already reads the same signal to take its one-shot path.
+
+    Pure, and given both answers rather than finding them, so the one rule can
+    live here (with the rest of the phrasing) while its callers sit on either
+    side of the import that would otherwise make this circular.
+    """
+    return verbose or not is_terminal
+
+
+def user_traceback(exc: BaseException) -> str:
+    """The formatted traceback, with footman's own frames taken out.
+
+    Every one of them, not only the leading run. A step's body is reached
+    through the pump, so the framework sits in the *middle* of that stack, and
+    leaving it there puts `_pump` and `__call__` between two lines the reader
+    wrote. Nothing in those frames is ever theirs to fix, and the receipt above
+    already says the work was a step.
+
+    The cost is honest to name: two adjacent frames in the result were not
+    adjacent in the call. What is bought is that every line printed is one
+    somebody can act on.
+    """
+    import traceback
+
+    kept = [
+        frame
+        for frame in traceback.extract_tb(exc.__traceback__)
+        if not _is_ours(frame.filename)
+    ]
+    tail = "".join(traceback.format_exception_only(type(exc), exc))
+    if not kept:  # nothing but framework: the message is the whole story
+        return tail
+    body = "".join(traceback.StackSummary.from_list(kept).format())
+    return f"Traceback (most recent call last):\n{body}{tail}"
 
 
 def global_default_suffix(name: str, *, code: bool = False) -> str:

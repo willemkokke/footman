@@ -1085,7 +1085,12 @@ def _emit_document(value: object, inner: object) -> None:
     except Exception:
         tty = False
     text = json.dumps(
-        value,
+        # The walk `--json` does, which this surface claimed above to share and
+        # did not: `json_default` alone cannot redact, because `Secret` is a
+        # `str` subclass and rides `json.dumps`' fast path without ever
+        # reaching the `default` hook. A document went out in the clear while
+        # the envelope for the same task redacted.
+        _describe.redact(value),
         default=_describe.json_default,
         ensure_ascii=False,
         indent=2 if tty else None,
@@ -1094,10 +1099,20 @@ def _emit_document(value: object, inner: object) -> None:
     sys.stdout.write(text + "\n")
 
 
+def _stack_wanted(verbose: bool) -> bool:
+    """`_describe.stack_wanted`, asked about this run's real stderr.
+
+    The *real* stream, not `ctx.tty`, which folds in whether output is being
+    captured: `Runner` captures, and a suite is not a log to be rescued.
+    """
+    return _describe.stack_wanted(verbose, context.real_stderr().isatty())
+
+
 def _print_summary(
     results: list[_executor.TaskResult],
     *,
     timings: bool,
+    verbose: bool = False,
     total: float,
 ) -> None:
     # The summary is commentary about the run, not the run's output — it goes
@@ -1157,6 +1172,26 @@ def _print_summary(
             else:
                 detail = f"{type(err).__name__}: {err}"
             _error(f"{result.task}: {detail}")
+            if not context._was_expected(err):
+                # An exception nobody planned: the reader's own bug, and the
+                # only question it raises is where. The line used to end above,
+                # so a task that raised said what happened and never where —
+                # information destroyed rather than merely unformatted.
+                #
+                # The place by default, the whole stack under -v or when
+                # stderr is not a terminal. Not a terminal means a log — CI, a
+                # redirect, cron — where there is no second run to add -v to,
+                # and the same reasoning already sends the progress estimate
+                # down its one-shot path.
+                # One place decides, whichever half of the runner the exception
+                # came out of: a step keeps its stack in the record and leaves
+                # the placing to here, so a task and a step read the same and
+                # neither is said twice — including under a quiet capture,
+                # where a step's receipt is never displayed at all.
+                if _stack_wanted(verbose) and (stack := _describe.user_traceback(err)):
+                    print(stack.rstrip("\n"), file=sys.stderr)
+                elif where := _describe.user_frame(err):
+                    _error(f"       at {where}")
         elif not result.ok and state != "skipped":
             # A skipped row's whole story is its cause, already on the line.
             _error(f"{result.task}: exited with code {result.code}")
@@ -1224,6 +1259,16 @@ def _print_json(
             "output": r.output,
             "error": None if r.error is None else str(r.error),
         }
+        if r.error is not None and not context._was_expected(r.error):
+            # An exception nobody planned, so the reader's own bug: the stack
+            # rides along whatever the terminal was doing. A consumer of this
+            # envelope is a log or a dashboard, never someone who can re-run
+            # with -v, and losing the one thing that places the failure is the
+            # problem this whole rule exists to fix. Trimmed of footman's
+            # frames like the printed one. Additive to schema 1; absent for a
+            # command that exited non-zero or a deliberate stop, which have
+            # nothing to place.
+            entry["traceback"] = _describe.user_traceback(r.error)
         if r.title:
             # A reviewer's label for the row; absent when no one set one.
             entry["title"] = r.title
@@ -2277,7 +2322,12 @@ def _run_tree(
                     sys.stderr.write(r.output)
             sys.stderr.flush()
         if not g.get("quiet"):
-            _print_summary(results, timings=bool(g.get("timings")), total=total)
+            _print_summary(
+                results,
+                timings=bool(g.get("timings")),
+                verbose=bool(g.get("verbose")),
+                total=total,
+            )
         if emitters:
             doc_seg, doc_inner = emitters[0]
             doc_result = next((r for r in results if r.task == doc_seg.task), None)

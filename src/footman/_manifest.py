@@ -822,10 +822,13 @@ def _cli_params(fn: Any) -> list[inspect.Parameter]:
 
 
 def _source_of(fn: Any) -> str:
-    code = getattr(fn, "__code__", None)
-    if code is None:
-        return ""
-    return f"{code.co_filename}:{code.co_firstlineno}"
+    """Where *fn* is written, for the shadow chain `--help` prints.
+
+    The one answer, shared with the refusals that name a declaration and the
+    failure line that places an exception: three spellings of
+    `co_filename:co_firstlineno` is how they drift apart.
+    """
+    return _describe.source_of(fn)
 
 
 def _task_node(

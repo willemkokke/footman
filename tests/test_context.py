@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import sys
+import textwrap
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -2591,3 +2592,258 @@ def test_run_refuses_a_bare_container_in_its_list():
         run(["ssh", "app@host", payload])  # type: ignore[list-item]
     with pytest.raises(TypeError, match=r"Spread it with `\*`"):
         run(["echo", ["a", "b"]])  # type: ignore[list-item]
+
+
+def test_an_async_body_is_refused_rather_than_reported_ok():
+    # Calling an `async def` builds a coroutine and runs none of it, so this
+    # used to report `ok` for a body that never executed — a receipt with no
+    # work behind it. footman runs no event loop on purpose (docs/design.md,
+    # "No event loop"), so the refusal names the way in instead.
+    ran: dict[str, bool] = {}
+
+    def build(reg):
+        @reg.task
+        async def sleeper():
+            ran["it"] = True
+
+    _, _, results = drive(build, "sleeper")
+    assert not results[0].ok
+    assert not ran.get("it")  # it never ran, and never claimed to
+    assert "async def" in str(results[0].error)
+    assert "asyncio.run" in str(results[0].error)
+
+
+def test_an_unexpected_exception_places_itself_in_the_users_code(fm_project):
+    # A task that raised used to say what happened and never where — the type
+    # and message, in a file of forty tasks. Captured output is not a terminal,
+    # so this is the log-destined path: the whole stack, with footman's own
+    # leading frames off the front so the first line is one somebody wrote.
+    fm = fm_project("""
+        from footman import task
+
+        def helper(n):
+            return 10 // n
+
+        @task
+        def boom():
+            helper(0)
+    """)
+    result = fm.invoke("boom")
+    assert result.exit_code != 0
+    said = result.stderr
+    assert "ZeroDivisionError" in said
+    assert "in helper" in said  # the innermost frame the caller wrote
+    assert "src/footman" not in said  # and never the plumbing that called it
+
+
+def test_a_step_and_a_task_report_an_exception_the_same_way(fm_project):
+    # The two halves of the runner answering one question two ways is how this
+    # started: a task said only the type, a step printed footman's frames.
+    fm = fm_project("""
+        from footman import step, task
+
+        def helper(n):
+            return 10 // n
+
+        @task
+        def in_task():
+            helper(0)
+
+        @step
+        def _inner():
+            helper(0)
+
+        @task
+        def in_step():
+            _inner()()
+    """)
+    task_said = fm.invoke("in-task").stderr
+    step_said = fm.invoke("in-step").stderr
+    for said in (task_said, step_said):
+        assert "ZeroDivisionError" in said
+        assert "in helper" in said
+        assert "src/footman" not in said
+    # And the placement is not said twice for the step, whose own receipt
+    # already carried it.
+    assert step_said.count("in helper") == 1
+
+
+def test_an_expected_failure_carries_no_stack(fm_project):
+    # A command exiting non-zero is not a bug in the tasks file, and a location
+    # would point at the line that ran it as though it were the fault.
+    fm = fm_project("""
+        import sys
+        from footman import run, task
+
+        @task
+        def failing():
+            run([sys.executable, "-c", "raise SystemExit(3)"])
+    """)
+    result = fm.invoke("failing")
+    assert result.exit_code != 0
+    assert "Traceback" not in result.stderr
+    assert " at " not in result.stderr
+
+
+def test_the_json_row_carries_a_stack_only_for_a_real_bug(fm_project):
+    # A consumer of the envelope is a log or a dashboard, never someone who
+    # can re-run with -v, so the stack rides along regardless of the terminal.
+    # But only for an exception nobody planned: a command exiting non-zero has
+    # nothing to place, and pointing at the line that ran it would be a lie.
+    import json as json_mod
+
+    fm = fm_project("""
+        import sys
+        from footman import fail, run, task
+
+        def helper(n):
+            return 10 // n
+
+        @task
+        def boom():
+            helper(0)
+
+        @task
+        def stopped():
+            fail("chose to stop")
+
+        @task
+        def command_failed():
+            run([sys.executable, "-c", "raise SystemExit(3)"])
+    """)
+    rows = {}
+    for name in ("boom", "stopped", "command-failed"):
+        envelope = json_mod.loads(fm.invoke(f"--json {name}").stdout)
+        rows[name] = next(i for i in envelope["items"] if i.get("task"))
+
+    trace = rows["boom"]["traceback"]
+    assert "in helper" in trace  # the caller's own frame
+    assert "src/footman" not in trace  # never the plumbing that called it
+    assert "traceback" not in rows["stopped"]  # a chosen stop
+    assert "traceback" not in rows["command-failed"]  # a command's exit code
+
+
+def test_ctrl_c_reaps_the_child_a_task_was_waiting_on(tmp_path):
+    """`fm` exited 130 while the thing it started kept running.
+
+    The child is spawned into its own process group on purpose, so the
+    terminal's SIGINT never reaches it and footman must reap it by hand — but
+    the `finally` that unregisters it ran first, as the interrupt unwound, so
+    the reaper upstairs found an empty registry.
+
+    Driven as a real process in its own session: the bug is entirely about
+    which signal reaches whom, and nothing in-process can pose that question.
+    """
+    import os
+    import signal
+    import subprocess
+    import time
+
+    if sys.platform == "win32":
+        # In the body rather than a decorator: `killpg`/`SIGKILL` do not exist
+        # on Windows, and the checkers read this narrowing the same way the
+        # source's own `_kill_tree` relies on.
+        pytest.skip("POSIX process groups and SIGINT")
+
+    pid_file = tmp_path / "child.pid"
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(f"""
+        import sys
+        from footman import run, task
+
+        @task
+        def slow():
+            run([sys.executable, "-c",
+                 "import os, time;"
+                 "open({str(pid_file)!r}, 'w').write(str(os.getpid()));"
+                 "time.sleep(120)"])
+        """)
+    )
+    env = {**os.environ, "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache")}
+    env.pop("VIRTUAL_ENV", None)
+    runner = subprocess.Popen(
+        [sys.executable, "-m", "footman", "slow"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        deadline = time.time() + 30
+        while time.time() < deadline and not pid_file.exists():
+            time.sleep(0.05)
+        assert pid_file.exists(), "the child never started; the test proves nothing"
+        child = int(pid_file.read_text())
+
+        os.killpg(runner.pid, signal.SIGINT)  # what a terminal does
+        runner.wait(timeout=30)
+
+        gone_by = time.time() + 15
+        while time.time() < gone_by:
+            try:
+                os.kill(child, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:
+            os.kill(child, signal.SIGKILL)  # do not leak it into the suite
+            pytest.fail("the child outlived the interrupt")
+    finally:
+        if runner.poll() is None:  # pragma: no cover - only on a regression
+            runner.kill()
+
+
+def test_the_stack_rule_reads_verbose_or_a_log():
+    from footman import _describe
+
+    assert not _describe.stack_wanted(verbose=False, is_terminal=True)
+    assert _describe.stack_wanted(verbose=True, is_terminal=True)
+    assert _describe.stack_wanted(verbose=False, is_terminal=False)  # a log
+    assert _describe.stack_wanted(verbose=True, is_terminal=False)
+
+
+def test_the_async_refusal_reads_the_call_not_the_function():
+    # Deliberately checked on what the body *returned*, not on whether the
+    # function is a coroutine function. A sync wrapper hides the latter both
+    # ways round: one forgets to await (the body never runs, and the wrapper
+    # looks synchronous), the other drives it properly (and must be allowed).
+    import asyncio
+    import functools
+
+    ran: dict[str, bool] = {}
+
+    def leaks(f):
+        @functools.wraps(f)
+        def inner(*a, **k):
+            return f(*a, **k)  # never awaited
+
+        return inner
+
+    def runs(f):
+        @functools.wraps(f)
+        def inner(*a, **k):
+            return asyncio.run(f(*a, **k))
+
+        return inner
+
+    def build_leaky(reg):
+        @reg.task
+        @leaks
+        async def leaky():
+            ran["leaky"] = True
+
+    def build_proper(reg):
+        @reg.task
+        @runs
+        async def proper():
+            ran["proper"] = True
+
+    # Driven apart: chained, the first failure would fail-fast the second and
+    # the assertion below would pass for the wrong reason.
+    _, _, leaky_results = drive(build_leaky, "leaky")
+    assert not leaky_results[0].ok and not ran.get("leaky")
+
+    _, _, proper_results = drive(build_proper, "proper")
+    assert proper_results[0].ok and ran.get("proper")  # awaited: real work

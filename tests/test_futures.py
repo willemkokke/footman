@@ -15,6 +15,59 @@ from footman.registry import Group, RegistrationError
 from footman.testing import Runner
 
 
+def test_a_base_exception_answers_the_cell_it_claimed(tmp_path):
+    """An unresolved cell blocks its sharer for the rest of the run.
+
+    `_call` deliberately does not catch `BaseException` — a KeyboardInterrupt
+    must abort the run, not become a task failure — but leaving by that door
+    skipped the `resolve` that answers anyone waiting. The claimant died and
+    the sharer waited for a value nobody would ever set, past a second Ctrl-C,
+    since the wait is not interruptible.
+
+    Driven as a subprocess with a timeout: the failure mode is a hang, and a
+    hang in-process takes the suite with it.
+    """
+    import os
+    import subprocess
+    import sys
+    import textwrap
+
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent("""
+        import time
+        from footman import task
+
+        class Abrupt(BaseException):
+            pass
+
+        @task
+        def claimant():
+            time.sleep(0.4)      # the sharer reaches the cell first
+            raise Abrupt("out through the cell")
+
+        @task
+        def sharer():
+            time.sleep(0.15)
+            claimant()           # joins the cell the node claimed
+        """)
+    )
+    env = {**os.environ, "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache")}
+    env.pop("VIRTUAL_ENV", None)
+    try:
+        done = subprocess.run(
+            [sys.executable, "-m", "footman", "claimant", "sharer"],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:  # pragma: no cover - the regression
+        pytest.fail("the sharer is still waiting on a cell nobody resolved")
+    assert done.returncode != 0
+    assert "Abrupt" in done.stderr  # failed by what failed the claimant
+
+
 def drive(reg: Group, line: str):
     """Run *line* against *reg* through the in-process CLI."""
     return Runner().invoke(line, tasks=reg)

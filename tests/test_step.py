@@ -7,7 +7,7 @@ import time
 import pytest
 
 from footman import Context, fail, parallel, step, use_context
-from footman.context import RunTimeout
+from footman.context import Failed, RunTimeout
 
 
 def test_calling_a_step_maker_builds_and_runs_nothing():
@@ -256,3 +256,41 @@ def test_a_step_yielding_a_value_is_taught():
 
     with use_context(Context()), pytest.raises(TypeError, match="checkpoints"):
         chatty()()
+
+
+def test_an_async_step_body_is_refused_and_names_where_it_lives():
+    # A generator body is the supported way for a step to yield; an `async
+    # def` is not a generator function, so it fell through to the plain call
+    # and built a coroutine nothing drove — a sealed record for work that
+    # never happened. The refusal carries the definition site, because the
+    # question it answers is "which one?" and the answer is a place in a file.
+    ran: list[str] = []
+
+    async def sleeper():
+        ran.append("no")
+
+    with use_context(Context()), pytest.raises(Failed) as caught:
+        # Bound, because both checkers otherwise report the unused coroutine —
+        # which is exactly the mistake under test, spotted statically. It never
+        # binds: the call raises.
+        _ = step(sleeper)()()
+    assert not ran  # it never ran, and never claimed to
+    said = str(caught.value)
+    assert "async def" in said
+    assert "asyncio.run" in said
+    assert "test_step.py:" in said  # the definition site, not a traceback
+
+
+def test_a_deliberate_step_failure_is_not_dressed_as_a_crash():
+    # `fail()` carries a reason written for the person reading it, and
+    # `Failed` promises it renders verbatim. The pump used to print a full
+    # traceback first — footman's own frames included — which buried the
+    # reason and made a considered stop look like an internal error.
+    @step
+    def stopper():
+        fail("this step chose to stop")
+
+    ctx = Context()
+    with use_context(ctx), pytest.raises(Failed, match="this step chose to stop"):
+        stopper()()
+    assert "Traceback" not in ctx.steps[-1].stderr

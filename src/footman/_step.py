@@ -21,14 +21,15 @@ from __future__ import annotations
 import inspect
 import io
 import time
-import traceback
 from collections.abc import Callable, Generator
 from contextvars import ContextVar
 from typing import Any, Generic, Literal, ParamSpec, TypeVar, cast, overload
 
+from footman import _describe
 from footman import context as _context
 from footman.context import (
     AuditEntry,
+    Failed,
     Result,
     ResultView,
     RunFailed,
@@ -298,13 +299,23 @@ def _pump(item: WorkItem[Any]) -> Any:
     deadline = start + timeout if timeout is not None else None
     value: Any = None
     error: BaseException | None = None
+    stack_text = ""
     timed_out = False
     out_buf, err_buf = io.StringIO(), io.StringIO()
 
     def drive() -> Any:
         nonlocal timed_out
         if not maker._is_gen:
-            return maker._fn(*item._args, **item._kwargs)
+            produced = maker._fn(*item._args, **item._kwargs)
+            if inspect.iscoroutine(produced):
+                # An `async def` is not a generator function, so it lands here
+                # and the call builds a coroutine that nothing drives: the step
+                # recorded a receipt for work that never happened. A generator
+                # body is the supported way to yield, and it is a cancellation
+                # point rather than a scheduling one.
+                produced.close()  # or "was never awaited" trails the refusal
+                raise _context.coroutine_refusal("step", maker._fn)
+            return produced
         gen: Generator[Any, Any, Any] = maker._fn(*item._args, **item._kwargs)
         payload: Any = None
         while True:
@@ -377,9 +388,24 @@ def _pump(item: WorkItem[Any]) -> Any:
         else:  # a string reason: print it, fail with 1 — sys.exit's contract
             err_buf.write(f"{exc.code}\n")
             exit_code = 1
+    except Failed as exc:
+        # A deliberate stop, not a crash: `footman.fail()` and the refusals
+        # built on it carry a reason written for the person reading it, and
+        # `Failed` promises that reason renders verbatim. A traceback here
+        # buried it under footman's own frames and made a considered stop look
+        # like an internal error. The reason reaches the report through the
+        # sealed record, so it is not written twice.
+        error = exc
     except Exception as exc:  # the body failed; the record still seals
         error = exc
-        err_buf.write(traceback.format_exc())
+        # Trimmed of footman's own leading frames, so the first line is the one
+        # somebody wrote. It goes into the record unconditionally — `--json`
+        # and `recording()` read that, and a machine consumer is not reading
+        # for noise — while the *display* below follows the same rule the task
+        # summary does. Kept in hand as well as written, so the display can
+        # take it back out again without guessing where it starts.
+        stack_text = _describe.user_traceback(exc)
+        err_buf.write(stack_text)
 
     duration = time.perf_counter() - start
     if timed_out:
@@ -447,6 +473,13 @@ def _pump(item: WorkItem[Any]) -> Any:
             out = _sys.stdout
             out.write(_context._step_line(ctx, result.code == 0, view.title, duration))
             combined = result.stdout + result.stderr
+            if stack_text:
+                # The stack stays in the record — `--json` and `recording()`
+                # read that — and out of the display, which the run summary
+                # owns. One place decides how a failure is placed, so a task
+                # and a step answer identically and neither says it twice.
+                # What the body printed before it fell over is untouched.
+                combined = combined.replace(stack_text, "")
             if capture and combined and (result.code != 0 or ctx.verbose):
                 out.write(combined if combined.endswith("\n") else combined + "\n")
             if result.code != 0 and len(result.audit) > 1:

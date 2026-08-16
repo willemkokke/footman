@@ -41,6 +41,7 @@ from footman.context import (
     RunFailed,
     _current,
     context_param_name,
+    coroutine_refusal,
 )
 from footman.params import Secret
 from footman.registry import Group, Task
@@ -1286,6 +1287,15 @@ def _call(
         # The task's own body — never the handle, whose call is the body-call
         # machinery that would route this invocation straight back here.
         returned = registry.task_body(fn)(*args, **kwargs)
+        if inspect.iscoroutine(returned):
+            # Calling an `async def` builds a coroutine and runs none of it.
+            # Left alone this reported `ok` for a body that never executed —
+            # a receipt with no work behind it, which is the one thing the
+            # design says it will not mint. footman has no event loop on
+            # purpose (docs/design.md, "No event loop"), so the refusal names
+            # the way in rather than pretending to be one.
+            returned.close()  # or Python warns "was never awaited" as well
+            raise coroutine_refusal("task", registry.task_body(fn))
     except SystemExit as exc:
         # A non-int, non-None code is Python's `sys.exit("message")` idiom: the
         # object is the reason the interpreter would print to stderr. Carry it as
@@ -2301,6 +2311,22 @@ def run_bound(
         if error is None:
             # The body finished and had every chance to read what it declared.
             _advise_unread_uses(ctx, fn)
+    except BaseException as exc:
+        # Not an ordinary failure — `_call` turns those into `error` and the
+        # run carries on to `resolve` below. This is the class it deliberately
+        # does not catch, KeyboardInterrupt above all, and letting it leave by
+        # the front door skipped the one line that answers anyone waiting on
+        # this task's cell. `resolve`'s own contract says it is "always called
+        # for a claimed cell, on every path out"; this was the path out that
+        # did not.
+        #
+        # A sharer then blocked on a cell nobody would ever fill — for the rest
+        # of the run, and past a second Ctrl-C, since the wait is not
+        # interruptible. Answering it costs nothing and the exception carries
+        # on unchanged: the waiter is failed by the same thing that failed the
+        # claimant, which is the truth of what happened to it.
+        _futures.resolve(cell, None, exc)
+        raise
     finally:
         _current.reset(token)
         worker.name = born
@@ -2380,7 +2406,13 @@ def run_bound(
     _futures.resolve(cell, returned, error, record=result)
     # A task that failed while fail-fast was already aborting the run wasn't a
     # genuine failure — it was cut off. Report that honestly, not as "failed".
-    if not result.ok and context._aborting.is_set():
+    # Only when the abort actually *reaches* this task, though: the latch is
+    # process-wide and a sibling's failure sets it, but a keep-going task is
+    # spared the reap and runs to its own conclusion. Reading the latch alone
+    # called that conclusion a cancellation — and because the label replaces
+    # the error rather than joining it, `--keep-going` reported the first
+    # failure and hid every one after it, which is the opposite of the flag.
+    if not result.ok and context.abort_reaches(ctx.keep_going):
         result.cancelled = True
     return result
 
