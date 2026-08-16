@@ -1246,9 +1246,15 @@ class TaskFn(Protocol[_P, _R_co]):
 
 
 class TaskDecorator(Protocol):
-    """The static shape of the module-level `task` decorator — the bound
-    `Group.task` of the root registry. `test_registry_aliases_stay_in_sync`
-    holds its parameterised form to `Group.task`'s."""
+    """Register a function as a task: bare (`@task`) or parameterised
+    (`@task(serial=True)`). The function's name becomes the command
+    (underscores as hyphens), its typed parameters become flags and
+    positionals, and its docstring's first line becomes the help text.
+
+    This protocol is the module-level `task`'s static shape — the bound
+    `Group.task` of the root registry, whose docstring carries the
+    long-form story. `test_registry_aliases_stay_in_sync` holds its
+    parameterised form to `Group.task`'s."""
 
     @overload
     def __call__(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
@@ -1275,7 +1281,54 @@ class TaskDecorator(Protocol):
         needs_project: bool | None = None,
         lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
-    ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
+    ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]:
+        """Configure and register a task.
+
+        Args:
+            name: Override the command name; the default is the function
+                name with underscores as hyphens.
+            pre: Tasks that must conclude before this one runs;
+                independent prerequisites run in parallel.
+            post: Tasks that run after this one concludes.
+            progress: `False` for work with no predictable duration (a
+                watcher, a network fetch) — no timing history is
+                recorded and no determinate bar is shown.
+            infinite: The task runs until stopped (a dev server, a
+                follow-mode tail); implies `progress=False`, and the run
+                notes that Ctrl-C is how this ends.
+            shared: `False` runs this task for every request instead of
+                sharing one execution per task-and-arguments; it
+                propagates down the task's whole subtree.
+            confirm: A yes/no question asked before the task and its
+                prerequisites run — deny and the subtree is skipped;
+                `--yes` auto-answers.
+            interactive: The task owns the real terminal — prompts and
+                REPLs work, output is uncaptured, the run goes
+                sequential, and `--json` refuses it.
+            keep_going: Collect failures in this task's subtree instead
+                of stopping at the first; `-k` says it for a whole run.
+            atomic: Its subprocesses opt out of the fail-fast kill and
+                finish on their own.
+            cwd: Where the task runs — `"taskfile"` (the defining
+                file's directory, the default), `"root"` (the cascade's
+                top), `"asinvoked"` (the launch directory), or
+                `"unmanaged"` — or an absolute path.
+            rel: A relative suffix appended to the resolved `cwd`.
+            serial: Owns the process globals — at most one serial task
+                at a time, overlapping the parallel pool; a real
+                `chdir` is legal inside.
+            exclusive: Owns the machine — nothing else in flight while
+                it runs.
+            hidden: Out of `--list` and help, callable and completable
+                as ever; unset inherits the enclosing group's answer.
+            needs_project: The task refuses to run outside a project
+                checkout, by name and with a reason.
+            lanes: Named resources this task holds while it runs;
+                contends only with other claimants of the same lanes.
+            uses: Global options this task reads — mounting it puts
+                them on the command line.
+        """
+        ...
 
 
 class GroupFactory(Protocol):
