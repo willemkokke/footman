@@ -99,6 +99,24 @@ def test_collect_ages_the_fetch_room(tmp_path):
     assert (room / "warm.meta.json").exists()
 
 
+def test_collect_sweeps_abandoned_part_files(tmp_path):
+    # A download in flight lives in a `.part` file beside the body it will
+    # be renamed onto. One whose process was killed is read by nobody and
+    # can be gigabytes, so it ages on PART_DAYS rather than the idle window
+    # — and a running download, still writing, keeps its own mtime fresh.
+    cache = tmp_path / "cache"
+    room = cache / "fetch"
+    room.mkdir(parents=True)
+    (room / "abandoned.a1b2.part").write_text("half a tarball")
+    then = time.time() - (_gc.PART_DAYS + 0.5) * 86400
+    os.utime(room / "abandoned.a1b2.part", (then, then))
+    (room / "inflight.c3d4.part").write_text("still arriving")
+
+    assert _gc.collect(cache) == 1
+    assert not (room / "abandoned.a1b2.part").exists()
+    assert (room / "inflight.c3d4.part").exists()
+
+
 def test_collect_tolerates_garbage_manifests(tmp_path):
     cache = tmp_path / "cache"
     cache.mkdir()

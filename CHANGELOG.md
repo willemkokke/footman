@@ -9,6 +9,41 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The cache collector sweeps downloads abandoned mid-flight.** It globbed
+  only bodies and sidecars, so a `.part` file left behind by a killed
+  process — a multi-gigabyte tarball, possibly — sat in the cache forever.
+  It ages on its own short clock: one still being written keeps its own
+  mtime fresh, and one that stopped a day ago belongs to a process that is
+  not coming back.
+- **A `fetch()` lands on its cache path whole, or not at all.** Every backend
+  downloaded straight onto the cached file, so two tasks fetching the same
+  cold URL truncated each other — one caller was handed a zero-byte file and
+  the run reported ok — and a transfer that died halfway left its stump in
+  the cache, where the next call mistook it for a good copy and served it.
+  With `sha256=` the report was worse than the bug: it blamed the server for
+  bytes a sibling task had corrupted after they arrived intact. A download
+  now streams into a `.part` file beside the body and is renamed into place
+  only once it is complete.
+- **A body that arrives short is refused, not cached.** With `urllib`, a
+  response that ended before its `Content-Length` was written to the cache
+  as a complete file and exited 0 — CPython reads a truncated body without a
+  word on purpose. The ETag off that same response then went in the sidecar,
+  the healthy origin answered `304` from then on, and the half file was
+  served as a hit until somebody deleted the cache by hand.
+- **A dead transfer no longer takes the cached copy with it.** A connection
+  that dropped mid-body raised the library's own exception straight past
+  `fetch()`, so the documented "a cached copy beats a failed refresh"
+  fallback never got its say — on `urllib`, `httpx` and `requests` alike.
+  Those arrive as `FetchError` now, and the good copy is still there to fall
+  back to.
+- **The `curl` fetch backend revalidates like every other one.** It threw
+  its response headers away, so it stored no ETag, sent no `If-None-Match`,
+  and could never receive a `304` — every call re-downloaded the whole file.
+  Worse, it reported a download unconditionally, so when another backend's
+  sidecar did win it a `304` the receipt still said the bytes had moved. It
+  reads the status and the validators off the response now, the way `urllib`,
+  `httpx` and `requests` do. Which backend you name picks a socket, not a
+  behaviour.
 - **Ctrl-C during an in-body `parallel()` stops the run instead of waiting
   it out.** The fan-out entered its pool with no abort arm, so the interrupt
   unwound in the main thread and then blocked joining workers that were

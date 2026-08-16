@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.server
 import threading
+import time
 from pathlib import Path
 from typing import ClassVar
 
@@ -12,15 +13,27 @@ import pytest
 from footman import _fetch, _paths
 from footman.context import Context, use_context
 
-BODY = b"footman fetch payload\n"
+# Big enough to cross `_fetch.CHUNK` and Python's own write buffer: a body
+# that fits in one buffered write is atomic by luck, and the whole point of
+# the scenarios below is that nothing here runs on luck.
+BODY = b"footman fetch payload\n" * 12000
 SHA = "0f2c1a8ff1b0e8b2f0b1b7b2c9a0e2b7f6e5d4c3b2a1908070605040302010ff"
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
-    """Serves BODY with an ETag, answering conditional requests with 304."""
+    """Serves BODY with an ETag, answering conditional requests with 304.
 
+    `mode` bends the *next* response without changing the path, because the
+    scenarios need one URL to behave two ways: a warm cache is the point of
+    a failed refresh, and the cache is keyed by URL.
+    """
+
+    protocol_version = "HTTP/1.1"  # the "chunked" mode needs it
     etag = '"v1"'
+    mode = ""  # "", "short", "chunked", or "stall"
     hits: ClassVar[list[str]] = []
+    stalled = threading.Event()
+    release = threading.Event()
 
     def do_GET(self):  # BaseHTTPRequestHandler's spelling, not ours
         type(self).hits.append(self.headers.get("If-None-Match") or "unconditional")
@@ -33,10 +46,37 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        mode = type(self).mode
+        if mode == "chunked":
+            # A chunk stream that stops before its terminator. The client's
+            # own framing catches this one and raises; the two below are the
+            # shapes that arrive looking perfectly well-formed.
+            self.send_response(200)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.send_header("ETag", type(self).etag)
+            self.end_headers()
+            half = BODY[: len(BODY) // 2]
+            self.wfile.write(f"{len(half):x}\r\n".encode() + half + b"\r\n")
+            self.wfile.write(b"ffff\r\n")  # a chunk header with no chunk
+            self.close_connection = True
+            return
         self.send_response(200)
         self.send_header("Content-Length", str(len(BODY)))
         self.send_header("ETag", type(self).etag)
         self.end_headers()
+        if mode == "short":
+            # Half a body and a dropped connection: the shape CPython reads
+            # without a word, and the shape curl calls exit 18.
+            self.wfile.write(BODY[: len(BODY) // 2])
+            self.close_connection = True
+            return
+        if mode == "stall":
+            self.wfile.write(BODY[: len(BODY) // 2])
+            self.wfile.flush()
+            type(self).stalled.set()
+            type(self).release.wait(20)
+            self.wfile.write(BODY[len(BODY) // 2 :])
+            return
         self.wfile.write(BODY)
 
     def log_message(self, format, *args):  # the base class's spelling
@@ -48,12 +88,26 @@ def server(tmp_path, monkeypatch):
     """A local HTTP server plus an isolated footman cache."""
     monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
     _Handler.hits = []
-    httpd = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    _Handler.mode = ""
+    _Handler.stalled = threading.Event()
+    _Handler.release = threading.Event()
+    # Threaded: a stalled request must not hold up the one racing it.
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{httpd.server_port}/file.bin"
+    _Handler.release.set()  # never leave a parked handler behind
     httpd.shutdown()
 
+
+# --- the backend conformance table --------------------------------------------
+#
+# Naming a backend picks a socket, not a behaviour: all four revalidate with
+# the same headers, refuse a body that arrived short, keep a good cached copy
+# when a refresh dies, and land the finished file with the same rename. One
+# set of scenarios, run against every backend installed here — the missing
+# ones skip, and CI installs them all. Nothing exercised curl's revalidation
+# before this table, and nothing could: it never stored a validator to send.
 
 BACKENDS = ["urllib", "curl", "httpx", "requests"]
 
@@ -88,14 +142,109 @@ def test_every_backend_refuses_a_404(server, backend):
         _fetch.fetch(server.replace("file.bin", "missing.bin"), backend=backend)
 
 
-@pytest.mark.parametrize("backend", ["urllib", "httpx", "requests"])
-def test_library_backends_revalidate_with_the_etag(server, backend):
-    """curl aside (it re-fetches by design), a warm cache revalidates: the
-    second call carries If-None-Match and the server answers 304."""
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_every_backend_revalidates_with_the_etag(server, backend):
+    """A warm cache revalidates: the second call carries If-None-Match, the
+    server answers 304, and the receipt says cached. curl used to be outside
+    this — it threw its headers away, so it stored no validator to send and
+    could never receive a 304 at all."""
     _skip_unless_available(backend)
     _fetch.fetch(server, backend=backend)
-    assert _fetch.fetch(server, backend=backend).read_bytes() == BODY
+    with use_context(Context(fetch_backend=backend)) as ctx:
+        assert _fetch.fetch(server).read_bytes() == BODY
     assert _Handler.hits == ["unconditional", '"v1"']
+    assert ctx.steps[-1].stdout == "cached"
+
+
+# Two ways a transfer dies mid-body: one the client's own framing catches
+# and raises about, one it reads to the end and calls a complete file.
+DEATHS = ["short", "chunked"]
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("death", DEATHS)
+def test_every_backend_refuses_a_truncated_body(server, backend, death):
+    """A body that ends early is a failure, not a cache entry. Cached, it
+    would be permanent: the ETag off that same response goes in the sidecar
+    and the healthy origin answers 304 forever, so the half file is served
+    as a hit until someone deletes the cache by hand."""
+    _skip_unless_available(backend)
+    _Handler.mode = death
+    body, sidecar = _fetch._paths_for(server)
+    with pytest.raises(_fetch.FetchError, match="fetch: "):
+        _fetch.fetch(server, backend=backend)
+    assert not body.exists()
+    assert not sidecar.exists()
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("death", DEATHS)
+def test_every_backend_keeps_the_cached_copy_when_a_refresh_dies(
+    server, backend, death
+):
+    """The documented offline fallback, on a transfer that dies mid-body
+    rather than one that never connects. The good copy has to survive being
+    refreshed onto — and the failure has to arrive as a FetchError, or the
+    fallback never gets its say and the library's own exception escapes."""
+    _skip_unless_available(backend)
+    assert _fetch.fetch(server, backend=backend).read_bytes() == BODY
+    _Handler.mode = death
+    with use_context(Context(fetch_backend=backend)) as ctx:
+        assert _fetch.fetch(server, refresh=True).read_bytes() == BODY
+    assert ctx.steps[-1].stdout == "cached"
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_every_backend_leaves_the_cache_alone_while_downloading(server, backend):
+    """Two tasks, one cold URL: the copy the first was handed stays whole
+    while the second streams. Downloading onto the cache path truncated it to
+    zero the moment the second `open` landed, and the run reported ok —
+    `sha256=` then blamed the server for bytes that arrived intact.
+
+    The stall is server-side; when the client reaches its own write is not,
+    so the file is watched across a window rather than sampled once.
+    """
+    _skip_unless_available(backend)
+    body, _ = _fetch._paths_for(server)
+    assert _fetch.fetch(server, backend=backend).read_bytes() == BODY
+
+    _Handler.mode = "stall"
+    got: list[object] = []
+
+    def sibling() -> None:
+        try:
+            got.append(_fetch.fetch(server, backend=backend, refresh=True))
+        except Exception as exc:  # surfaced by the assert below, not swallowed
+            got.append(exc)
+
+    thread = threading.Thread(target=sibling)
+    thread.start()
+    try:
+        assert _Handler.stalled.wait(20)
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline:
+            assert body.read_bytes() == BODY
+            time.sleep(0.01)
+    finally:
+        _Handler.release.set()
+        thread.join(20)
+    assert got and isinstance(got[0], Path) and got[0].read_bytes() == BODY
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_every_backend_leaves_no_scratch_behind(server, backend):
+    """A download in flight lives in a `.part` file; a finished one does not.
+    Nothing that succeeded, 304'd, or failed may leave one lying about."""
+    _skip_unless_available(backend)
+    _fetch.fetch(server, backend=backend)
+    _fetch.fetch(server, backend=backend)  # a 304
+    _Handler.mode = "short"
+    with pytest.raises(_fetch.FetchError):
+        _fetch.fetch(server, backend=backend, refresh=True, sha256=SHA)
+    assert list(_fetch.cache_dir().glob("*.part")) == []
+
+
+# --- the cache, the receipt, and the rest -------------------------------------
 
 
 def test_fetch_downloads_and_caches(server):
@@ -147,14 +296,14 @@ def test_fetch_records_a_step(server):
 
 def test_a_download_is_never_reported_cached(server):
     # `cached` used to derive from "no validators came back", which read a
-    # curl download — validator-less by design — as cached on the first-ever
+    # curl download — validator-less back then — as cached on the first-ever
     # fetch. Downloaded and cached are separate facts now, on every backend.
     _skip_unless_available("curl")
     with use_context(Context(fetch_backend="curl")) as ctx:
         _fetch.fetch(server)
         assert ctx.steps[-1].stdout == ""  # a real download says so
-        _fetch.fetch(server)
-        assert ctx.steps[-1].stdout == ""  # re-fetch is honest: still not cached
+        _fetch.fetch(server, refresh=True)
+        assert ctx.steps[-1].stdout == ""  # forced past the ETag: still moved
 
 
 def test_a_revalidated_serve_counts_as_use(server):
@@ -207,6 +356,19 @@ def test_curl_backend_downloads(server):
     assert path.read_bytes() == BODY
 
 
+def test_curl_reads_the_last_response_in_the_dump():
+    """A redirect or a retry appends another block; only the last one
+    describes the bytes that landed in the file."""
+    dump = (
+        'HTTP/1.1 301 Moved Permanently\r\nETag: "old"\r\nLocation: /x\r\n\r\n'
+        'HTTP/1.1 200 OK\r\nETag: "new"\r\nLast-Modified: Mon, 01 Jan 2035\r\n\r\n'
+    )
+    code, headers = _fetch._last_response(dump)
+    assert code == 200
+    assert headers["etag"] == '"new"'
+    assert headers["last-modified"] == "Mon, 01 Jan 2035"
+
+
 def test_backend_comes_from_the_config_ladder(server, monkeypatch):
     seen = {}
 
@@ -217,7 +379,7 @@ def test_backend_comes_from_the_config_ladder(server, monkeypatch):
 
     monkeypatch.setattr(_fetch, "_download", spy)
     with use_context(Context(fetch_backend="curl")):
-        _fetch.fetch(server)
+        assert _fetch.fetch(server).read_bytes() == BODY
     assert seen["backend"] == "curl"  # [fetch] backend, not the default
 
 
