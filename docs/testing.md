@@ -72,11 +72,37 @@ taught errors, exit codes — and captures everything:
 ```python
 from footman.testing import Runner
 
+TASKS = '''
+from footman import task, run
+
+@task
+def format():
+    "Format the tree."
+    run("ruff format .")
+
+@task
+def lint(fix: bool = False):
+    "Lint it."
+    run("ruff check ." + (" --fix" if fix else ""))
+
+@task
+def test():
+    "Run the suite."
+    run("pytest -q")
+'''
+
 def test_the_check_pipeline(tmp_path):
+    (tmp_path / "tasks.py").write_text(TASKS)
     result = Runner().invoke("--dry-run format lint --fix test", cwd=tmp_path)
     assert result.ok
-    assert "lint" in result.stdout
+    assert [t.task for t in result.results] == ["format", "lint", "test"]
+    assert "ruff check . --fix" in result.stdout
 ```
+
+`cwd` is where the `tasks.py` cascade starts, so it needs a tasks file to
+find — an empty `tmp_path` earns `no tasks file found` and exit 64. The
+`fm_project` fixture [below](#the-pytest-fixtures) does this scaffolding for
+you.
 
 `Runner.invoke` returns an `InvokeResult` (named apart from the run-step
 `Result` that `run()` returns) carrying `exit_code`, `stdout`, `stderr`, the
