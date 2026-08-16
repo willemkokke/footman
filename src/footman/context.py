@@ -1847,7 +1847,16 @@ class Invocation:
     def text(self, *, exact: bool) -> str:
         """The plain command line — the width-measured, non-colour form."""
         if exact:
-            return " ".join(_shell_quote(a) for a in self.exact)
+            # `exact` is the literal argv, and the bridge keeps a `Secret`
+            # whole in it on purpose — the child needs the real value. That
+            # makes this the one rendering path where the marker is still
+            # here to act on, and `--verbose` is a showing like any other: a
+            # secret must not appear just because the reader asked for the
+            # paste-able spelling. `parts` was redacted upstream by the
+            # bridge; this is the same rule reaching the other form.
+            from footman._describe import redact
+
+            return " ".join(_shell_quote(str(redact(a))) for a in self.exact)
         return " ".join(text for _, text in self.parts)
 
     def painted(self, *, color: bool, exact: bool) -> str:

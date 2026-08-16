@@ -2281,6 +2281,23 @@ def test_a_secret_argument_never_reaches_a_shown_command_line(capsys):
     assert out.count(f"{sys.executable} -c pass ***") == 2  # announce, receipt
 
 
+def test_the_exact_spelling_redacts_like_the_readable_one():
+    """`--verbose` shows a bridged call in its exact, paste-able form, and the
+    bridge keeps a `Secret` whole in that argv on purpose — the child needs the
+    real value. So `exact` is the one rendering path where the marker is still
+    present to act on, and it went out unredacted: a toolroom call under `-v`
+    printed the token while its own receipt, built from `parts`, said `***`.
+    Asking for the paste-able spelling is not asking to be shown a secret."""
+    inv = Invocation(
+        parts=(("prog", "git"), ("opt", "--author"), ("value", "***")),
+        exact=("git", Secret("hunter2")),
+    )
+    assert "hunter2" not in inv.text(exact=True)
+    assert "hunter2" not in inv.painted(color=False, exact=True)
+    assert "hunter2" not in inv.painted(color=True, exact=True)
+    assert inv.exact[1] == "hunter2"  # the record still carries it
+
+
 def test_the_record_keeps_the_secret_the_display_hid(capsys):
     """Redaction is display policy over a committed record, not a rewrite of
     it: what `recording()`, a dependent, and the caller read is the value
