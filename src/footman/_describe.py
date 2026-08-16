@@ -861,6 +861,17 @@ def redact(value: Any) -> Any:
         return "***"
     if isinstance(value, dict):
         return {redact(k): redact(v) for k, v in value.items()}
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        # The shape a structured return is most likely to arrive in, and the
+        # one this walk used to step straight over: `json_default` turns a
+        # dataclass into a dict with `asdict`, which deep-copies — so a
+        # `Secret` field survived as the str subclass it is, rode `json.dumps`'
+        # fast path, and printed in the clear. A dict here is what the encoder
+        # would have produced anyway, now with the fields walked first.
+        return {
+            field.name: redact(getattr(value, field.name))
+            for field in dataclasses.fields(value)
+        }
     if isinstance(value, tuple):
         return tuple(redact(v) for v in value)
     if isinstance(value, list):

@@ -1085,7 +1085,12 @@ def _emit_document(value: object, inner: object) -> None:
     except Exception:
         tty = False
     text = json.dumps(
-        value,
+        # The walk `--json` does, which this surface claimed above to share and
+        # did not: `json_default` alone cannot redact, because `Secret` is a
+        # `str` subclass and rides `json.dumps`' fast path without ever
+        # reaching the `default` hook. A document went out in the clear while
+        # the envelope for the same task redacted.
+        _describe.redact(value),
         default=_describe.json_default,
         ensure_ascii=False,
         indent=2 if tty else None,
