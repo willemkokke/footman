@@ -9,6 +9,76 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Ctrl-C during an in-body `parallel()` stops the run instead of waiting
+  it out.** The fan-out entered its pool with no abort arm, so the interrupt
+  unwound in the main thread and then blocked joining workers that were
+  still in `communicate()` on children spawned into their own process
+  groups, which never saw the signal. It waited out exactly the work you
+  asked to cancel — measured at 11 seconds for 12-second children — and a
+  user who gave up and killed footman orphaned the whole tree. The fan-out
+  now reaps its children the way the scheduler already did one layer up.
+- **A runnable group's bare name completes its default's values.** Parked on
+  the group, completion never reached the branch that answers values, so
+  `fm ci --mode=<TAB>` was silent — no choices, no paths, no `suggest()` —
+  while the same action spelled `ci.default` completed in full. A bare group
+  still offers its sibling tasks.
+- **A generated `Example:` line is a command footman accepts.** The
+  synthesised example spelled an option and its value as two words, the one
+  spelling footman refuses, so copying the example out of `fm --help` gave
+  exit 64. The same text feeds the docs exporter, so it shipped on the site
+  too. The test round-trips the generated line through the parser, which
+  catches the next one as well.
+- **An unwritable cache no longer kills the command.** With a read-only
+  `HOME`, every invocation — `fm --help` included — died with a
+  `PermissionError` traceback. Writing the manifest is now best-effort at
+  the call site: the cache is derived data, and failing to save it is not a
+  reason to fail the run.
+- **A numeric enum survives the round trip.** `--json` wrote an enum field
+  as its number and published a schema saying so, and piping that same
+  document back in refused with "expected one of 1|2, got a number". The
+  binder now accepts a member by value, as it already did for `Literal`.
+- **`between()` and path checks run on a piped document.** A whole-document
+  parameter ran only its `check()` validators, so a piped `[1, 9]` passed
+  bounds that `--flag=9` refused. Container documents now validate per
+  element, like the flag channel.
+- **Two `include()` calls from one package both mount.** The first call
+  memoised the parent package's empty capture, and the second stopped at
+  that entry and looked for its submodule inside an empty tree. A typo in
+  the address keeps its taught refusal.
+- **A defaultless group as a prerequisite refuses instead of crashing.**
+  `pre=[group]` where the group has no `@group.default` gave a traceback and
+  exit 1 — but only with the progress line on, which is the default, so it
+  looked intermittent. The taught refusal was already written; the summary
+  pass now steps aside for a chain that is about to be refused.
+- **`run(cwd="unmanaged")` runs where it says.** The token resolved to "no
+  directory", which the subprocess injector could not tell from "not asked
+  for", so it filled in the task's directory — and then blamed the task for
+  spawning raw, recommending `run()` to someone already using it.
+- **An emptied cascade takes its completion manifest with it.** Deleting the
+  last `tasks.py` left the directory's manifest live, so TAB kept offering
+  tasks the runner then refused by name — and every stale press renewed it,
+  so the idle sweep never collected it either.
+- **`--json` task rows drop a lifted step's receipt.** A failing `step()`
+  wrote footman's own receipt line into the row's `output`, duplicating the
+  step row beside it. The `run()` path already suppressed this under
+  `--json`; the lifted path now does too.
+- **The cache collector no longer condemns files it did not write.** One of
+  its rules ignored age, so any JSON in the cache directory with a `cwd` key
+  naming a missing path was deleted at any age — including files the docs
+  invite task authors to keep there. It now checks the file is a manifest.
+- **An empty listing says nothing rather than trailing off.** `(know: )`
+  with a dangling colon, on a tasks file with no tasks — and on three
+  sibling clauses, two of which promised tasks and then named none. The list
+  can be empty because everything in it needs a project, too.
+- **The `=`-attachment hint is said once.** A task option shadowing a
+  value-taking global printed "did you mean `--jobs=4`?" twice in one line.
+- **The generated completion hook's header names a command that runs.** Its
+  first line quoted `fm --install-completion bash`, which footman refuses —
+  inside a file footman writes into your shell config.
+- **The shipped `docs.*` options say more than their own type.** `--out=PATH
+  a path` told the reader nothing the metavar had not; on two of those tasks
+  it was the only option line on the page.
+
 - **An exception escaping a task body says where it came from.** A task
   that raised reported the type and the message and no location at all —
   on a run of any size, finding the line meant guessing. The receipt now
