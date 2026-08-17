@@ -859,6 +859,22 @@ classifying documented behaviour as a vulnerability once.
   nailgun next, and protocol knowledge accumulating where it cannot be removed.
   The plugin speaks LSP inside the daemon; footman moves typed calls.
 
+## Where this went next
+
+Part 3's transports frame turned out to point at something larger than the
+remote rung. Asked whether it helps with distributed processing, the honest
+answer was "one slice of it" — and the slice it does not reach is gated not by
+transport but by **declared inputs and outputs**, the same blocker
+`20260727-incremental-caching.md` already found from the caching side.
+
+That thread became its own note:
+[20260817-global-address-space.md](20260817-global-address-space.md), on the
+observation that footman already has a global address space for *tasks* and the
+once-cell's `(task, bound args)` key is already a name for a result. Read it
+before building the project rung — it argues a reach-address is
+project-relative and therefore not good enough as a global name, which is a
+constraint on how task identity gets recorded.
+
 ## Open — Willem's call
 
 1. **Exit code on a clean stop.** `fm docs.serve`, Ctrl-C, the service did its
