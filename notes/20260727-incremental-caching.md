@@ -90,6 +90,17 @@ where the design actually lives.
    resume hands you a stale downstream. A Merkle chain over the DAG — the
    shape where having a real dependency graph pays.
 
+**Item 1 now gates three features, not one** (added 2026-08-17). Stable task
+identity is needed by this cache, by remote execution, and by
+[20260817-global-address-space.md](20260817-global-address-space.md). That note
+argues the answer proposed here — *record the address the task was reached
+through* — is correct for a **key** and insufficient for an **address**:
+`plugin(…, into=…)` grafts a provider's tree under a consumer-chosen prefix, so
+the same task is `lint.check` in one project and `acme.lint.check` in another,
+and two machines would disagree about the name of identical work. A global name
+wants the provider's canonical identity with the mount point as a local alias.
+Deciding that here costs nothing and cannot be retrofitted cheaply.
+
 Items 4 and 5 are the argument that this would be footman's niche rather
 than a Snakemake reimplementation: footman sits between the task and the
 process, so it can observe things a file-target tool must be told.
