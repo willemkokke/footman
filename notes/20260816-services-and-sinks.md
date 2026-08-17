@@ -3,9 +3,10 @@
 Status: EXPLORATORY — 2026-08-16, opened by Willem while the signal fixes
 (#455–#458) were still landing. Everything below was measured against
 `origin/main` at `913a59b`, in throwaway worktrees, with the reproductions
-kept in the appendix. **Nothing here is built.** One ruling has been made —
-`infinite=True` goes, see Part 1 — and six questions at the bottom are still
-Willem's to call, of which two gate the builds.
+kept in the appendix. **Nothing here is built.** Two rulings have been made —
+`infinite=True` goes, and the scope ladder plus what `timeout` may be reused
+for, all in Part 1 — and five questions at the bottom are still Willem's to
+call, of which one gates a build.
 
 Three parts: **services** (a node kind with an inverted contract), **sinks**
 (the splitter's one trailing-consumer concept is two), and **transports** (the
@@ -265,16 +266,85 @@ daemon flag. But that ceremony *buys* something. It makes visible that nothing
 will stop that thread cleanly, which is exactly what `infinite=True` does
 silently. The harder spelling is the honest one.
 
-### Scope is a ladder, not a choice
+### Scope is a ladder, not a choice — RULED 2026-08-16 (Willem)
 
 The first draft of this design offered two scopes and asked which. That was
 wrong; it is three rungs, and the third one is what Willem's language-server
-question turned up:
+question turned up. Willem's follow-up is what settled the shape:
 
-- **subtree** — up for one dependent's duration, torn down after
-- **run** — up for the invocation
-- **project** — survives invocations, keyed by (project, tool version,
-  config hash)
+> So does `pre=[serve]` mean start, then this task, then teardown? How do we
+> distinguish between do teardown and leave running until timeout?
+
+**"Leave running until timeout" is not a third behaviour — it is what the
+project rung *is*.** Every rung already carries its own end condition, so there
+is nothing left to distinguish beyond which rung applies:
+
+| scope | up from | ends when |
+|---|---|---|
+| **subtree** | before its dependent | the **last** dependent finishes |
+| **run** | first request in the run | the run finishes |
+| **project** | first request, any invocation | idle, key change, explicit stop, gc sweep |
+
+So `pre=[serve]` is start → dependent → teardown, and
+`pre=[serve.opts(scope="project")]` leaves it up. Or the service declares
+`scope="project"` and every `pre=` leaves it.
+
+**Resolution is the ladder `shared` already uses** — this reference's own
+`.opts(scope=…)`, then the task's declaration, then whatever asked for it, then
+a default. `.opts()` exists and already carries overrides of exactly this kind;
+`scope` joins `TaskOpts`, which is pleasing since `TaskOpts` carries `infinite`
+today and that is being deleted. The flag that was a *claim* is replaced, in the
+same struct, by the thing that actually varies.
+
+**Subtree teardown needs refcounting, not "the dependent finished".** Two tasks
+in one run both declaring `pre=[serve]` get one instance from the once-cell, so
+the teardown belongs to the last dependent to finish. Getting this wrong makes
+the second task's server vanish mid-test, and it will present as a flake.
+
+**The author cannot know which scope they got**, since it is resolved on the
+request. That is the `shared` precedent exactly — a task does not know whether
+it was shared either — so it is consistent, but it should be documented rather
+than discovered.
+
+### Three time limits, and `timeout` means exactly one
+
+> Can we reuse the task `timeout` parameter for that on daemons rather than
+> tasks? — Willem, 2026-08-16
+
+`@task(timeout=…)` does not exist yet: `20260807-timeout-and-retry.md` is
+DESIGNED, not built, with retry ruled on 2026-08-07 and timeout *"assessed but
+unruled beyond 'do it first, it's the cheap half'"*. So this is two designs
+shaped together rather than one retrofitted onto the other.
+
+There are three time limits around a service, and `timeout` correctly means one:
+
+| limit | breach means | spelling |
+|---|---|---|
+| **readiness deadline** — waiting for the `yield` | the spawn **failed** | `timeout` — same meaning, same machinery |
+| **idle eviction** — unused for too long | nothing failed; it stopped being worth keeping | its own word (`idle=`) |
+| **max age** — alive regardless of use | nothing failed; hygiene | its own word |
+
+**Reuse `timeout` for the first, never for the second.** `timeout` answers *"did
+this take too long?"*; idle answers *"is this still worth keeping?"* One is an
+execution verdict, the other a cache decision. Overloading them would make an
+evicted daemon indistinguishable from a failed task in receipts and leave
+`fm --daemons` unable to say why something stopped. A dev server up for eight
+hours is not timing out.
+
+This is the same principle deleting `infinite=True` — one name must not carry
+two meanings — and it is worse here, because one of the two means "you failed".
+
+`retries` transfers cleanly to the same phase: the spawn did not become ready
+inside `timeout`, so retry N times. Keep that distinct from the **crash
+breaker** below, which is a circuit breaker over repeated failures across
+invocations — different timescale, different trigger, easy to conflate.
+
+**A third convergence.** That note's stated limit is *"a body running
+`while True: pass` runs forever, exactly as it does under fail-fast today."*
+That is the wall this note hit from the other direction, and why service bodies
+must return and yield. After the incremental-caching serialisation wall and the
+failure-vocabulary split, three separate threads have now arrived at constraints
+this design already had to satisfy.
 
 The ladder is a shape footman already uses, for `shared` and for the config
 cascade, and resolving it on the *request* rather than the declaration is the
@@ -791,21 +861,17 @@ classifying documented behaviour as a vulnerability once.
 
 ## Open — Willem's call
 
-1. **How is a service's scope resolved?** A ladder on the request, as `shared`
-   does? `fm serve + a + b` says the run; `pre=[serve]` says the dependent's
-   subtree. Same task, two scopes, decided by how it was reached. The `shared`
-   precedent probably carries it, but it is the load-bearing assumption.
-2. **Exit code on a clean stop.** `fm docs.serve`, Ctrl-C, the service did its
+1. **Exit code on a clean stop.** `fm docs.serve`, Ctrl-C, the service did its
    job: 0 or 130? Leaning 130 when anything was still pending and 0 when the
    service was all that remained — principled, but it makes the exit code depend
    on the plan.
-3. **Does `--jobs` bound services?** If they do not count, `--jobs` means
+2. **Does `--jobs` bound services?** If they do not count, `--jobs` means
    "concurrent jobs" and services are unbounded. Probably right, but
    `fm a.serve + b.serve + c.serve` with no limit is a thing someone will do.
-4. **Note or refuse for the swallowed token, and does `--` get a `+` exit?**
+3. **Note or refuse for the swallowed token, and does `--` get a `+` exit?**
    These are coupled: whether "note" is defensible depends on whether `--` is a
    complete escape hatch, and today it is not.
-5. **What is it, once this lands?** Willem, 2026-08-16: *"we're turning this into
+4. **What is it, once this lands?** Willem, 2026-08-16: *"we're turning this into
    more of a project runner now than just a task runner. I wonder if there is a
    better word for it."* A task runner runs tasks to completion; a service does
    not complete, and a daemon outlives the invocation entirely.
@@ -828,22 +894,28 @@ classifying documented behaviour as a vulnerability once.
 
    Not decided here. Flagged because the design forces the question and the
    answer is cheapest before a launch, not after.
-6. **Is the remote rung in scope for this design, or explicitly deferred?**
+5. **Is the remote rung in scope for this design, or explicitly deferred?**
    Wanted (Part 3), and it fits the frame — but it crosses the local-only line
    and brings an authentication story with it. Deciding *now* costs nothing and
    changes two things: whether transport-legality is built per-marker from the
    start, and whether `SECURITY.md` needs rewriting before or after.
 
-*(A fifth — whether `infinite=True` survives — was ruled on 2026-08-16: it
-goes. See the ruling in Part 1.)*
+*(Two more were ruled on 2026-08-16 and moved into Part 1: whether
+`infinite=True` survives — it goes — and how a service's scope resolves, which
+took `timeout` reuse with it.)*
 
-Question 1 gates the service build. Question 4 gates the sink build. The two
-builds do not touch each other and can land in either order — the sink half is
+**Nothing gates the service build any more.** Question 3 gates the sink build.
+The two do not touch each other and can land in either order — the sink half is
 smaller, is mostly deleting an exception, and has a visible payoff in TAB.
 
-The service half now has a fixed internal order, set by the ruling:
-`run.background()` → migrate `docs.serve` → services as a node kind →
-delete `infinite=True`.
+The service half has a fixed internal order, set by the two rulings:
+`run.background()` → migrate `docs.serve` → services as a node kind (scope on
+`TaskOpts`, resolved by the `shared` ladder; `timeout` as the readiness
+deadline; `idle` as its own word) → delete `infinite=True`.
+
+Question 1 (exit code on a clean stop) is the only one the service build can
+hit without an answer, and it is a one-line decision that can be taken when the
+receipt is written rather than before.
 
 ## Appendix — reproductions
 

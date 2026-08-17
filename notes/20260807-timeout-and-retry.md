@@ -175,3 +175,29 @@ task retry is *outer* to whatever a tool does on its own.
 - Backoff. Nothing has been said about delay between attempts; a fixed
   `retries=N` with no wait is the honest minimum, and anything else wants
   its own ruling.
+
+## Settle this alongside services (added 2026-08-16)
+
+`20260816-services-and-sinks.md` proposes services as a node kind, and it
+lands on this note's vocabulary in three places. Since neither feature is
+built, they should be shaped together rather than one retrofitted onto the
+other.
+
+- **`timeout` is the service readiness deadline.** Waiting for a service body
+  to reach its `yield` is a deadline whose breach is a failure — the same
+  meaning `timeout` has here, so it is reuse rather than overload.
+- **Idle eviction must *not* be spelled `timeout`.** A daemon dropped for
+  going unused has not failed; it stopped being worth keeping. `timeout`
+  answers "did this take too long?", idle answers "is this still worth
+  keeping?" — one is an execution verdict, the other a cache decision.
+  Sharing the word would make an evicted daemon indistinguishable from a
+  failed task in receipts.
+- **`retries` transfers to the readiness phase** — the spawn did not become
+  ready inside `timeout`, so retry N times. Keep it distinct from that note's
+  *crash breaker*, a circuit breaker over repeated failures across
+  invocations: different timescale, different trigger, easily conflated.
+
+Also worth knowing: this note's stated limit — *"a body running
+`while True: pass` runs forever, exactly as it does under fail-fast today"* —
+is the same wall the services note hit from the other direction, and is why a
+service body must return and yield rather than block.
