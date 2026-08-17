@@ -53,7 +53,59 @@ gRPC, Thrift — contract-first, generated stubs, machine-only):
    Autocomplete is not a ninth odd projection; it is the canonical member of
    the reflective family, and the manifest is that family's store — which is
    *why* it can answer in 30 ms: reflection was designed never to touch the
-   executing path.
+   executing path. (Dynamic `suggest()` completers look like a crack in this
+   split — they execute code at TAB time. They are not; see the refinement
+   below.)
+
+### Reflection that executes: where `suggest()` fits
+
+The refined statement: **the reflective family never executes *the task*; it
+may execute *queries about the world* — and those queries are themselves
+fabric calls.**
+
+Completion answers two different kinds of question, and only one is
+answerable from the contract alone. *"What does the signature admit?"* —
+flags, subcommands, `Literal` choices — is static, derivable, baked into the
+manifest: reflection proper, zero execution. *"What does the world currently
+contain?"* — which files, which git branches, which deployed environments —
+cannot be enumerated by any contract; only a query can answer it, and
+`git checkout <TAB>` is impossible without asking the repo.
+
+A `suggest()` completer is that query: a function from a partial binding to a
+set of legal continuations — a typed callable with a contract of its own. So
+completion-with-suggest is the fabric calling itself: the reflective layer is
+a *client* of the executing layer, for a restricted class of calls. footman's
+architecture already treats it exactly this way without saying so — the hot
+path answers from the manifest import-free, and `_suggest.py` spawns a
+separate child to run one completer fresh. Not a violation; a second, smaller
+RPC riding beside the first.
+
+The types-flavoured reading: `Literal["staging", "prod"]` is a static domain;
+`suggest()` is the escape hatch for a **dependent domain** — legal values
+that depend on the world's state or on arguments already bound. Static
+domains project into the manifest; dependent domains need an oracle, and the
+oracle is a call.
+
+Once suggest-is-a-call is admitted, the rest of this note applies to it
+mechanically — the test of whether the frame is any good:
+
+- **Effects:** a completer must be a derivation-shaped query — read-only,
+  fast, no actions. TAB must never deploy anything. In the effect vocabulary
+  that is enforceable at declaration, not aspirational.
+- **Security:** the sharp edge. If TAB executes code, mounting an untrusted
+  tree means *TAB runs their code* — the reflective attack surface includes
+  execution, not just steering-by-description. Every shell's completion
+  system has quietly had this problem forever (bash completion functions are
+  arbitrary shell code). The fabric's answer is the attenuation story: a
+  completer runs as a sandboxed derivation with read-only authority over its
+  declared input set; an untrusted manifest's completers run confined or not
+  at all, and TAB degrades to static-only for that subtree.
+- **Addressing:** a suggest call has a name too —
+  `(completer, partial binding, world fingerprint)` — so the caching ladder
+  applies: bake what is static, cache what is stable, run fresh what is live,
+  stale-while-revalidate in between. footman's existing spectrum (baked
+  choices at one end, `_suggest.py` re-running fresh at the other) is this
+  ladder with the middle rungs not yet built.
 
 ## The answer to Waldo
 
@@ -200,6 +252,72 @@ layer (its "traits" are exactly the marker concept); the WASM component
 model's WIT is the same idea with a sandbox attached, and is a plausible
 *optional* execution substrate — one rung among the transports, not a
 requirement.
+
+## Three layers, one law — the encoding is an implementation detail
+
+> json as protocol is really an implementation detail right? Transports could
+> define their own as long as it can represent the schema? — Willem, 2026-08-17
+
+Right, and it separates three things "protocol" says loosely:
+
+1. **The contract** — the type layer: what shapes exist, what markers mean,
+   what a refusal is. Singular, canonical, language- and wire-neutral.
+2. **The envelope** — the call semantics: bind these arguments, run, return a
+   typed result or a typed refusal, attach the receipt. Also singular; this
+   is what the 0.21.0 process-boundary work actually defined, and what the
+   coherence law protects.
+3. **The encoding** — how envelope + values become bytes on one transport.
+   **Plural, negotiable, per-transport.** JSON is just one.
+
+The architecture already agrees: **argv is a non-JSON encoding of the same
+contract** — flag strings lifted back to typed values by the coercion layer —
+and completion answers are a third. The fabric was never "JSON-based"; JSON
+is the document transport's choice, made in footman for local reasons
+(stdlib-only, 30 ms manifest reads) that constrain one implementation, not
+the design.
+
+The precise requirement on an encoding is **round-trip fidelity against the
+contract**: every value shape the contract admits survives encode→decode
+unchanged, and refusal semantics are preserved. Fidelity can be *low* if the
+binder can recover — argv is the most lossy encoding imaginable (strings
+only, no nesting) and works because schema-directed coercion reconstructs the
+values. That generalises: since both ends hold the contract, encodings split
+into **self-describing** (JSON, CBOR — parseable without the schema) and
+**schema-directed** (protobuf-style — compact because the schema supplies the
+structure), and the manifest being fetchable is exactly what makes
+schema-directed encodings legal for hot paths and a fleet rung.
+
+Two places the choice stops being a detail:
+
+- **The naming layer needs canonical bytes, and JSON is bad at it.**
+  "Arguments in normal form" and content addressing require that the same
+  value has the same bytes everywhere. JSON has no canonical form by default
+  (key order, number representation; RFC 8785/JCS exists precisely because of
+  this), while CBOR's deterministic-encoding rules are in its core spec
+  (RFC 8949 §4.2). Clean split: transports encode however they negotiate;
+  **the naming/addressing layer has exactly one canonical encoding**, used
+  only for keys and hashes, never required on the wire. Many mouths, one
+  spelling in the ledger — the cache-key/address distinction one layer down.
+- **The artifact tier should not pass through a structured encoding at all.**
+  Bytes-tier results want streaming and zero-copy — content-addressed byte
+  streams with metadata in the envelope, the way git separates loose objects
+  from refs. Large structured data has encodings whose whole point is the
+  memory layout (Arrow); "represents the schema" there includes representing
+  it *without deserialising*.
+
+For the ecosystem, the mature pattern is HTTP's: **one mandatory-to-implement
+encoding plus negotiation upward.** Mandate JSON as the floor — every
+endpoint can always talk, humans can always debug by eye — and let endpoints
+that both advertise CBOR or a schema-directed binary upgrade, the
+advertisement riding the manifest or the handshake. LSP mandates JSON and
+conquered the world; gRPC mandates protobuf and did fine; neither made the
+floor optional.
+
+The tax nobody prices in: encodings multiply the drift surface — N encodings
+× M transports × L frontends is a compatibility matrix whose optional cells
+rot silently. The answer is the same law extended once more: the conformance
+kit's golden call/response pairs run *per encoding*, so "same call, same
+answer" holds across encodings exactly as across transports.
 
 ---
 
@@ -519,6 +637,41 @@ sandboxing all queue behind it); each rung pays for itself locally before the
 next exists; and the coherence property test is the law that keeps a growing
 family of views honest.
 
+## A name
+
+> we're going to need a name for this fabric ;-) — Willem, 2026-08-17
+
+"Typed call fabric" is a description, not a name. footman set the register —
+the below-stairs household — and toolroom stayed in it, so the fabric's name
+should too. Candidates, with what each carries:
+
+- **livery** — the front-runner. Three metaphors for the price of one: the
+  *uniform* a household servant wears, marking whose authority they act under
+  (the capability story: you do not ask a footman for credentials, you read
+  the livery); the London *livery companies* — chartered guilds, an ecosystem
+  of trades under a shared institution (the conformance kit as charter); and
+  the *livery stable* — hired transport. A capability grant is "wearing the
+  livery"; attenuation is the livery saying which house and which duties.
+- **loom** — what weaves threads into fabric; the transports are the threads.
+  Short, strong, but a crowded namespace.
+- **bellwire** — the wire from each room to the annunciator board in the
+  servants' hall. The board *is* a household's address space; a pull is a
+  typed request travelling a transport. The most literal fit for the
+  transports frame, and the most obscure.
+- **retinue** — the staff collectively; names the ecosystem rather than the
+  mechanism.
+- **parley** — a negotiation between parties under safe conduct; fits the
+  envelope/handshake half, less the address space.
+
+Whatever wins, one piece of sub-vocabulary is worth keeping from the same
+register: the manifest a mounted tree presents is a **calling card** — the
+thing a caller hands the footman at the door, announcing who they are and
+what they may be received for. TOFU-plus-pinning is then exactly what a
+card tray was for.
+
+Willem's call, unhurried — nothing ships under this name until something of
+it exists.
+
 ## What this note is not
 
 - **Not a footman plan.** No phase list, no target release, no API proposal.
@@ -548,3 +701,9 @@ family of views honest.
    local proof that the shape works. A product decision, same as the remote
    rung's — and the same answer applies: deciding is cheapest before a
    launch, not after.
+6. **The name.** Candidates above; livery is the recommendation. Willem's
+   call.
+7. **Which canonical encoding the naming layer uses** — JCS canonical JSON
+   (stdlib-pure via a small implementation) or CBOR deterministic encoding
+   (better spec, third-party dependency in Python). Only the keys-and-hashes
+   layer cares; no wire format is constrained by the answer.
