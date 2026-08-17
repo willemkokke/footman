@@ -77,6 +77,7 @@ src/footman/
   _app.py         execution path: _run → _execute → _run_tree / run_group
   _script.py      PEP 723 script blocks + the uv handoff argvs
   _signals.py     stop signals (SIGTERM/SIGHUP/SIGBREAK) + the SIGQUIT stack dump
+  _encoding.py    the byte-order-mark table, shared by _config and _shellcomp
   _config.py      the config cascade ([tool.<brand>], <brand>.toml, user-level)
   _discover.py    the monorepo tasks.py cascade (per-file import isolation)
   compose.py      include() / plugin() (footman.tasks entry points)

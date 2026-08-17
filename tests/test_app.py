@@ -872,6 +872,38 @@ def test_malformed_explicit_config_is_an_error(project, capsys):
     assert "--config" in err and "bad.toml" in err
 
 
+def test_non_utf8_cascade_config_warns_and_continues(project, capsys):
+    # One non-UTF-8 byte used to reach the user as a raw UnicodeDecodeError
+    # and exit 1 — `fm hi` included, so the whole CLI was bricked while that
+    # file sat between the repo root and the cwd. It is a malformed config
+    # like any other now: warned about, skipped, and the task still runs.
+    (project / "footman.toml").write_bytes(b"# caf\xe9\nsort = true\n")
+    assert _app.run(["hi"]) == 0
+    captured = capsys.readouterr()
+    assert "hello world" in captured.out
+    assert "ignoring malformed config" in captured.err
+    assert "not valid UTF-8" in captured.err and "re-save" in captured.err
+
+
+def test_non_utf8_explicit_config_is_an_error(project, capsys):
+    (project / "bad.toml").write_bytes(b"# caf\xe9\nsort = true\n")
+    assert _app.run(["--config=bad.toml", "hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "--config" in err and "bad.toml" in err
+    assert "not valid UTF-8" in err
+
+
+def test_utf8_bom_config_is_read_not_refused(project, capsys):
+    # A Windows editor's byte-order mark is stripped, so the settings behind
+    # it actually apply: `sort` reorders the listing away from file order.
+    (project / "footman.toml").write_bytes("sort = true\n".encode("utf-8-sig"))
+    assert _app.run(["--list"]) == 0
+    captured = capsys.readouterr()
+    assert "malformed" not in captured.err
+    listed = [ln.split()[0] for ln in captured.out.splitlines() if ln.startswith("  ")]
+    assert listed[0] == "add"  # alphabetical; definition order opens with `hi`
+
+
 def test_missing_explicit_config_is_an_error(project, capsys):
     # F15: a typo'd --config (prod.tmol) must be loud, not silently ignored.
     assert _app.run(["--config=prod.tmol", "hi"]) == EX_USAGE

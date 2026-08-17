@@ -688,6 +688,9 @@ def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
     args = ["-f=x.py", "--config=c.toml", "deploy", "--target="]
     assert _complete._fresh_dynamic("target", ["deploy"], args) == ["gamma", "delta"]
     cmd = captured["cmd"]  # the subprocess carries the target and the context
+    # `-P` before `-m`, for the same reason the refresh child carries it: a
+    # `footman.py` in the completed directory must not answer this import.
+    assert cmd[1:3] == ["-P", "-m"]
     assert cmd[cmd.index("--param") + 1] == "target"
     assert cmd[cmd.index("--path") + 1] == "deploy"
     assert cmd[cmd.index("--tasks-file") + 1] == "x.py"
@@ -723,6 +726,30 @@ def test_cold_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     complete_cli(["--", ""])
     out = capsys.readouterr().out.split()
     assert "lint" in out and "check" in out, _cold_evidence(tmp_path / "cache")
+
+
+def test_a_planted_footman_py_is_never_imported_by_a_tab(tmp_path, monkeypatch, capsys):
+    # The builder child runs `python -c "… from footman import _refresh …"`,
+    # and `-c` heads sys.path with the directory it was spawned in. A
+    # `footman.py` sitting in the completed directory would answer that import
+    # first, so one TAB in a directory somebody else wrote would execute its
+    # code. `-P` drops the implicit entry, and nothing legitimate loses it:
+    # `_discover` inserts a tasks file's own parent itself.
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "tasks.py").write_text("from footman import task\n\n@task\ndef lint(): ...")
+    (proj / "footman.py").write_text(  # the plant, waiting to be imported
+        "import pathlib\n\npathlib.Path(__file__).with_name('ran').touch()\n"
+    )
+    monkeypatch.chdir(proj)
+
+    complete_cli(["--", ""])
+
+    assert not (proj / "ran").exists()  # the plant never ran
+    # …and the child reached the *real* footman, so the build still landed
+    assert "lint" in capsys.readouterr().out.split(), _cold_evidence(tmp_path / "cache")
 
 
 def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
@@ -810,16 +837,20 @@ def test_child_argv_mirrors_the_real_spawn():
     # not on the CI failure the diagnostic exists to explain.
     plain = _child_argv()
     assert plain is not None
-    assert plain[0] == sys.executable and plain[1] == "-c"
-    assert "_refresh.refresh_cwd(*sys.argv[1:])" in plain[2]
+    # `-P` ahead of the mode flag: `-c` would otherwise head the child's
+    # sys.path with the completed directory, where a planted `footman.py`
+    # would answer its own `import footman`.
+    assert plain[0] == sys.executable and plain[1:3] == ["-P", "-c"]
+    assert "_refresh.refresh_cwd(*sys.argv[1:])" in plain[3]
     # …and the brand's resolved locations behind it, so the detached child
     # writes this CLI's cache rather than stock footman's.
-    assert plain[3:] == _paths.child_args()
+    assert plain[4:] == _paths.child_args()
 
     override = _child_argv("other.py")
     assert override is not None
-    assert "_refresh.refresh_source" in override[2]
-    assert override[3] == "other.py" and override[4:] == _paths.child_args()
+    assert override[1:3] == ["-P", "-c"]
+    assert "_refresh.refresh_source" in override[3]
+    assert override[4] == "other.py" and override[5:] == _paths.child_args()
 
 
 def test_cold_evidence_reports_the_childs_own_words(tmp_path, monkeypatch):

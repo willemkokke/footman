@@ -4,7 +4,9 @@ A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and
 the UX of [typer](https://typer.tiangolo.com/): typed function signatures
 become real flags and positionals, modules become nested command groups,
 independent tasks run in parallel by default, and shell completion answers
-from a cached manifest in ~30 ms — **without importing your code**.
+from a cached manifest in ~30 ms — **without importing your code**. Building
+that cache does import it, once, in a detached subprocess: the first
+<kbd>Tab</kbd> in a fresh directory pays for it, and no keystroke after that.
 
 Ships two console scripts, `footman` and the two-letter `fm`. Zero runtime
 dependencies. Python 3.11+.

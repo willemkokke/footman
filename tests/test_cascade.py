@@ -192,6 +192,79 @@ def test_cascade_tags_defining_dir(tmp_path):
     assert _discover.defining_dir(merged.tasks["b"]) == str(tmp_path / "svc")
 
 
+SHARED = "from footman import context, task\n@task\ndef where():\n    pass\n"
+
+
+def test_one_task_at_two_addresses_with_two_folders_is_refused(tmp_path):
+    # The stamp lives on the function, so one function can only answer with
+    # one folder. Mounted from two cascade levels under different names, the
+    # last stamp wins and the other address silently runs somewhere its own
+    # tasks file never named. Refused, because no rule about which stamp wins
+    # can be right for both addresses.
+    _write(tmp_path / "shared.py", SHARED)
+    root = _write(
+        tmp_path / "tasks.py",
+        "from footman import include\ninclude('shared', into='rootside')\n",
+    )
+    sub = _write(
+        tmp_path / "svc" / "tasks.py",
+        "from footman import include\ninclude('shared', into='svcside')\n",
+    )
+    with pytest.raises(_discover.TasksImportError) as caught:
+        _discover.load_tree([root, sub])
+    said = str(caught.value.original)
+    assert "'rootside.where'" in said  # the mount that was already there
+    assert "two defining directories" in said
+    assert 'cwd="asinvoked"' in said  # the goal the second mount probably had
+    assert caught.value.path == sub  # the nearer file, the one to edit
+
+
+def test_a_nearer_file_may_shadow_the_same_task_with_itself(tmp_path):
+    # The same function, the same address, a new folder: not a conflict but
+    # the cascade's whole point — the nearer file wins and its directory is
+    # the right answer, because it is the file that defined the address.
+    _write(tmp_path / "shared.py", SHARED)
+    root = _write(
+        tmp_path / "tasks.py", "from footman import include\ninclude('shared')\n"
+    )
+    sub = _write(
+        tmp_path / "svc" / "tasks.py",
+        "from footman import include\ninclude('shared')\n",
+    )
+    merged = _discover.load_tree([root, sub])
+    assert _discover.defining_dir(merged.tasks["where"]) == str(tmp_path / "svc")
+
+
+def test_two_providers_may_share_a_helper(tmp_path):
+    # Two addresses for one function, and no disagreement: both providers sit
+    # in the same folder, so both stamps say the same thing. Nobody authored
+    # this alias and nobody can avoid it, so it must not be refused.
+    _write(tmp_path / "common.py", SHARED)
+    _write(tmp_path / "alpha.py", "from footman import include\ninclude('common')\n")
+    _write(tmp_path / "beta.py", "from footman import include\ninclude('common')\n")
+    root = _write(
+        tmp_path / "tasks.py",
+        "from footman import include\n"
+        "include('alpha', into='alpha')\ninclude('beta', into='beta')\n",
+    )
+    merged = _discover.load_tree([root])
+    assert merged.groups["alpha"].tasks["where"] is merged.groups["beta"].tasks["where"]
+    assert _discover.defining_dir(merged.groups["beta"].tasks["where"]) == str(tmp_path)
+
+
+def test_a_second_load_may_restamp_the_same_function(tmp_path):
+    # The claim is per load, not an attribute: a fresh process, the refresh
+    # child and a second in-process invocation all legitimately re-stamp the
+    # same function. Only a disagreement *within one cascade* is a conflict.
+    _write(tmp_path / "shared.py", SHARED)
+    root = _write(
+        tmp_path / "tasks.py", "from footman import include\ninclude('shared')\n"
+    )
+    assert _discover.load_tree([root]).tasks["where"] is not None
+    merged = _discover.load_tree([root])  # would refuse if the claim persisted
+    assert _discover.defining_dir(merged.tasks["where"]) == str(tmp_path)
+
+
 def test_load_tree_leaves_no_global_state(tmp_path):
     from footman import registry
 
@@ -255,6 +328,53 @@ def test_config_cli_path_overrides_all(tmp_path):
 def test_config_corrupt_toml_is_ignored(tmp_path):
     _write(tmp_path / "footman.toml", "this is : not [[ valid")
     assert _config.load_config(tmp_path, tmp_path) == {}
+
+
+def test_config_non_utf8_is_malformed_not_a_crash(tmp_path):
+    # One latin-1 byte used to escape as a raw UnicodeDecodeError, so every
+    # invocation under that directory died. TOML's spec makes UTF-8
+    # mandatory: the file is malformed by the format's own rule, and takes
+    # the malformed path — warn, skip, carry on.
+    (tmp_path / "footman.toml").write_bytes(b"# caf\xe9\nsequential = true\n")
+    warnings: list[str] = []
+    assert _config.load_config(tmp_path, tmp_path, on_warning=warnings.append) == {}
+    assert any("not valid UTF-8" in w and "re-save" in w for w in warnings)
+
+
+def test_config_non_utf8_pyproject_does_not_brick_the_cascade(tmp_path):
+    # The bad byte need not be anywhere near [tool.footman]: a description
+    # nobody asked footman to read makes the whole file undecodable.
+    (tmp_path / "pyproject.toml").write_bytes(
+        b"[project]\nname='x'\ndescription='caf\xe9'\n"
+    )
+    warnings: list[str] = []
+    assert _config.load_config(tmp_path, tmp_path, on_warning=warnings.append) == {}
+    assert any("pyproject.toml" in w and "not valid UTF-8" in w for w in warnings)
+
+
+def test_config_non_utf8_explicit_file_is_loud(tmp_path):
+    # A file named on purpose fails loudly, like any other malformed --config.
+    named = tmp_path / "custom.toml"
+    named.write_bytes(b"# caf\xe9\nsequential = true\n")
+    with pytest.raises(_config.ConfigError, match=r"not valid UTF-8"):
+        _config.load_config(tmp_path, tmp_path, str(named))
+
+
+def test_config_utf8_bom_reads_normally(tmp_path):
+    # What a Windows editor writes. A byte-order mark is the one encoding
+    # hint that is never a guess, so it is stripped rather than handed to
+    # tomllib as a stray glyph on line 1.
+    (tmp_path / "footman.toml").write_bytes(b"\xef\xbb\xbfsequential = true\n")
+    assert _config.load_config(tmp_path, tmp_path)["sequential"] is True
+
+
+def test_config_utf16_bom_is_refused_by_name(tmp_path):
+    # Detected, never decoded: a UTF-16 config would work here and nowhere
+    # else, so the refusal says what it found instead of reading it anyway.
+    (tmp_path / "footman.toml").write_bytes("sequential = true\n".encode("utf-16"))
+    warnings: list[str] = []
+    assert _config.load_config(tmp_path, tmp_path, on_warning=warnings.append) == {}
+    assert any("UTF-16 byte-order mark" in w for w in warnings)
 
 
 def test_config_global_file_is_the_bottom_rung(tmp_path, monkeypatch):

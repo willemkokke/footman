@@ -266,6 +266,13 @@ def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
                     f"{_brand.name} declares built-in tasks from {name!r}, "
                     f"which did not mount: {exc}",
                 )
+    # A built-in was defined by no tasks file, so it must carry no folder —
+    # and the stamp lives on the function, which is the same object every
+    # time it is mounted. Without this, an earlier in-process invocation that
+    # mounted the same provider from inside a project leaves that project's
+    # directory on it, and nothing here overwrites it: the base exists only
+    # when discovery found no task files, so no overlay ever runs.
+    _discover.untag(base)
     # Before the cascade overlays the user's own tasks into this group: after
     # that, nothing tells the brand's tasks from the person's, and the two
     # have opposite defaults.
@@ -1514,6 +1521,10 @@ def _spawn_gc(cache: Path, skip_stem: str) -> None:
     _complete.detach(
         [
             sys.executable,
+            # `-P`, like the completion children: `-c` would otherwise head
+            # sys.path with the directory the run started in, where a
+            # `footman.py` would answer the collector's own import.
+            "-P",
             "-c",
             "from footman import _gc; _gc.main()",
             str(cache),

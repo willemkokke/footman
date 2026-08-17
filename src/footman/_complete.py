@@ -720,6 +720,11 @@ def _spawn_refresh(override: str | None = None) -> None:
     # The brand's resolved locations ride along as argv words too: the child
     # inherits the environment but not the brand, and must write this CLI's
     # cache rather than stock footman's.
+    # `-P` keeps the child's own imports honest: without it `-c` puts the
+    # *completed directory* at the head of sys.path, so a file called
+    # `footman.py` sitting there would answer the child's `import footman` and
+    # run on a keystroke. Nothing legitimate needs that entry — `_discover`
+    # inserts a tasks file's own parent itself, deliberately and briefly.
     from footman import _paths
 
     where = _paths.child_args()
@@ -728,13 +733,13 @@ def _spawn_refresh(override: str | None = None) -> None:
             "import sys; from footman import _refresh; "
             "_refresh.refresh_source(*sys.argv[1:])"
         )
-        cmd = [sys.executable, "-c", script, override, *where]
+        cmd = [sys.executable, "-P", "-c", script, override, *where]
     else:
         script = (
             "import sys; from footman import _refresh; "
             "_refresh.refresh_cwd(*sys.argv[1:])"
         )
-        cmd = [sys.executable, "-c", script, *where]
+        cmd = [sys.executable, "-P", "-c", script, *where]
     detach(cmd)
 
 
@@ -859,8 +864,12 @@ def _fresh_dynamic(param: str, path: list[str], args: list[str]) -> list[str] | 
     # Length-prefixed, so the flags that follow can never be eaten when the
     # word count grows — the arity drifted once per release until it was.
     where = _paths.child_args()
+    # `-P` for the same reason the refresh child carries it: `-m` would put the
+    # completed directory at the head of sys.path, and a `footman.py` planted
+    # there would be imported — and executed — by a TAB press.
     cmd = [
         sys.executable,
+        "-P",
         "-m",
         "footman._suggest",
         "--where",

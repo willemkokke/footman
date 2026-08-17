@@ -32,11 +32,13 @@ if TYPE_CHECKING:  # runtime imports stay deferred: this child spawns cheap
 def _maybe_reexec(files: list[Path], entry: str, *args: str) -> None:
     """Continue this rebuild inside a script file's own environment — the
     rule lives in `_script.maybe_reexec`, shared with the suggest child.
-    The re-executed child runs the same one-liner *entry*, so the two spawn
-    shapes stay identical apart from the interpreter."""
+    The re-executed child runs the same one-liner *entry* under the same
+    interpreter flags, so the two spawn shapes stay identical apart from the
+    interpreter itself — `-P` included, or the re-exec would reopen the hole
+    the spawn closed and let a planted `footman.py` win the import."""
     from footman import _script
 
-    _script.maybe_reexec(files, ["-c", entry, *args])
+    _script.maybe_reexec(files, ["-P", "-c", entry, *args])
 
 
 def refresh_cwd(*where: str) -> None:

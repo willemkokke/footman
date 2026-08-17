@@ -22,7 +22,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from footman import _paths
+from footman import _encoding, _paths
 
 # Filenames read in each directory of the cascade. Within one directory the
 # dedicated file wins over `pyproject.toml`'s table. Both the dedicated
@@ -195,16 +195,46 @@ def cascade_mode(cli_path: str | None = None) -> str:
     return value
 
 
+# One tail for every "this file is not UTF-8" refusal, so the two spellings
+# (a foreign BOM, a stray byte) teach the same fix.
+_UTF8_ONLY = "TOML must be UTF-8; re-save the file as UTF-8"
+
+
+def _decode(path: Path, raw: bytes) -> str:
+    """*raw* as text, or `ConfigError` saying why it is not UTF-8.
+
+    TOML's own spec makes UTF-8 mandatory, so a config in any other encoding
+    is malformed by the format's rule and there is nothing to guess at:
+    falling back to latin-1 the way rc files do would invent settings nobody
+    wrote. The one unambiguous reading is a byte-order mark — a UTF-8 one
+    (what Windows editors write) is stripped and the file reads normally, and
+    any other mark names the encoding the refusal can teach against.
+    """
+    if raw.startswith(_encoding.UTF8_BOM):
+        return raw.decode("utf-8-sig")
+    sniffed = _encoding.sniff_bom(raw)
+    if sniffed is not None:
+        raise ConfigError(
+            f"{path}: a {sniffed[0].upper()} byte-order mark — {_UTF8_ONLY}"
+        )
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConfigError(
+            f"{path}: not valid UTF-8 ({exc.reason} at byte {exc.start}) — {_UTF8_ONLY}"
+        ) from exc
+
+
 def _read_toml(path: Path, required: bool = False) -> dict[str, Any] | None:
     """Parse *path*; `None` if absent/unreadable, `ConfigError` if malformed.
 
     A missing file is normal (most directories have no config); a file that
-    exists but doesn't parse is a user mistake that must not be silently
-    read as "no settings". When *required* (an explicit `--config`), an
-    unreadable file is loud too, not silently skipped.
+    exists but doesn't parse — bad TOML or bad bytes — is a user mistake that
+    must not be silently read as "no settings". When *required* (an explicit
+    `--config`), an unreadable file is loud too, not silently skipped.
     """
     try:
-        text = path.read_text("utf-8")
+        text = _decode(path, path.read_bytes())
     except OSError as exc:
         if required:
             raise ConfigError(f"{path}: {exc.strerror or exc}") from exc

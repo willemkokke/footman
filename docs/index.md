@@ -13,7 +13,9 @@ A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and the
 UX of [typer](https://typer.tiangolo.com/): typed function signatures become
 real flags and positionals, modules become nested command groups, and shell
 completion answers from a cached manifest in **~30 ms — without importing your
-code**.
+code**. Building that cache does import it, once, in a detached subprocess:
+the first <kbd>Tab</kbd> in a fresh directory pays for it, and no keystroke
+after that. See [completion](completion.md).
 
 Here is the whole project behind the recording below. No CLI framework, no
 argument parser, no completion script: three functions, and the annotations

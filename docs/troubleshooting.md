@@ -96,6 +96,12 @@ it's malformed, unreadable, or missing. You asked for that file on purpose,
 so a typo like `--config=prod.tmol` is reported (`--config: prod.tmol: no such
 file`), never silently ignored.
 
+The encoding is part of being well formed. TOML must be UTF-8, so a config
+saved as anything else is malformed and takes the same two paths, naming the
+byte that gave it away rather than guessing at what the file meant. The one
+exception is a byte-order mark: a UTF-8 mark, which some Windows editors add,
+is stripped and the file reads as ordinary UTF-8.
+
 ## When a run stops moving
 
 A hang says nothing on its own, so footman hands you the one thing that does:
