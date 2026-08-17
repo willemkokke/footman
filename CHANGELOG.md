@@ -209,6 +209,21 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **Hovering in the playground answers about a symbol.** Resting the
+  pointer in the gap between two arguments recited the callee's entire
+  signature — thirty parameters deep for a tool like `ruff.check` —
+  because hover fell through to "which call encloses this position?"
+  whenever no identifier sat under the pointer. It now says nothing
+  there, the way an IDE does; which call the cursor is in is the
+  parameter-hints panel's question. The card that does answer reads
+  prose first — the docstring, what the call returns, then each
+  argument with its documentation — and carries the signature at the
+  bottom, collapsed to one line. Labels lead with the name the source
+  spells: hovering `@task` said `TaskDecorator(…)` and a tool handle
+  said `Check(…)` where the code says `check`, because a synthesized
+  signature renders its class. A `Returns:` section is surfaced for the
+  first time, and it no longer bleeds into the last argument's
+  description.
 - **The playground shows parameter hints.** Positionals have
   documentation but completion cannot offer them — the value is yours
   to type — so the editor now does what every IDE does: typing `(` or

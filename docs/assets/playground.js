@@ -576,6 +576,46 @@ def _fm_returns_doc(doc):
             grabbing = True
     return " ".join(out)
 
+def _fm_bracket_name(source, head):
+    # The identifier spelled immediately before a call's bracket.
+    try:
+        bline, bcol = head.bracket_start
+    except Exception:
+        return ""
+    src_lines = source.split(chr(10))
+    li = bline - 1
+    if not (0 <= li < len(src_lines)):
+        return ""
+    text = src_lines[li]
+    a = bcol
+    while a > 0 and (text[a - 1].isalnum() or text[a - 1] == "_"):
+        a -= 1
+    return text[a:bcol]
+
+def _fm_spelled_head(label, spelled):
+    # The label leads with the name the source spells: a tool handle's
+    # synthesized signature renders its CLASS (Check) where the code
+    # says check. Only the head before the bracket changes.
+    paren = label.find("(")
+    if paren <= 0 or not spelled:
+        return label
+    return spelled + label[paren:]
+
+def _fm_help_payload(label, doc, returns):
+    # Willem's layout: the prose leads -- summary, what the call
+    # returns, then the arguments -- and a signature is the footer,
+    # collapsed to one line. A label that is not a signature (a
+    # parameter's declaration, a module's name) stays on top.
+    footer = "(" in label and bool(doc)
+    return json.dumps(
+        {
+            "label": label if footer else _fm_wrap_signature(label),
+            "doc": doc,
+            "returns": returns,
+            "footer": footer,
+        }
+    )
+
 def _fm_editor_help(files_json, source, line, column):
     # Hover help, asked of the interpreter: the signature first (jedi
     # get_signatures answers inside a call; help() answers on the name
@@ -595,27 +635,35 @@ def _fm_editor_help(files_json, source, line, column):
             path=str(Path("editing.py").resolve()),
             environment=jedi.InterpreterEnvironment(),
         )
-        # A quoted or numeric literal has nothing worth a tooltip --
-        # without this, the enclosing call's signature answered for
-        # every string argument hovered.
+        # Hover answers about a SYMBOL under the pointer. No identifier
+        # there -- whitespace, a comma, a bracket -- and there is nothing
+        # to say: without this the enclosing call's signature answered
+        # for every gap between arguments, so resting just right of a
+        # comma recited the whole callee. Which call the cursor sits in
+        # is the parameter-hints panel's question, not hover's.
         src_all = source.split(chr(10))
         li0 = int(line) - 1
-        if 0 <= li0 < len(src_all):
-            t0 = src_all[li0]
-            a0 = int(column)
-            while a0 > 0 and (t0[a0 - 1].isalnum() or t0[a0 - 1] == "_"):
-                a0 -= 1
-            b0 = int(column)
-            while b0 < len(t0) and (t0[b0].isalnum() or t0[b0] == "_"):
-                b0 += 1
-            w0 = t0[a0:b0]
-            quotes = chr(34) + chr(39)
-            if w0 and w0[0].isdigit():
-                return json.dumps(None)
-            if (a0 > 0 and t0[a0 - 1] in quotes) or (
-                b0 < len(t0) and t0[b0] in quotes
-            ):
-                return json.dumps(None)
+        if not (0 <= li0 < len(src_all)):
+            return json.dumps(None)
+        t0 = src_all[li0]
+        a0 = int(column)
+        while a0 > 0 and (t0[a0 - 1].isalnum() or t0[a0 - 1] == "_"):
+            a0 -= 1
+        b0 = int(column)
+        while b0 < len(t0) and (t0[b0].isalnum() or t0[b0] == "_"):
+            b0 += 1
+        w0 = t0[a0:b0]
+        if not w0:
+            return json.dumps(None)
+        # A quoted or numeric literal has nothing worth a tooltip either.
+        quotes = chr(34) + chr(39)
+        if w0[0].isdigit():
+            return json.dumps(None)
+        if (a0 > 0 and t0[a0 - 1] in quotes) or (
+            b0 < len(t0) and t0[b0] in quotes
+        ):
+            return json.dumps(None)
+        spelled = w0
         signatures = script.get_signatures(int(line), int(column))
         if signatures:
             head = signatures[0]
@@ -653,7 +701,7 @@ def _fm_editor_help(files_json, source, line, column):
                     plabel = word
                 pdoc = _fm_arg_doc(call_doc(), word)
                 if pdoc or plabel != word:
-                    return json.dumps({"label": plabel, "doc": pdoc})
+                    return _fm_help_payload(plabel, pdoc, "")
 
             label = None  # decided below: symbol first, call as fallback
         # The symbol under the pointer outranks the enclosing call --
@@ -686,6 +734,8 @@ def _fm_editor_help(files_json, source, line, column):
             head = signatures[0]
             label = head.to_string()
             doc = call_doc()
+            # The callee's own spelling, not the hovered word.
+            spelled = _fm_bracket_name(source, head)
         elif not names:
             return json.dumps(None)
         else:
@@ -724,7 +774,7 @@ def _fm_editor_help(files_json, source, line, column):
                             pass
                     if not doc and owner:
                         doc = "Parameter of " + owner + "()."
-                return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
+                return _fm_help_payload(label, doc, "")
             if head.type == "module":
                 label = head.name or ""
                 doc = head.docstring(raw=True) or ""
@@ -732,7 +782,7 @@ def _fm_editor_help(files_json, source, line, column):
                     p for p in doc.split(chr(10) + chr(10)) if p.strip()
                 ]
                 doc = (chr(10) + chr(10)).join(paragraphs[:3])
-                return json.dumps({"label": label, "doc": doc})
+                return _fm_help_payload(label, doc, "")
             call_sigs = []
             try:
                 if not local_def:
@@ -743,6 +793,11 @@ def _fm_editor_help(files_json, source, line, column):
                 call_sigs = []  # a private synthesized callee teaches nothing
             if call_sigs:
                 label = call_sigs[0].to_string()
+                # A builtin type keeps its own name: the spelled head is
+                # for callables the source names, and renaming bool( to
+                # fix( would imply the variable were one.
+                if (call_sigs[0].full_name or "").startswith("builtins."):
+                    spelled = ""
                 doc = call_sigs[0].docstring(raw=True) or ""
                 if not doc:
                     # The synthesized instance-call signature drops the
@@ -771,6 +826,8 @@ def _fm_editor_help(files_json, source, line, column):
                                 doc = calls[0].docstring(raw=True) or ""
                         except Exception:
                             pass
+                # Read the Returns section before the doc is trimmed.
+                returns = _fm_returns_doc(doc)
                 paragraphs = [
                     p for p in doc.split(chr(10) + chr(10)) if p.strip()
                 ]
@@ -778,7 +835,9 @@ def _fm_editor_help(files_json, source, line, column):
                 lines = doc.split(chr(10))
                 if len(lines) > 200:
                     doc = chr(10).join(lines[:200]) + chr(10) + "…"
-                return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
+                return _fm_help_payload(
+                    _fm_spelled_head(label, spelled), doc, returns
+                )
             # A Name's docstring() leads with the signature -- raw=True
             # strips it, which is how the tooltip once showed a bare
             # "check". The signature may wrap over several physical
@@ -835,6 +894,7 @@ def _fm_editor_help(files_json, source, line, column):
                         label = header
         # The tooltip scrolls, so the budget is generous: an Args section
         # documenting thirty flags is the payload, not an overflow.
+        returns = _fm_returns_doc(doc)
         paragraphs = [p for p in doc.split(chr(10) + chr(10)) if p.strip()]
         doc = (chr(10) + chr(10)).join(paragraphs[:3])
         lines = doc.split(chr(10))
@@ -842,7 +902,7 @@ def _fm_editor_help(files_json, source, line, column):
             doc = chr(10).join(lines[:200]) + chr(10) + "…"
         if not label and not doc:
             return json.dumps(None)
-        return json.dumps({"label": _fm_wrap_signature(label), "doc": doc})
+        return _fm_help_payload(_fm_spelled_head(label, spelled), doc, returns)
     except Exception:
         if os.environ.get("_FM_PLAYGROUND_SIM"):
             traceback.print_exc(file=sys.stderr)
@@ -1625,28 +1685,45 @@ function initPlayground() {
             // HighlightStyle, via the bundle's highlighter helper. One
             // block per line, so a soft-wrapped parameter hangs at its
             // indent instead of snapping back to column zero.
+            const sig = document.createElement("div");
             for (const lineText of help.label.split("\n")) {
               const lineEl = document.createElement("div");
               lineEl.className = "fmp-sig-line";
               lineEl.appendChild(highlightPython(lineText));
-              dom.appendChild(lineEl);
+              sig.appendChild(lineEl);
             }
+            // A signature is the footer, the prose leads (Willem's
+            // layout); a label that is not one — a parameter's
+            // declaration, a module's name — is the subject and stays
+            // on top.
+            if (!help.footer) dom.appendChild(sig);
             if (help.doc) {
               const docEl = document.createElement("div");
               docEl.className = "fmp-signature-doc";
-              // A Google-style Args section renders structurally — each
-              // argument a bold name with its description — the way an
-              // IDE would show it; any other doc stays plain text.
+              // The summary is whatever precedes the first Google-style
+              // section header; Args renders structurally beneath it —
+              // each argument a bold name with its description — the way
+              // an IDE would show it.
+              const sectionAt = help.doc.match(/(^|\n)([A-Z][A-Za-z]*):\n/);
+              const summary = (
+                sectionAt ? help.doc.slice(0, sectionAt.index) : help.doc
+              ).trim();
+              if (summary) {
+                const sumEl = document.createElement("div");
+                sumEl.textContent = summary;
+                docEl.appendChild(sumEl);
+              }
+              if (help.returns) {
+                const row = document.createElement("div");
+                row.className = "fmp-arg";
+                const nameEl = document.createElement("strong");
+                nameEl.textContent = "Returns";
+                row.appendChild(nameEl);
+                row.appendChild(document.createTextNode(" " + help.returns));
+                docEl.appendChild(row);
+              }
               const argsAt = help.doc.match(/(^|\n)Args:\n/);
-              if (!argsAt) {
-                docEl.textContent = help.doc;
-              } else {
-                const summary = help.doc.slice(0, argsAt.index).trim();
-                if (summary) {
-                  const sumEl = document.createElement("div");
-                  sumEl.textContent = summary;
-                  docEl.appendChild(sumEl);
-                }
+              if (argsAt) {
                 const headEl = document.createElement("div");
                 headEl.className = "fmp-args-head";
                 headEl.textContent = "Arguments";
@@ -1665,6 +1742,10 @@ function initPlayground() {
                   entry = null;
                 };
                 for (const lineText of block.split("\n")) {
+                  // A section header at column zero ends the table —
+                  // without this, "Returns:" landed inside the last
+                  // argument's description.
+                  if (/^\S/.test(lineText)) break;
                   const m = lineText.match(/^ {4}(\w+): ?(.*)$/);
                   if (m) {
                     flush();
@@ -1676,6 +1757,10 @@ function initPlayground() {
                 flush();
               }
               dom.appendChild(docEl);
+            }
+            if (help.footer) {
+              sig.firstChild.classList.add("fmp-sig-footer");
+              dom.appendChild(sig);
             }
             return { dom };
           },
