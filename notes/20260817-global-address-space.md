@@ -151,6 +151,15 @@ where an author asked for one.
 - **Merge the skip and the value.** Already ruled; the third tier is an
   addition, not a revision.
 
+## Where this went next
+
+Pulling the transports frame away from footman entirely — what the general
+system is, the four-way security decomposition, capability attenuation as the
+ergonomics problem, and what other languages need to join — became
+[20260817-typed-call-fabric.md](20260817-typed-call-fabric.md). A thought
+experiment rather than a plan: nothing in it revises this note's rulings, and
+its "what this note is not" section draws the line explicitly.
+
 ## Open
 
 1. **Is a global address the provider's canonical path or the mount point?**
