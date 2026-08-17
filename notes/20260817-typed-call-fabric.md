@@ -672,6 +672,75 @@ card tray was for.
 Willem's call, unhurried — nothing ships under this name until something of
 it exists.
 
+## Footman's place in it
+
+> I suppose we would have to implement footman as a thin layer on top of
+> this. — Willem, 2026-08-17
+
+Yes, with one direction-of-construction correction that matters more than
+the layering itself: **footman is not reimplemented on top of the fabric;
+the fabric is extracted out of footman.** Same endpoint, opposite build
+order, very different risk. Build-the-platform-then-rebuild-the-product is
+the second-system trap — a foundation API frozen before any consumer has
+exercised it. The direction that works is extract-from-working-product, and
+this repo has already rehearsed it: toolroom was carved out along a seam the
+working code had proven, on its own release train, while footman kept
+moving.
+
+The seams are already fabric-shaped, because a year of design kept cutting
+along them without naming them. The inventory falls out mechanically:
+
+| | modules |
+|---|---|
+| **descends into the fabric** — contract, envelope, resolver, reflective store | `_manifest`, `_coerce`, `_binder`, the `params` marker vocabulary, the 0.21.0 envelope (typed refusals, `Stdout[T]`, exit 64), `_futures` (the once-cell is the resolver's first store); eventually the socket transport, effects, capabilities |
+| **stays footman** — renderers and household conventions | `_split` and the CLI grammar, `App`/branding, the tasks.py discovery cascade, the config cascade, shell completion installers, `_progress`, `_describe` phrasing, the docs exporter, the gate ergonomics |
+
+Footman becomes "the CLI frontend plus the conventions of a well-run
+project" — thin, and exactly the product identity it already has. The pitch
+never changes: task runner, zero deps, 30 ms TAB. The fabric never appears
+in footman's marketing.
+
+**The scheduler is the piece that does not sort cleanly.** The lean: the
+*resolver* (one execution per name, whoever asks) is fabric; the
+*orchestration grammar* (`+`, parallel-by-default, confirm gates as product
+behaviour) is footman. That is the seam where extraction will fight back —
+leave it for last.
+
+Two wrinkles, stated rather than discovered later:
+
+- **The zero-dep invariant.** A separate livery distribution means
+  `pip install footman` pulls it, and "zero runtime dependencies" needs
+  restating — honestly survivable as "stdlib-only transitively, first-party
+  throughout", since the invariant's spirit was always import-weight and
+  supply-chain trust. But the marketing sentence currently says "zero", and
+  the alternative (one wheel, two importable layers, module discipline
+  instead of a package boundary) delays that cost until the split earns it.
+- **The trigger condition.** Do not extract until a second consumer is real.
+  A library with one consumer is a public API paying freezing costs for
+  nobody. The services note observed the fourth transport forces the
+  coherence invariant to be written down; the same logic says the second
+  *frontend* forces the fabric API to be right. Until then the boundary
+  lives as module discipline inside footman — `_complete.py`'s import-free
+  purity is the existing proof that layer discipline holds there — and the
+  conformance kit gets written as footman's own property test, so the seam
+  is under test from both sides before extraction day.
+
+**The nominated second consumer: an MCP renderer.** `livery-mcp` — serve any
+manifest's tree as MCP tools over the envelope. Small, the highest-leverage
+rung in this note (agents as callers; no new machinery, only a renderer),
+and it exercises contract + envelope + reflective store while wanting *none*
+of the CLI grammar — the perfect API client precisely because it uses the
+fabric without footman's conventions. If one fabric API serves both footman
+and an MCP renderer without either leaking into it, the extraction is right:
+the don't-launder-user-level-coupling test at layer scale.
+
+The sequence: keep building the rungs inside footman on their own threads'
+merits (declared I/O, socket transport, effects) → write the coherence
+property test as the nascent conformance kit → build the MCP renderer as a
+second consumer against the internal seam → extract along the now-tested
+boundary, toolroom-style, separate train. Footman ends up the thin layer —
+by having been the quarry, never the demolition site.
+
 ## What this note is not
 
 - **Not a footman plan.** No phase list, no target release, no API proposal.
@@ -697,10 +766,12 @@ it exists.
    decorator idiom from the services note is the likely shape.
 4. **The human grant gesture** for delegating to agents. Unsolved everywhere;
    the confirm gate is the placeholder until a real gesture is found.
-5. **Whether footman is ever the vehicle for any of this**, or stays the
-   local proof that the shape works. A product decision, same as the remote
-   rung's — and the same answer applies: deciding is cheapest before a
-   launch, not after.
+5. **Whether footman is ever the vehicle for any of this** — NARROWED
+   2026-08-17: "Footman's place in it" above answers the *how* (reference
+   frontend and quarry; fabric extracted, never footman rebuilt) and the
+   *when* (gated on a real second consumer, MCP renderer nominated). Still
+   open: whether the trigger ever fires, and how the zero-dep sentence gets
+   restated if it does.
 6. **The name.** Candidates above; livery is the recommendation. Willem's
    call.
 7. **Which canonical encoding the naming layer uses** — JCS canonical JSON
