@@ -68,13 +68,27 @@ def _runner(
     )
 
 
-def _await(condition, what: str, seconds: float = 30.0) -> None:
+def _await(condition, what: str, seconds: float = 30.0, saw=None) -> None:
+    """Wait for *condition*, or fail saying what was there instead.
+
+    These tests wait on a real process writing to a real file, so a timeout
+    is either a regression or the runner being slow — and the two are told
+    apart only by what the file held. *saw* is called on failure to put that
+    in the message, because a CI failure nobody can reproduce locally is
+    worth as much as the evidence it carries and no more.
+    """
     deadline = time.time() + seconds
     while time.time() < deadline:
         if condition():
             return
         time.sleep(0.05)
-    pytest.fail(f"{what} never happened; the test proves nothing")
+    detail = ""
+    if saw is not None:
+        try:
+            detail = f"\ninstead, after {seconds:g}s:\n{saw()!r}"
+        except Exception as exc:  # pragma: no cover - diagnostics must not mask
+            detail = f"\n(could not read what was there: {exc!r})"
+    pytest.fail(f"{what} never happened; the test proves nothing{detail}")
 
 
 # --- a stop asked for by signal ----------------------------------------------
@@ -216,12 +230,16 @@ def test_sigquit_dumps_every_thread_and_the_run_carries_on(tmp_path):
         try:
             _await(ready.exists, "the task started")
             os.kill(runner.pid, signal.SIGQUIT)
+            # Wait for the frame, not for the header. faulthandler writes the
+            # "Current thread …" line and the frames under it as separate
+            # writes, so a reader that stops at the header can catch the file
+            # between them and see a dump with no stack in it — which is what
+            # a loaded CI runner does, and a laptop almost never does.
             _await(
-                lambda: "Current thread" in err_file.read_text(),
-                "the stacks were dumped",
+                lambda: "in wait" in err_file.read_text(),
+                "a dump naming the task's own frame",
+                saw=err_file.read_text,
             )
-            dump = err_file.read_text()
-            assert "in wait" in dump  # the task's own frame, not just footman's
             go.write_text("go")
             assert runner.wait(timeout=30) == 0
         finally:
@@ -254,6 +272,7 @@ def test_the_timer_dumps_where_there_is_no_key_to_press(tmp_path):
             _await(
                 lambda: "in wait" in err_file.read_text(),
                 "a dump naming the task's own frame",
+                saw=err_file.read_text,
             )
             go.write_text("go")
             assert runner.wait(timeout=30) == 0

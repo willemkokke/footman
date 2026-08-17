@@ -248,15 +248,20 @@ poe dist-build
 | No `ctx`/`c` boilerplate param              | yes     | yes    | no              | no            | n/a      |
 | Real `--flags`                              | yes     | yes    | yes             | yes           | yes      |
 | `Literal`/`Enum` → validated choices        | yes     | yes    | no              | no            | no       |
-| Native nested groups                        | yes     | manual | no              | manual        | no       |
+| Native nested groups                        | yes     | yes    | no              | manual        | no       |
 | Zero-boilerplate discovery (module = group) | yes     | no     | no              | no            | no       |
 | Separator-free chaining                     | yes     | no     | reserved-word   | reserved-word | seq task |
 | Completion without re-importing             | yes     | no     | no              | no            | yes*     |
-| Zero runtime dependencies                   | yes     | no     | no              | no            | no       |
+| Zero runtime dependencies                   | yes     | no     | no              | yes†          | no       |
 | Output capture / replay-on-failure          | yes     | no     | yes (`ctx.run`) | partial       | no       |
 | DAG / parallel-by-default                   | yes     | no     | serial          | serial        | yes      |
 
 \* poe avoids re-importing only because its tasks aren't Python functions.
+
+† invoke declares no dependencies either. It gets there by vendoring:
+`invoke/vendor/` ships fluidity, lexicon and PyYAML inside the wheel. footman
+carries no third-party code at all — the difference is where the dependency
+lives, not whether you install one.
 
 **typer is footman's closest feature-peer, not a laggard.** It matches footman on
 the typed-CLI basics — no `ctx`, real flags, nested groups (via `add_typer`), and
@@ -274,11 +279,12 @@ nested groups, **eager choice/type validation** (duty accepts an invalid
 `Literal` value; footman rejects it), `Literal`/`Enum`-driven completion, and
 completion that doesn't re-import your project (~13× faster per TAB).
 
-**Where footman is still behind:** shell-completion installers aren't wired yet
-(the resolver works via `fm --complete`), and typer's `--help` formatting is
-richer. Both are on the roadmap. (footman has since gained a `run()`/`tools`
-capture layer and a parallel-by-default DAG scheduler — the matrix above
-reflects that.)
+**Where footman is still behind:** typer's `--help` formatting is richer —
+`rich`-painted panels where footman prints plain text. An optional renderer is
+on the roadmap. Completion is not on that list: `fm --install-completion`
+writes the hook and the rc line for bash, zsh, fish, PowerShell or nushell,
+detects the shell when you don't name one, and `--uninstall-completion` takes
+it back out again. The suite drives all five shells for real.
 
 ## Other Python task runners worth contrasting
 
