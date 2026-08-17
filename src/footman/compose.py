@@ -45,15 +45,40 @@ ENTRY_POINT_GROUP = "footman.tasks"
 _module_trees: dict[str, Group] = {}
 
 
-def _tree_of_module(module: ModuleType) -> Group:
-    """The task tree of an already-imported module: the memo, a rebuild, or
-    a taught no.
+def _declares_tasks(module: ModuleType) -> bool:
+    """Whether *module* holds anything whose registration cannot be rebuilt.
+
+    A `Group` or a `@task`-stamped function is the shape `_reconstruct`
+    refuses to speak for, because a task's registration IS the tree
+    structure and a namespace cannot say where it was mounted. Everything
+    else a provider declares — options, hooks — carries its own receipt and
+    rebuilds.
+    """
+    return any(
+        isinstance(value, Group) or hasattr(value, registry._PRE)
+        for value in vars(module).values()
+    )
+
+
+def _tree_of_module(module: ModuleType, *, allow_empty: bool = False) -> Group:
+    """The task tree of an already-imported module: the memo, a rebuild, an
+    empty answer, or a taught no.
 
     A module imported *outside* `include()` already ran its decorators
     against whatever registry was live, and re-executing it would double
     every side effect. A contributions-only module (hooks and options, no
     tasks) can still be rebuilt from its own namespace; a module that
     defined tasks cannot, and the answer is guidance, not guesswork.
+
+    The last two rungs are the same question the freshly-imported path asks
+    a few lines below — *does this module hold anything footman can use?* —
+    and they exist because it must be asked here too. An already-imported
+    module that declares NOTHING was not spent: there was nothing to
+    capture. Refusing it blamed an import for a tree that was always empty,
+    and named the wrong module while doing it, because the empty one is
+    usually a parent package `include()` is merely walking through
+    (`include("devkit.tasks")` walks `devkit`) rather than the one the
+    caller wrote.
     """
     name = module.__name__
     if name in _module_trees:
@@ -61,12 +86,18 @@ def _tree_of_module(module: ModuleType) -> Group:
     if (rebuilt := _reconstruct(module)) is not None:
         _module_trees[name] = rebuilt
         return rebuilt
-    raise RegistrationError(
-        f"include({name!r}): the module was already imported outside "
-        f"include(), so its tasks were never captured — call include() "
-        f"before anything else imports it, or have the module expose an "
-        f"explicit Group and pass that instead"
-    )
+    if _declares_tasks(module):
+        # Genuinely spent: there IS something here, and the import that would
+        # have captured it happened somewhere this call cannot reach.
+        raise RegistrationError(
+            f"include({name!r}): the module was already imported outside "
+            f"include(), so its tasks were never captured — call include() "
+            f"before anything else imports it, or have the module expose an "
+            f"explicit Group and pass that instead"
+        )
+    if allow_empty:
+        return Group("root")  # an intermediate package with nothing in it
+    return _adopt_explicit_group(module)
 
 
 def _reconstruct(module: ModuleType) -> Group | None:
@@ -134,7 +165,7 @@ def _import_source(dotted: str, *, allow_empty: bool = False) -> Group:
         return _module_trees[dotted]
 
     if dotted in sys.modules:
-        return _tree_of_module(sys.modules[dotted])
+        return _tree_of_module(sys.modules[dotted], allow_empty=allow_empty)
     with registry.capture() as captured:
         try:
             module = importlib.import_module(dotted)

@@ -19,6 +19,17 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A package you only `include()` *through* may be empty.** The shape is
+  the ordinary one: constants in `devkit/__init__.py`, tasks in
+  `devkit/tasks.py`, and a tasks file that does `from devkit import REGISTRY`
+  before `include("devkit.tasks")`. That first import put `devkit` in
+  `sys.modules`, and the already-imported path refused before it ever read
+  the flag that exists for exactly this — so the whole CLI died, `fm --list`
+  included, naming `devkit`, a module the caller never wrote, with advice
+  about capturing tasks the package never had. An import that registered
+  nothing is *empty*, not spent. The refusal now fires only when the module
+  really does hold tasks it could not capture, and an empty module named
+  directly gets the error that describes it: nothing here to mount.
 - **One task mounted from two cascade levels is now refused.** A task runs
   in the directory of the tasks file that defined it, and that folder is
   recorded on the function — so mounting one provider at two addresses from
