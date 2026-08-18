@@ -263,6 +263,18 @@ class App:
             from footman._complete import complete_cli
 
             return complete_cli(args[1:])
+        # A process started without a stream (the caller closed the fd;
+        # pythonw) gets `None` for it, and every later touch — the
+        # scheduler's isatty, the uv handoff's flush, a body's print —
+        # becomes an AttributeError traceback. A stream nobody connected
+        # means "discard", so it is wired to devnull once, here, and the
+        # whole run downstream never has to ask.
+        import os as _os
+
+        if sys.stdout is None:
+            sys.stdout = open(_os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+        if sys.stderr is None:
+            sys.stderr = open(_os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         from footman import _app
 
         return _app.run(args, brand=self.brand)

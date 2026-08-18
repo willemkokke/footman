@@ -320,6 +320,38 @@ def test_an_explicit_tasks_file_still_wins(tmp_path, monkeypatch, capsys):
     assert "theirs" in capsys.readouterr().out
 
 
+def test_a_closed_stdout_means_discard_not_a_traceback(tmp_path):
+    # The caller closed fd 1 (supervisors and cron shells do), so Python
+    # started with `sys.stdout = None` — and the scheduler's isatty, the uv
+    # handoff's flush, and any body print became AttributeError tracebacks.
+    # A stream nobody connected means "discard": the run works, the output
+    # goes nowhere, and a failure still reaches stderr.
+    if sys.platform == "win32":
+        pytest.skip("preexec_fn is POSIX")
+    import subprocess
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n\n@task\ndef hello():\n    print('hi')\n"
+    )
+    env = {
+        **os.environ,
+        "FOOTMAN_NO_UV": "1",
+        "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache"),
+    }
+    env.pop("VIRTUAL_ENV", None)
+    proc = subprocess.run(
+        [sys.executable, "-m", "footman", "hello"],
+        cwd=tmp_path,
+        env=env,
+        stderr=subprocess.PIPE,
+        text=True,
+        preexec_fn=lambda: os.close(1),
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "AttributeError" not in proc.stderr
+    assert "Traceback" not in proc.stderr
+
+
 def _ascii_stdout(monkeypatch) -> io.BytesIO:
     """Stand in for a legacy console: ascii, errors='strict', not a tty."""
     raw = io.BytesIO()
