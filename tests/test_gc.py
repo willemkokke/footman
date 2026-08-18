@@ -74,6 +74,46 @@ def test_collect_ages_orphan_times_files(tmp_path):
     assert (cache / "warm.times.json").exists()
 
 
+def test_fetch_data_lives_by_reference_not_by_age(tmp_path):
+    # The manifest layout: a live manifest pins the data file it names at
+    # any age, and a data file no manifest names is unreachable (fetch
+    # resolves only through manifests) — garbage immediately, however
+    # young. The clock stays only where nothing references the bytes yet.
+    cache = tmp_path / "cache"
+    room = cache / "fetch"
+    room.mkdir(parents=True)
+    ancient = time.time() - (_gc.IDLE_DAYS + 5) * 86400
+    (room / "aaaa.json").write_text(json.dumps({"url": "u", "data": "aaaa-1111.bin"}))
+    (room / "aaaa-1111.bin").write_text("pinned")
+    os.utime(room / "aaaa-1111.bin", (ancient, ancient))  # old bytes, live ref
+    (room / "bbbb-2222.bin").write_text("orphan")  # written seconds ago
+
+    _gc.collect(cache)
+
+    assert (room / "aaaa-1111.bin").exists()  # referenced: kept at any age
+    assert not (room / "bbbb-2222.bin").exists()  # unreferenced: gone now
+    assert (room / "aaaa.json").exists()
+
+
+def test_an_idle_fetch_manifest_releases_its_data(tmp_path):
+    # Nobody asked in IDLE_DAYS (a serve would have touched the manifest):
+    # the manifest goes, and the data it referenced becomes an orphan the
+    # same pass sweeps.
+    cache = tmp_path / "cache"
+    room = cache / "fetch"
+    room.mkdir(parents=True)
+    ancient = time.time() - (_gc.IDLE_DAYS + 5) * 86400
+    (room / "cccc.json").write_text(json.dumps({"url": "u", "data": "cccc-3333.bin"}))
+    (room / "cccc-3333.bin").write_text("bytes")
+    for name in ("cccc.json", "cccc-3333.bin"):
+        os.utime(room / name, (ancient, ancient))
+
+    _gc.collect(cache)
+
+    assert not (room / "cccc.json").exists()
+    assert not (room / "cccc-3333.bin").exists()
+
+
 def test_collect_ages_the_fetch_room(tmp_path):
     # Rule 3: bodies and sidecars age as pairs, orphan sidecars age alone,
     # and a warm body (a recent serve touched it) survives with its sidecar.

@@ -74,10 +74,31 @@ def _key(url: str) -> str:
     return hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
 
 
-def _paths_for(url: str) -> tuple[Path, Path]:
-    """The cached body and its metadata sidecar (ETag, Last-Modified)."""
-    stem = cache_dir() / _key(url)
-    return stem.with_suffix(".bin"), stem.with_suffix(".meta.json")
+def _manifest_path(url: str) -> Path:
+    """The URL's manifest: a small JSON that names its own data file.
+
+    The layout's one moving part. The data file is content-addressed
+    (`<key>-<digest16>.bin`) and immutable once published; a fresh download
+    lands under a fresh name and only this manifest is replaced — one
+    uncontended swap of a small file no reader holds open. A path handed to
+    a caller therefore never changes underneath them, the validators in the
+    manifest describe exactly the bytes they sit beside, and the Windows
+    replace-under-reader failure has nothing left to happen to.
+    """
+    return cache_dir() / f"{_key(url)}.json"
+
+
+def _data_name(url: str, digest: str) -> str:
+    return f"{_key(url)}-{digest[:16]}.bin"
+
+
+def _cached_body(url: str, meta: dict[str, Any]) -> Path | None:
+    """The data file *meta* names, when it is really there."""
+    name = meta.get("data")
+    if not isinstance(name, str) or not name.startswith(_key(url)):
+        return None
+    body = cache_dir() / name
+    return body if body.is_file() else None
 
 
 def _load_meta(path: Path) -> dict[str, Any]:
@@ -145,7 +166,7 @@ def _download(
 
     Two separate facts that used to share one value: whether bytes moved
     (what the receipt reports), and the validators to persist for the next
-    revalidation (what the sidecar stores). A revalidation that comes back
+    revalidation (what the manifest stores). A revalidation that comes back
     `304` moves no bytes and keeps the validators it already had, which
     under the shared value read as a fresh download of nothing.
 
@@ -186,7 +207,7 @@ def _download_urllib(
             if total and received != total:
                 # A short body reads as a small one to everyone upstream, and
                 # cached it is forever: the ETag off this same response goes
-                # in the sidecar, the healthy origin answers 304 from then
+                # in the manifest, the healthy origin answers 304 from then
                 # on, and the half file is served as a hit. CPython won't
                 # raise here itself — HTTPResponse.read's own comment says it
                 # "might break compatibility" — so the check is ours to make.
@@ -350,48 +371,89 @@ def fetch(
     """
     ctx = context.current()
     label = f"fetch {url}"
-    body, sidecar = _paths_for(url)
-    destination = Path(into) if into is not None else body
+    manifest = _manifest_path(url)
+    meta = _load_meta(manifest)
+    body = _cached_body(url, meta)
+    # `refresh` skips revalidation, not the cache: the download goes out
+    # unconditional, but a cached copy keeps its say as the fallback when
+    # that download dies — the documented offline behaviour.
+    validators = {} if refresh else meta
 
     if ctx.dry_run:
         ctx.steps.append(context.Result(0, command=label, raw=label))
         if not ctx.quiet:
             print(f"$ {label}")
-        return destination
+        # The cached path when there is one; otherwise the key's nominal
+        # stem — a stable placeholder for the plan, never a real file.
+        nominal = body or cache_dir() / f"{_key(url)}.bin"
+        return Path(into) if into is not None else nominal
 
     chosen = _resolve_backend(backend or _configured_backend(ctx))
     started = time.perf_counter()
     cache_dir().mkdir(parents=True, exist_ok=True)
-    meta = {} if refresh else _load_meta(sidecar)
-    incoming = _scratch(body)
+    incoming = _scratch(manifest)
     try:
         downloaded, fresh = _download(
-            chosen, url, incoming, meta if body.exists() else {}
+            chosen, url, incoming, validators if body is not None else {}
         )
         if downloaded:
-            # The cache path is only ever replaced whole. Downloading onto it
-            # meant two tasks fetching the same cold URL truncated each other
-            # and a transfer that died halfway left its stump behind — and
-            # `sha256=` then blamed the server for bytes that arrived intact.
-            os.replace(incoming, body)
+            # The data file is content-addressed and immutable: a fresh
+            # download lands under a fresh name, so no reader's path is
+            # ever replaced underneath them — two cold fetches of one URL
+            # publish the same name from the same bytes, and a changed
+            # upstream publishes a different one. Only the manifest moves.
+            digest = _digest(incoming)
+            final = cache_dir() / _data_name(url, digest)
+            if final.exists():
+                # Same content already published: the bytes are identical
+                # by construction, so the part is a duplicate — and not
+                # replacing means a Windows reader's open handle is safe.
+                incoming.unlink()
+            else:
+                os.replace(incoming, final)
+            body = final
+            _publish(
+                manifest,
+                {"url": url, "data": final.name, "sha256": digest, **(fresh or {})},
+            )
     except FetchError:
-        if body.exists():  # a cached copy beats a failed refresh
-            _touch(body, sidecar)
+        if body is not None:  # a cached copy beats a failed refresh
+            _touch(manifest, body)
             _record(ctx, label, started, cached=True)
-            return _deliver(body, destination, sha256, url)
+            return _deliver(body, _destination(into, body), sha256, url)
         raise
     finally:
         with contextlib.suppress(OSError):
             incoming.unlink(missing_ok=True)
-    if fresh:
-        sidecar.write_text(json.dumps(fresh), encoding="utf-8")
+    if body is None:
+        raise FetchError(f"fetch: {url} — nothing downloaded and nothing cached")
     if not downloaded:
-        # A serve is a use: the collector's idle rule reads mtimes, and a
-        # 304 writes nothing of its own — untouched, a daily-fetched file
-        # would age out and force a pointless re-download.
-        _touch(body, sidecar)
+        if fresh:
+            # A revalidation may hand back fresh validators for the same
+            # bytes (a rotated ETag): same data file, updated manifest.
+            _publish(manifest, {**meta, **fresh})
+        # A serve is a use: the collector's idle rule reads the manifest's
+        # mtime, and a 304 writes nothing of its own — untouched, a
+        # daily-fetched file would age out and force a pointless re-download.
+        _touch(manifest, body)
     _record(ctx, label, started, cached=not downloaded)
-    return _deliver(body, destination, sha256, url)
+    return _deliver(body, _destination(into, body), sha256, url)
+
+
+def _destination(into: Path | str | None, body: Path) -> Path:
+    return Path(into) if into is not None else body
+
+
+def _publish(manifest: Path, data: dict[str, Any]) -> None:
+    """The manifest, replaced whole — the layout's one swap.
+
+    Written beside and moved on, so a concurrent reader sees the old
+    manifest or the new one, never a torn half; the file is small and no
+    reader holds it open, so the swap is uncontended on every platform.
+    """
+    scratch = _scratch(manifest, suffix=".json.part")
+    scratch.write_text(json.dumps(data), encoding="utf-8")
+    os.replace(scratch, manifest)
 
 
 def _touch(*paths: Path) -> None:

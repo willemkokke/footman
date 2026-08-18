@@ -17,6 +17,22 @@ versions may include breaking changes.
   on a timer that repeats every 30 seconds. Both write to stderr, so a
   `--json` run keeps its document.
 
+### Changed
+
+- **The fetch cache is a manifest naming an immutable data file.** Each URL
+  keeps one small `<key>.json` that names a content-addressed
+  `<key>-<digest>.bin` and carries its validators beside it. A fresh
+  download lands under a fresh name and only the manifest is swapped — one
+  uncontended replace of a small file no reader holds open — so a path
+  `fetch()` returned never changes underneath its holder, two parallel cold
+  fetches publish identical bytes under one name, and the Windows
+  replace-under-reader failure has nothing left to happen to. The collector
+  follows the layout: a live manifest pins its data at any age, an
+  unreferenced data file is garbage immediately, and only downloads in
+  flight — referenced by nothing yet — keep an age clock. Old-layout cache
+  entries are simply re-downloaded on first use and swept by the age rule
+  they always had.
+
 ### Fixed
 
 - **A sibling package leaves with its whole subtree.** The cascade's

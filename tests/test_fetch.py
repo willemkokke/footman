@@ -31,6 +31,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"  # the "chunked" mode needs it
     etag = '"v1"'
     mode = ""  # "", "short", "chunked", or "stall"
+    body_override = b""  # a different payload, for the changed-upstream case
     hits: ClassVar[list[str]] = []
     stalled = threading.Event()
     release = threading.Event()
@@ -60,10 +61,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b"ffff\r\n")  # a chunk header with no chunk
             self.close_connection = True
             return
+        payload = type(self).body_override or BODY
         self.send_response(200)
-        self.send_header("Content-Length", str(len(BODY)))
+        self.send_header("Content-Length", str(len(payload)))
         self.send_header("ETag", type(self).etag)
         self.end_headers()
+        if mode == "":
+            self.wfile.write(payload)
+            return
         if mode == "short":
             # Half a body and a dropped connection: the shape CPython reads
             # without a word, and the shape curl calls exit 18.
@@ -89,6 +94,8 @@ def server(tmp_path, monkeypatch):
     monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
     _Handler.hits = []
     _Handler.mode = ""
+    _Handler.body_override = b""
+    _Handler.etag = '"v1"'
     _Handler.stalled = threading.Event()
     _Handler.release = threading.Event()
     # Threaded: a stalled request must not hold up the one racing it.
@@ -170,11 +177,10 @@ def test_every_backend_refuses_a_truncated_body(server, backend, death):
     as a hit until someone deletes the cache by hand."""
     _skip_unless_available(backend)
     _Handler.mode = death
-    body, sidecar = _fetch._paths_for(server)
     with pytest.raises(_fetch.FetchError, match="fetch: "):
         _fetch.fetch(server, backend=backend)
-    assert not body.exists()
-    assert not sidecar.exists()
+    assert not _fetch._manifest_path(server).exists()  # nothing published
+    assert not list(_fetch.cache_dir().glob("*.bin"))  # and no data landed
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -205,8 +211,8 @@ def test_every_backend_leaves_the_cache_alone_while_downloading(server, backend)
     so the file is watched across a window rather than sampled once.
     """
     _skip_unless_available(backend)
-    body, _ = _fetch._paths_for(server)
-    assert _fetch.fetch(server, backend=backend).read_bytes() == BODY
+    body = _fetch.fetch(server, backend=backend)
+    assert body.read_bytes() == BODY
 
     _Handler.mode = "stall"
     got: list[object] = []
@@ -267,11 +273,35 @@ def test_refresh_skips_revalidation(server):
     assert _Handler.hits == ["unconditional", "unconditional"]
 
 
+def test_a_returned_path_is_immutable_across_a_changed_upstream(server):
+    # The layout's core promise: the data file is content-addressed and
+    # never replaced, so a path handed to a caller keeps its bytes even
+    # after the upstream changes — the fresh download publishes a new name
+    # and only the manifest moves. Under the old <key>.bin layout the
+    # refresh rewrote the very file the first caller was still holding.
+    first = _fetch.fetch(server)
+    assert first.read_bytes() == BODY
+    _Handler.etag = '"v2"'
+    _Handler.body_override = b"changed payload\n" * 12000
+    second = _fetch.fetch(server, refresh=True)
+    assert second != first  # a new name for new bytes
+    assert first.read_bytes() == BODY  # the old handle kept its bytes
+    assert second.read_bytes() == b"changed payload\n" * 12000
+    meta = _fetch._load_meta(_fetch._manifest_path(server))
+    assert meta["data"] == second.name  # the manifest points at the new one
+    assert meta["sha256"] == _fetch._digest(second)  # validators sit beside
+
+
 def test_into_copies_to_a_chosen_path(server, tmp_path):
     dest = tmp_path / "vendor" / "file.bin"
     path = _fetch.fetch(server, into=dest)
     assert path == dest and dest.read_bytes() == BODY
-    assert (_fetch.cache_dir() / path.name).exists() or True  # cache kept too
+    # The cache genuinely keeps its copy — the old assertion here ended in
+    # `or True` and could not fail (audit, suite pass), and the name it
+    # checked was the *destination's*, which the cache never used.
+    meta = _fetch._load_meta(_fetch._manifest_path(server))
+    cached = _fetch._cached_body(server, meta)
+    assert cached is not None and cached.read_bytes() == BODY
 
 
 def test_sha256_mismatch_is_refused(server):
@@ -314,15 +344,15 @@ def test_a_revalidated_serve_counts_as_use(server):
     import time as _time
 
     with use_context(Context()) as ctx:
-        _fetch.fetch(server)
-        body, sidecar = _fetch._paths_for(server)
+        body = _fetch.fetch(server)
+        manifest = _fetch._manifest_path(server)
         then = _time.time() - 400
         os.utime(body, (then, then))
-        os.utime(sidecar, (then, then))
+        os.utime(manifest, (then, then))
         _fetch.fetch(server)
         assert ctx.steps[-1].stdout == "cached"
     assert body.stat().st_mtime > then + 100
-    assert sidecar.stat().st_mtime > then + 100
+    assert manifest.stat().st_mtime > then + 100
 
 
 def test_dry_run_downloads_nothing(server, capsys):
