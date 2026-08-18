@@ -75,6 +75,11 @@ class Spot:
     y: float
 
 
+@dataclass
+class Port:
+    n: int
+
+
 def run(build, line):
     reg, tree = build_tree(build)
     # The resolver the app builds, so a dynamic parameter validates here
@@ -1116,6 +1121,30 @@ def test_an_untyped_constructor_is_not_a_grouped_shape():
     run(tasks, "ident --u=12345678-1234-5678-1234-567812345678 --amount=1.50")
     assert seen["u"] == uuid.UUID("12345678-1234-5678-1234-567812345678")
     assert seen["amount"] == Decimal("1.50")
+
+
+def test_a_one_field_record_reads_its_fields_declared_type():
+    # `T(value)` spelling, but the field declares a type and a dataclass
+    # constructor validates nothing: `n: int` silently received the string
+    # 'abc' — and '5' stayed a string on the happy path. The token is the
+    # *field's* value first; untyped constructors (UUID, Decimal) expose no
+    # fields and keep the raw token, pinned by the parity test above.
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def serve(p: Port = Port(0)):
+            seen["p"] = p
+
+    results = run(tasks, "serve --p=5")
+    assert results[0].ok
+    assert seen["p"] == Port(5)  # the int, not the string '5'
+
+    seen.clear()
+    results = run(tasks, "serve --p=abc")
+    assert not results[0].ok
+    assert "p" not in seen  # the body never ran on the bad value
+    assert "'abc' is not a valid Port" in str(results[0].error)
 
 
 def test_a_constructor_that_rejects_however_it_likes_is_a_bad_value():

@@ -97,6 +97,7 @@ def _evict_siblings(before: set[str], parent: Path) -> None:
     whoever-imported-first-wins. Deeper imports and editable-installed packages
     live elsewhere on disk and are deliberately left (D8).
     """
+    evicted: set[str] = set()
     for name in set(sys.modules) - before:
         file = getattr(sys.modules.get(name), "__file__", None)
         if file is None:
@@ -105,6 +106,15 @@ def _evict_siblings(before: set[str], parent: Path) -> None:
         sibling = f.parent == parent
         package = f.name == "__init__.py" and f.parent.parent == parent
         if sibling or package:
+            evicted.add(name)
+    # A package leaves with its whole subtree: dropping `pkg` alone left
+    # `pkg.sub` in sys.modules, and the next cascade file's `import pkg.sub`
+    # re-imported `pkg` fresh from its own directory and then took the
+    # *stale* submodule straight out of sys.modules — the previous file's
+    # copy, wearing the new package. Name-prefixed, because a submodule's
+    # file lives a level too deep for the directory checks above to see.
+    for name in list(sys.modules):
+        if name in evicted or any(name.startswith(p + ".") for p in evicted):
             del sys.modules[name]
 
 
