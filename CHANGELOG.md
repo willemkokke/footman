@@ -19,6 +19,38 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A reader hanging up is a calm cut, not a crash.** `fm chatty | head`:
+  once the body wrote past the pipe buffer after `head` exited, the next
+  print raised EPIPE and footman dressed the reader's "enough" as a crash —
+  a raw `BrokenPipeError` traceback, an "Exception ignored while flushing
+  sys.stdout" on the way down, and exit 120. Now: one calm reason ("stdout
+  closed by the reader — output cut short"), no traceback, and exit **141**
+  — 128+SIGPIPE, what any SIGPIPE-default tool reports — so
+  `set -o pipefail` still sees the cut while `| head` stays quiet.
+- **A failure code the shell cannot carry still fails.** A task returning
+  256 printed FAIL and exited **0**: POSIX keeps only the low byte of an
+  exit status, so `fm deploy || rollback` never rolled back. A failure code
+  outside 1–255 collapses to 1 at the exit boundary; in-range codes pass
+  through untouched, and the real number still rides the receipt line and
+  the `--json` row.
+- **A stream nobody connected means discard, not a traceback.** Starting
+  footman with fd 1 closed (a supervisor's redirect, a cron shell) hands
+  Python `sys.stdout = None`, and every later touch — the scheduler's
+  isatty, the uv handoff's flush, a body's print — was an AttributeError
+  traceback. A `None` stdout or stderr is wired to devnull at the entry, so
+  the run works, the output goes where a closed stream asked, and failures
+  still reach whichever stream is real.
+- **A constructor may reject a bad token however it likes.**
+  `Decimal("abc")` raises `decimal.InvalidOperation` — an ArithmeticError,
+  outside the coercion contract's ValueError/TypeError catch — so the raw
+  exception escaped, class name and all, where UUID and every other custom
+  type taught the value. A CLI token a constructor refuses is a bad value
+  whatever it raises: it reports as one, with the original riding the
+  exception chain for `-v`.
+- **`docs.page` and `docs.site` teach a bad `--target`.** The resolver's
+  message already named what it does know; it just escaped as a raw
+  `ValueError:`. Both tasks now deliver it as the deliberate refusal it is —
+  flag named, menu intact, no exception class.
 - **Import-time chatter is never served as a completion candidate.** The
   dynamic-completer child's stdout is the candidate channel, and computing
   candidates starts by importing the tasks file — so a `print()` at module
