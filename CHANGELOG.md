@@ -35,6 +35,21 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The published CLI reference describes computed defaults, never this
+  machine's answers.** The docs exporter resolved `--jobs` and `--color` on
+  the build runner, so the published reference said `3` and `never` — the
+  runner's core count and CI's `NO_COLOR`, machine-specific values dressed
+  as the product's. A computed default now renders as its phrase ("the
+  machine's cores minus one, never below 2"), kept beside the grammar table
+  so a new computed default cannot ship without one; `--help` still
+  resolves live, which is right at a terminal — the reader is on the
+  machine the number answers for.
+- **`docs.cast` takes a `steady=` knob, and the docs build's retry uses
+  it.** A recording on a loaded machine drops keystrokes because "output
+  went quiet" is often a CPU-starved shell mid-redraw; a key typed into
+  that gap diverges the whole interaction. `steady=` widens the
+  quiet-detection windows without touching the hard caps, and the hero-cast
+  retry re-records at triple patience instead of repeating the same take.
 - **A broken annotation is an advisory line, not a Python `UserWarning`.**
   A mis-spelled marker, an unresolvable annotation, or a docstring
   documenting a parameter that does not exist printed as

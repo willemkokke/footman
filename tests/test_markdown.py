@@ -135,12 +135,33 @@ def test_globals_table_carries_defaults_from_the_grammar(monkeypatch):
     where = next(line for line in text.splitlines() if "--where=TASK" in line)
     # Same source as `--help`, so the page cannot say one thing while the
     # runner says another — the drift hand-written "(default: …)" prose had.
-    # Colour's default is computed (it reads NO_COLOR/FORCE_COLOR), so with a
-    # clean environment the page says auto, and says it worked for it.
-    assert "(computed)" in jobs
-    assert "default: `auto` (computed)" in colour
+    # A computed default renders as its *phrase* here, never the build
+    # machine's value: the published reference said `--jobs` defaults to `3`
+    # and `--color` to `never` — the docs runner's core count and CI's
+    # NO_COLOR, machine-specific answers dressed as the product's.
+    assert "the machine's cores minus one" in jobs
+    assert "default: auto (or what NO_COLOR/FORCE_COLOR says)" in colour
+    import re
+
+    assert not re.search(r"default: `\d+`", jobs)  # never a baked number
     assert "default" not in where
     assert "{prog}" not in text  # placeholders always filled
+
+
+def test_a_computed_default_without_a_phrase_refuses_to_publish():
+    # The phrase table lives beside the grammar so a new computed default
+    # cannot ship undocumented: asked to speak symbolically about a name it
+    # has no phrase for, the resolver refuses instead of baking a value.
+    from footman import _split
+
+    monkey = dict(_split._COMPUTED_PHRASE)
+    try:
+        del _split._COMPUTED_PHRASE["--jobs"]
+        with pytest.raises(KeyError, match="no symbolic phrase"):
+            _split.global_default("--jobs", resolved=False)
+    finally:
+        _split._COMPUTED_PHRASE.clear()
+        _split._COMPUTED_PHRASE.update(monkey)
 
 
 def test_globals_table_speaks_the_brand():

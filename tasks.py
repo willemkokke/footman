@@ -435,13 +435,20 @@ def _record_cast(
             height=height,
             cwd=cwd,
             pace=pace,
+            # The retry is not the same recording again: a drop means the
+            # quiet-detection read a CPU-starved shell as settled and typed
+            # into a menu that had not opened. The second take triples the
+            # quiet windows (`steady`), which is patience, not slowness —
+            # a loaded CI runner dropped the nushell hero cast on BOTH
+            # attempts when the retry only repeated the first take.
+            steady=1.0 if attempt == 1 else 3.0,
         )
         try:
             _assert_cast_captured(out, beats)
         except RuntimeError:
             if attempt == 2:
                 raise
-            print(f"note: {out.name} came back mute — re-recording once")
+            print(f"note: {out.name} came back mute — re-recording, steadier")
             continue
         return
 
