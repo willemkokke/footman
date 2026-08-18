@@ -118,7 +118,7 @@ def test_docstring_long_absent_when_empty():
     assert "long" not in node(plain)
 
 
-def test_docstring_unknown_param_warns():
+def test_docstring_unknown_param_warns(capsys):
     def run_it(a: int = 0):
         """Run.
 
@@ -127,8 +127,11 @@ def test_docstring_unknown_param_warns():
             ghost: not a parameter
         """
 
-    with pytest.warns(UserWarning, match="ghost"):
-        node(run_it)
+    _manifest._warned.clear()
+    node(run_it)
+    err = capsys.readouterr().err
+    assert "ghost" in err
+    assert "UserWarning" not in err  # one clean line, not Python's dressing
 
 
 def test_numpy_and_sphinx_docstrings_reach_the_spec():
@@ -479,35 +482,41 @@ def test_serial_and_exclusive_carry_the_lane_key():
     assert "lane" not in tree["tasks"]["plain"]
 
 
-def test_one_broken_annotation_degrades_only_its_parameter():
+def test_one_broken_annotation_degrades_only_its_parameter(capsys):
     # `eval_str` is all-or-nothing, so the fallback resolves per parameter:
     # the typo'd one passes through as text, the sibling keeps its type —
     # previously one broken name cost the whole task its grammar.
     def f(x="d", flag: bool = False): ...
 
     f.__annotations__ = {"x": "NoSuchType", "flag": "bool"}  # PEP-563 strings
-    with pytest.warns(UserWarning, match=r"<x>.*'NoSuchType' did not resolve"):
-        by_name = {s["name"]: s for s in specs(f)}
+    _manifest._warned.clear()
+    by_name = {s["name"]: s for s in specs(f)}
+    err = capsys.readouterr().err
+    assert "<x>" in err and "'NoSuchType' did not resolve" in err
+    assert "UserWarning" not in err
     assert by_name["flag"]["kind"] == "flag"  # the sibling survived
     assert "types" not in by_name["x"]  # the broken one degraded to text
     assert "choices" not in by_name["x"]
 
 
-def test_the_broken_annotation_warning_names_task_and_cause():
+def test_the_broken_annotation_warning_names_task_and_cause(capsys):
     def deploy(tier="post"): ...
 
     # What ruff once made of a quote-stripped Literal: a subtraction of two
     # names, which is exactly as unresolvable as a typo.
     deploy.__annotations__ = {"tier": "post - merge"}
-    with pytest.warns(UserWarning, match=r"deploy.*<tier>.*name 'post'"):
-        specs(deploy)
+    _manifest._warned.clear()
+    specs(deploy)
+    err = capsys.readouterr().err
+    assert "deploy" in err and "<tier>" in err and "name 'post'" in err
 
 
-def test_a_broken_return_annotation_degrades_alone():
+def test_a_broken_return_annotation_degrades_alone(capsys):
     def f(flag: bool = False): ...
 
     f.__annotations__ = {"flag": "bool", "return": "Gone"}
-    with pytest.warns(UserWarning, match=r"<return>.*did not resolve"):
-        sig = _manifest.resolved_signature(f)
+    _manifest._warned.clear()
+    sig = _manifest.resolved_signature(f)
+    assert "<return>" in capsys.readouterr().err
     assert sig.parameters["flag"].annotation is bool
     assert sig.return_annotation == "Gone"

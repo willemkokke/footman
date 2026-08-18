@@ -19,8 +19,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, NotRequired, TypedDict
 
-import pytest
-
 from footman import _manifest, markdown
 from footman._describe import returned_mismatch, returns_json_schema, returns_phrase
 from footman._executor import EX_USAGE
@@ -171,7 +169,7 @@ def test_outside_the_set_means_no_claims_never_an_error():
         assert returned_spec(ann) is None, ann
 
 
-def test_a_missing_or_broken_annotation_makes_no_claims():
+def test_a_missing_or_broken_annotation_makes_no_claims(capsys):
     def missing():
         pass
 
@@ -182,8 +180,11 @@ def test_a_missing_or_broken_annotation_makes_no_claims():
         pass
 
     broken.__annotations__ = {"return": "NoSuchType"}  # PEP-563 string
-    with pytest.warns(UserWarning, match=r"<return>.*did not resolve"):
-        sig = _manifest.resolved_signature(broken)
+    _manifest._warned.clear()
+    sig = _manifest.resolved_signature(broken)
+    err = capsys.readouterr().err
+    assert "<return>" in err and "did not resolve" in err
+    assert "UserWarning" not in err
     assert returned_spec(sig.return_annotation) is None
 
 

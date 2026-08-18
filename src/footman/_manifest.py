@@ -30,9 +30,9 @@ import hashlib
 import inspect
 import json
 import os
+import sys
 import typing
 import uuid
-import warnings
 from pathlib import Path, PurePath
 from typing import Any
 
@@ -42,6 +42,24 @@ from footman.params import suggest
 from footman.registry import Group
 
 SCHEMA_VERSION = 6
+
+_warned: set[str] = set()
+
+
+def _warn(message: str) -> None:
+    """An advisory on stderr, once per message — never a Python UserWarning.
+
+    `warnings.warn` dressed these as `…/_manifest.py:416: UserWarning:` with
+    footman's own source line quoted underneath — internals nobody asked
+    about, above every `--help` and `--list`, pointing at the framework
+    instead of the user's file the message already names. The message is
+    the whole story; it is delivered as one line, once, like every other
+    advisory footman prints.
+    """
+    if message in _warned:
+        return
+    _warned.add(message)
+    print(message, file=sys.stderr)
 
 
 class ManifestError(Exception):
@@ -132,10 +150,9 @@ def _partially_resolved(fn: Any) -> inspect.Signature:
             # What `eval_str` does per annotation, minus the all-or-nothing.
             return eval(annotation, module_globals)
         except Exception as exc:  # any failure means "not a usable type"
-            warnings.warn(
+            _warn(
                 f"footman: {where} <{name}>: annotation {annotation!r} did "
-                f"not resolve ({exc}); values pass through as text",
-                stacklevel=2,
+                f"not resolve ({exc}); values pass through as text"
             )
             return annotation
 
@@ -413,10 +430,9 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         # the underlying error; repeating it per spec build would turn one
         # broken name back into a warning block.
         if not isinstance(element, str):
-            warnings.warn(
+            _warn(
                 f"footman: parameter {param.name!r}: annotation {element!r} "
-                f"is not a usable type; values are passed through as text",
-                stacklevel=2,
+                f"is not a usable type; values are passed through as text"
             )
     return spec
 
@@ -896,10 +912,9 @@ def _task_node(
     if ctx_name:
         known.add(ctx_name)  # documenting the injected ctx param is fine
     if unknown := sorted(set(parsed.params) - known):
-        warnings.warn(
+        _warn(
             f"footman: {getattr(fn, '__name__', fn)!s}: docstring documents "
-            f"unknown parameter(s): {', '.join(unknown)}",
-            stacklevel=2,
+            f"unknown parameter(s): {', '.join(unknown)}"
         )
     node: dict[str, Any] = {"help": parsed.summary, "params": params}
     used = registry.task_uses(fn)

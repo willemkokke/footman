@@ -825,7 +825,7 @@ def test_marker_manifest_keys():
 # --- opaque annotations warn -------------------------------------------------------
 
 
-def test_unresolvable_annotation_warns():
+def test_unresolvable_annotation_warns(capsys):
     def tasks(reg):
         def go(x="d"): ...
 
@@ -834,5 +834,8 @@ def test_unresolvable_annotation_warns():
         go.__annotations__ = {"x": "NoSuchType"}
         reg.task(go)
 
-    with pytest.warns(UserWarning, match=r"<x>.*did not resolve"):
-        build_tree(tasks)
+    _manifest._warned.clear()
+    build_tree(tasks)
+    err = capsys.readouterr().err
+    assert "<x>" in err and "did not resolve" in err
+    assert "UserWarning" not in err  # one clean line, not Python's dressing
