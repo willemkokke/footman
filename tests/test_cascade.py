@@ -668,11 +668,18 @@ def test_where_lists_the_shadow_chain(tmp_path, monkeypatch, capsys):
 
 
 def test_help_shows_the_inherited_options(tmp_path, monkeypatch, capsys):
+    import re
+
     _inherit_repo(tmp_path, monkeypatch, LEAF)
     assert _app.run(["--help", "check"]) == 0
     out = capsys.readouterr().out
     assert "shadows" in out and "inherited() calls it" in out
     assert "fm check [--fix]" in out  # the parent's options, not the leaf's
+    # The *where*: a real file:line, never the "the cascade" fallback the
+    # renderer degrades to when the manifest loses the location — which it
+    # could do with the suite staying green (audit, suite pass).
+    assert re.search(r"shadows .*tasks\.py:\d+", out)
+    assert "shadows the cascade" not in out
 
 
 # --- the cascade walk mode (tri-state) ---------------------------------------
