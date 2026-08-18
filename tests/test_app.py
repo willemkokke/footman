@@ -1658,6 +1658,33 @@ def test_script_handoff_execs_the_scripts_own_interpreter(script_project, monkey
     assert calls == [["/env/bin/python", "-m", "footman", "hi", "--name=x"]]
 
 
+def test_script_handoff_reenters_the_brand_not_stock_footman(
+    script_project, monkeypatch
+):
+    # `-m footman` is the *stock* CLI: a branded child re-ran the handoff —
+    # its belt variable is scoped to the brand, so the parent's didn't
+    # count — and died on the mismatch refusal, because the script declares
+    # the brand's dist and not 'footman'. The brand re-enters through its
+    # own console script's entry point instead.
+    from footman.app import App
+
+    (script_project / "tasks.py").write_text(
+        _SCRIPT_BLOCK.replace('"footman"', '"acme-cli"'), encoding="utf-8"
+    )
+    calls = _capture_exec(monkeypatch)
+    _fake_uv(monkeypatch)
+    monkeypatch.delenv("ACME_UV_REEXEC", raising=False)
+    monkeypatch.delenv("ACME_NO_UV", raising=False)
+    brand = App(name="acme", prog="acme", dist="acme-cli").brand
+    with pytest.raises(SystemExit):
+        _app.run(["hi", "--name=x"], brand=brand)
+    [argv] = calls
+    assert argv[0] == "/env/bin/python"
+    assert argv[-2:] == ["hi", "--name=x"]
+    assert "footman" not in argv  # never the stock door
+    assert any("'acme'" in part for part in argv)  # the brand's own entry point
+
+
 def test_script_handoff_is_quiet_but_teaches_under_verbose(script_project, monkeypatch):
     _capture_exec(monkeypatch)
     ran = _fake_uv(monkeypatch)
