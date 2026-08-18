@@ -753,6 +753,25 @@ def coerce_custom(value: str, element: Any) -> Any:
             return element.fromisoformat(value)
         if issubclass(element, _datetime.date):
             return element.fromisoformat(value)
+        fields = fields_of(element)
+        if fields is not None and len(fields) == 1:
+            # A one-field record spells as `T(value)` — but its field
+            # *declares a type*, and a dataclass constructor validates
+            # nothing, so `n: int` silently received the string 'abc' (and
+            # '5' stayed a string on the happy path). The token must first
+            # be the field's value. Untyped constructors (UUID, Decimal, a
+            # user type taking a string) expose no readable fields, so they
+            # keep the raw token exactly as before.
+            ftype = fields[0].type
+            tags = element_tags(ftype)
+            if tags:
+                ok, out = coerce_scalar(value, tags)
+                if not ok:
+                    raise ValueError(
+                        f"field {fields[0].name!r} takes {tags[0]}, got {value!r}"
+                    )
+                return element(out)
+            return element(coerce_one(value, ftype))
         # A user constructor: its call signature is its own business (the
         # contract is "accepts a string"), so the call is deliberately dynamic.
         ctor: Any = element
