@@ -109,9 +109,11 @@ signature, so no call site has to remember a flag. `fm summarise` *is* a
 filter, the way `sort` and `jq` are filters. The return type decides the
 bytes, mirroring `stdin`: `Stdout[str]` verbatim, `Stdout[bytes]` raw,
 anything structured JSON, pretty-printed at a terminal, one compact line
-into a pipe. Prints and `run()` lines replay on stderr, where the summary
-already lives, so redirecting stdout captures exactly the document. The
-full rule set lives on [JSON output](json.md).
+into a pipe. Text and JSON go out as UTF-8 whatever the console's encoding,
+the same codec the pipe in reads, so both ends of a footman pipeline agree
+without either side guessing. Prints and `run()` lines replay on stderr,
+where the summary already lives, so redirecting stdout captures exactly the
+document. The full rule set lives on [JSON output](json.md).
 
 ## Feeding a child: `run(input=…)`
 

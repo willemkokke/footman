@@ -1071,23 +1071,51 @@ def _describe_contract(tree: dict[str, Any], target: object, argv_rest: bool) ->
     return 0
 
 
+def _utf8(text: str) -> bytes:
+    """A document's text as UTF-8 bytes, degrading only what cannot be text.
+
+    Strict would trade a silent '?' for a traceback on an already-finished
+    task, and the only strings that fail are ones holding lone surrogates —
+    the escape hatch for bytes that were never characters, which no encoding
+    can carry. Everything a reader would call text survives intact.
+    """
+    return text.encode("utf-8", "replace")
+
+
+def _emit_bytes(payload: bytes) -> None:
+    """Put a document's bytes on stdout, underneath the text layer's codec.
+
+    A document is a payload footman defines, so it is UTF-8 always — no
+    autodetection, no locale. `sys.stdout` encodes with the locale's codec
+    and a run reconfigures it to `errors="replace"` so a tool's stray glyph
+    can never crash the run; together those turned "café" into b"caf?" on a
+    cp1252 console, with exit 0 and nothing on stderr. Writing bytes to the
+    underlying buffer skips the translation and pins UTF-8; captured stdout
+    (tests, some wrappers) has no buffer, so fall back.
+    """
+    buffer = getattr(sys.stdout, "buffer", None)
+    if buffer is None:  # an embedded runner's text capture has no byte buffer
+        sys.stdout.write(payload.decode("utf-8", "replace"))
+        return
+    # Anything already handed to the text layer belongs ahead of these bytes.
+    with contextlib.suppress(Exception):
+        sys.stdout.flush()
+    buffer.write(payload)
+    buffer.flush()
+
+
 def _emit_document(value: object, inner: object) -> None:
     """The declared document, on stdout: text verbatim (plus a trailing
     newline), bytes raw, anything else JSON — pretty-printed on a terminal,
-    one compact line into a pipe, always a trailing newline. Encoded via
-    `_describe.json_default`, the same encoder `--json` uses, so dataclasses
-    serialise and `Secret` redacts identically on both surfaces."""
+    one compact line into a pipe, always a trailing newline, and always UTF-8.
+    Encoded via `_describe.json_default`, the same encoder `--json` uses, so
+    dataclasses serialise and `Secret` redacts identically on both surfaces."""
     mode = _coerce.emission_mode(inner)
     if mode == "bytes" and isinstance(value, (bytes, bytearray)):
-        buffer = getattr(sys.stdout, "buffer", None)
-        if buffer is not None:
-            buffer.write(bytes(value))
-            buffer.flush()
-        else:  # an embedded runner's text capture has no byte buffer
-            sys.stdout.write(bytes(value).decode("utf-8", "replace"))
+        _emit_bytes(bytes(value))
         return
     if mode == "text" and isinstance(value, str):
-        sys.stdout.write(value if value.endswith("\n") else value + "\n")
+        _emit_bytes(_utf8(value if value.endswith("\n") else value + "\n"))
         return
     try:
         tty = sys.stdout.isatty()
@@ -1105,7 +1133,7 @@ def _emit_document(value: object, inner: object) -> None:
         indent=2 if tty else None,
         separators=None if tty else (",", ":"),
     )
-    sys.stdout.write(text + "\n")
+    _emit_bytes(_utf8(text + "\n"))
 
 
 def _stack_wanted(verbose: bool) -> bool:

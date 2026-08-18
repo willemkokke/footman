@@ -19,6 +19,17 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A `Stdout[T]` document is UTF-8, whatever the console's encoding.** It
+  was written through `sys.stdout`'s locale codec, which a run reconfigures
+  to replace anything it cannot encode so a tool's stray glyph never crashes
+  a run — so on a cp1252 console a document returning `"café naïve — 日本語"`
+  reached the pipe as `caf?na?ve ? ???`, exit 0 and nothing on stderr. For
+  `Stdout[str]` that is mangled prose; for a dict or a dataclass the damage
+  is inside a machine payload, and the bytes are not valid UTF-8 for the
+  reader on the other end. Text and JSON documents are encoded and written
+  to the byte stream underneath, the same way the completion protocol and
+  `stdin` are already pinned. `Stdout[bytes]` was always raw and stays so,
+  and a terminal still gets the indented form.
 - **A package you only `include()` *through* may be empty.** The shape is
   the ordinary one: constants in `devkit/__init__.py`, tasks in
   `devkit/tasks.py`, and a tasks file that does `from devkit import REGISTRY`
