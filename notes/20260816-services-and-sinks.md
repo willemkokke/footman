@@ -182,6 +182,11 @@ A generator body **is** the service. Why this and not a `service=True` flag:
 - it converts an open audit item into a feature. Today `@task def gen(): yield`
   prints `ok gen (0.0s)` and **never runs the body** — measured. Refusing that
   closes a hole; using it closes the hole and buys services.
+  *(Status 2026-08-18: the hole is closed by an interim refusal, ruled by
+  Willem — a yielding task body refuses by name, wording the shape as
+  reserved. The check keys off `isgeneratorfunction` at `_executor._call`,
+  which is the detection site this ruling re-uses: building services means
+  replacing that refusal with the readiness pump, not finding a home for it.)*
 - the yielded value is the readiness handoff, and it is `Forward[T]`-shaped.
 
 ### The rule that makes it work: no infinite bodies

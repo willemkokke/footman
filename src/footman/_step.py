@@ -321,6 +321,13 @@ def _pump(item: WorkItem[Any]) -> Any:
                 # point rather than a scheduling one.
                 produced.close()  # or "was never awaited" trails the refusal
                 raise _context.coroutine_refusal("step", maker._fn)
+            if inspect.isasyncgen(produced):
+                # The coroutine refusal's missed sibling: `async def` plus
+                # `yield` builds an async generator — not a coroutine, so the
+                # check above never sees it, and not a generator function, so
+                # the pump never takes it. Sealed `ok` for zero work, same as
+                # the coroutine case, refused the same way.
+                raise _context.generator_refusal("step", maker._fn, is_async=True)
             return produced
         gen: Generator[Any, Any, Any] = maker._fn(*item._args, **item._kwargs)
         payload: Any = None

@@ -42,6 +42,7 @@ from footman.context import (
     _current,
     context_param_name,
     coroutine_refusal,
+    generator_refusal,
 )
 from footman.params import Secret
 from footman.registry import Group, Task
@@ -1294,7 +1295,19 @@ def _call(
     try:
         # The task's own body — never the handle, whose call is the body-call
         # machinery that would route this invocation straight back here.
-        returned = registry.task_body(fn)(*args, **kwargs)
+        body = registry.task_body(fn)
+        unwrapped = inspect.unwrap(body)
+        if inspect.isgeneratorfunction(unwrapped) or inspect.isasyncgenfunction(
+            unwrapped
+        ):
+            # Declaration, not return value: a plain body may *return* an
+            # iterator it built, and that is real work with a real receipt.
+            # A body written with `yield` runs nothing when called — the
+            # shape a service will claim; until then it refuses by name.
+            raise generator_refusal(
+                "task", body, is_async=inspect.isasyncgenfunction(unwrapped)
+            )
+        returned = body(*args, **kwargs)
         if inspect.iscoroutine(returned):
             # Calling an `async def` builds a coroutine and runs none of it.
             # Left alone this reported `ok` for a body that never executed —
