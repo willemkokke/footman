@@ -614,6 +614,46 @@ def test_dynamic_option_signals_recompute():
     ]
 
 
+def test_a_runnable_groups_arity_walks_like_the_splitter_reads():
+    # Audit M12, verified resolved by the segment collapse: the walk and the
+    # splitter now agree on every bare word after a runnable group. A word
+    # inside the default's arity is the default's *value* (orchestration.md:
+    # "a bare word after the group is the default's value"), so the tail
+    # keeps completing the default's options — never the same-named child's.
+    # Past the arity, a nested member's bare name is the spelling the
+    # splitter refuses ("nested tasks use dots"), so the walk stays silent.
+    with registry.capture() as root:
+        rg = registry.group("rg")
+
+        @rg.default
+        def deploy(target: str, flag: bool = False):
+            "Deploy."
+
+        @rg.task
+        def status(verbose: bool = False):
+            "Status."
+
+        z = registry.group("z")
+
+        @z.default
+        def zero(flag: bool = False):
+            "No positionals."
+
+        @z.task
+        def member(verbose: bool = False):
+            "Member."
+
+    built = _manifest.build_manifest(root)["tree"]
+    # `rg status` binds status → target: the default's tail, not the child's.
+    assert "--flag" in complete(built, ["rg", "status", "--"])
+    assert "--verbose" not in complete(built, ["rg", "status", "--"])
+    # The dotted spelling is the child.
+    assert "--verbose" in complete(built, ["rg.status", "--"])
+    # Arity exhausted: `z member` is the refused spelling — silence, like
+    # the splitter's ChainError, never the member's (or anyone's) options.
+    assert complete(built, ["z", "member", "--"]) == []
+
+
 def _dynamic_project(tmp_path):
     proj = tmp_path / "proj"
     proj.mkdir()
