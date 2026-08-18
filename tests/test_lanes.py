@@ -157,22 +157,27 @@ def test_the_cwd_lane_applies_the_directory_for_the_hold(tmp_path):
 def test_a_string_in_lanes_is_taught_at_the_declaration():
     # Handles, not strings: a typo'd handle is an undefined name, and a
     # string dies here as a taught error, never a crash in the arbiter.
-    from footman import task
+    # Under capture(), so the test neither depends on the global registry
+    # being clean of the name `migrate` nor leaves it behind for a later
+    # test — it used to pass only by registration-order luck.
+    from footman import registry, task
 
-    with pytest.raises(TypeError, match="Lane handles, not str"):
+    with registry.capture(), pytest.raises(TypeError, match="Lane handles, not str"):
 
         @task(lanes=("database",))  # type: ignore[arg-type]  # the taught path
         def migrate(): ...
 
 
 def test_a_string_in_opts_lanes_is_taught():
-    from footman import task
+    from footman import registry, task
 
-    @task
-    def migrate(): ...
+    with registry.capture():
 
-    with pytest.raises(TypeError, match="Lane handles, not str"):
-        migrate.opts(lanes=("database",))  # type: ignore[arg-type]
+        @task
+        def migrate(): ...
+
+        with pytest.raises(TypeError, match="Lane handles, not str"):
+            migrate.opts(lanes=("database",))  # type: ignore[arg-type]
 
 
 def test_a_string_in_step_opts_lanes_is_taught():
