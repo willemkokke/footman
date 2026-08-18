@@ -2765,6 +2765,61 @@ def test_an_async_body_is_refused_rather_than_reported_ok():
     assert "asyncio.run" in str(results[0].error)
 
 
+def test_a_yielding_body_is_refused_rather_than_reported_ok():
+    # Calling a generator function builds the generator and runs none of it,
+    # so this reported `ok` for a body that never executed — the audit's
+    # measured hole. The shape is reserved (`yield` on a task is the coming
+    # service form), so the refusal names the reservation and the way out
+    # that exists today.
+    ran: dict[str, bool] = {}
+
+    def build(reg):
+        @reg.task
+        def pump():
+            ran["it"] = True
+            yield
+
+    _, _, results = drive(build, "pump")
+    assert not results[0].ok
+    assert not ran.get("it")  # it never ran, and never claimed to
+    said = str(results[0].error)
+    assert "generator function" in said
+    assert "@step" in said
+    assert "test_context.py:" in said  # the definition site, not a traceback
+
+
+def test_an_async_generator_body_is_refused_not_reported_ok():
+    # `async def` plus `yield` is neither a coroutine (`iscoroutine` misses
+    # it) nor a plain generator function — without its own check it sealed
+    # `ok` for zero work: the coroutine hole through a second door.
+    ran: dict[str, bool] = {}
+
+    def build(reg):
+        @reg.task
+        async def pump():
+            ran["it"] = True
+            yield
+
+    _, _, results = drive(build, "pump")
+    assert not results[0].ok
+    assert not ran.get("it")
+    said = str(results[0].error)
+    assert "async def" in said and "generator" in said
+
+
+def test_a_body_may_still_return_an_iterator_it_built():
+    # The refusal keys off the declaration, not the returned object: a plain
+    # body that builds and returns a generator did real work and keeps its
+    # receipt. This is the boundary between the reserved shape and a value.
+    def build(reg):
+        @reg.task
+        def maker():
+            return (n * n for n in range(3))
+
+    _, _, results = drive(build, "maker")
+    assert results[0].ok
+
+
 def test_an_unexpected_exception_places_itself_in_the_users_code(fm_project):
     # A task that raised used to say what happened and never where — the type
     # and message, in a file of forty tasks. Captured output is not a terminal,

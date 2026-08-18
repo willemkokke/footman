@@ -1291,6 +1291,48 @@ def coroutine_refusal(kind: str, fn: Any = None) -> Failed:
     )
 
 
+def generator_refusal(kind: str, fn: Any = None, *, is_async: bool = False) -> Failed:
+    """The taught refusal for a yielding body footman would never run.
+
+    Calling a generator function builds the generator and executes none of
+    its body, so a `@task` written with `yield` reported `ok` for work that
+    never happened — the receipt the design refuses to mint. The shape is
+    refused rather than pumped on purpose: `yield` on a *task* is reserved
+    for the service form (a body that yields once it is ready and tears down
+    after), so this refusal is the placeholder for that meaning, not a
+    ruling against it. Steps already give `yield` a meaning, which is the
+    way out the message names.
+
+    An `async def` generator is the coroutine refusal's missed sibling — it
+    is not a coroutine, so `iscoroutine` never sees it, and it is not a
+    plain generator function either, so a step's pump never takes it. Both
+    kinds refuse here, tasks and steps alike, with the async spelling named
+    so the fix (drop the `async`) is visible in the message.
+
+    Definition site over traceback, and `unwrap` first, for the same
+    reasons as `coroutine_refusal` above; one phrasing for both callers, so
+    two copies of a message cannot drift.
+    """
+    where = ""
+    if fn is not None:
+        code = getattr(inspect.unwrap(fn), "__code__", None)
+        if code is not None:
+            where = f" at {code.co_filename}:{code.co_firstlineno}"
+    shape = "an `async def` generator" if is_async else "a generator function"
+    if kind == "step":
+        remedy = "A step yields from a plain `def` body: drop the `async`."
+    else:
+        remedy = (
+            "Lift the yielding work into a `@step`, or build and return the "
+            "iterator from a non-yielding body."
+        )
+    return Failed(
+        f"the {kind} body{where} is {shape}, so calling it builds a "
+        f"generator and executes nothing. footman does not run a yielding "
+        f"{kind} body (the shape is reserved for services to come). {remedy}"
+    )
+
+
 def fail(reason: str = "", *, code: int = 1) -> NoReturn:
     """Fail the current task with a *reason* (and exit *code*, default 1).
 

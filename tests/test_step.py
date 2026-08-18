@@ -322,6 +322,26 @@ def test_an_async_step_body_is_refused_and_names_where_it_lives():
     assert "test_step.py:" in said  # the definition site, not a traceback
 
 
+def test_an_async_generator_step_is_refused_like_the_coroutine():
+    # `async def` with `yield` builds an async generator: not a coroutine,
+    # so the refusal above never fires, and not a generator function, so
+    # the pump never takes it — a sealed record for work that never
+    # happened, the same hole through a second door.
+    ran: list[str] = []
+
+    async def pump():
+        ran.append("no")
+        yield
+
+    with use_context(Context()), pytest.raises(Failed) as caught:
+        _ = step(pump)()()
+    assert not ran  # it never ran, and never claimed to
+    said = str(caught.value)
+    assert "async def" in said and "generator" in said
+    assert "plain `def`" in said
+    assert "test_step.py:" in said  # the definition site, not a traceback
+
+
 def test_a_deliberate_step_failure_is_not_dressed_as_a_crash():
     # `fail()` carries a reason written for the person reading it, and
     # `Failed` promises it renders verbatim. The pump used to print a full

@@ -19,6 +19,21 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A yielding task body is refused, not reported ok.** `@task` on a
+  generator function printed `ok (0.0s)` having run nothing: calling a
+  generator function only builds the generator, and nothing ever pumped it.
+  footman now refuses by name at the definition's `file:line`, the same way
+  it refuses an `async def` body — and the refusal is a *reservation*, not a
+  position: `yield` on a task is the shape the coming service form gives a
+  meaning (run to readiness, hand back a value, tear down after), so the
+  check sits exactly where that detection will live. Until then the message
+  names what exists today: lift yielding work into a `@step`, or build and
+  return the iterator from a non-yielding body — a body that *returns* a
+  generator it made is real work and keeps its receipt. `async def`
+  generators are refused the same way, on tasks and steps both: they are
+  neither coroutines (`iscoroutine` misses them) nor generator functions
+  (the step pump never takes them), so they were the coroutine refusal's
+  missed sibling — `ok` for zero work through a second door.
 - **A `Stdout[T]` document is UTF-8, whatever the console's encoding.** It
   was written through `sys.stdout`'s locale codec, which a run reconfigures
   to replace anything it cannot encode so a tool's stray glyph never crashes
