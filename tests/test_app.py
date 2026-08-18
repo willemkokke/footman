@@ -256,6 +256,40 @@ def test_systemexit_int_code_stays_bare(project, capsys):
     assert "SystemExit" not in err
 
 
+def test_a_code_the_shell_cannot_carry_still_fails(tmp_path):
+    # POSIX keeps only the low byte of an exit status: a task returning 256
+    # printed FAIL and exited 0 — `fm deploy || rollback` never rolled back.
+    # The process boundary collapses an uncarriable failure to 1; codes the
+    # shell can carry pass through untouched, and the receipt line and
+    # `--json` row keep the real number.
+    import textwrap
+
+    from footman.testing import Runner
+
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task
+
+            @task
+            def big() -> int:
+                return 256
+
+            @task
+            def neg() -> int:
+                return -9
+
+            @task
+            def plain() -> int:
+                return 7
+            """
+        )
+    )
+    assert Runner().invoke("big", cwd=tmp_path).exit_code == 1
+    assert Runner().invoke("neg", cwd=tmp_path).exit_code == 1
+    assert Runner().invoke("plain", cwd=tmp_path).exit_code == 7
+
+
 def test_fail_surfaces_reason(project, capsys):
     # `footman.fail("reason")` — the blessed task-failure idiom: the reason shows
     # verbatim (no `Failed:` type prefix), exit 1.
