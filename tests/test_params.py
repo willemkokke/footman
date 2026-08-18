@@ -1118,6 +1118,27 @@ def test_an_untyped_constructor_is_not_a_grouped_shape():
     assert seen["amount"] == Decimal("1.50")
 
 
+def test_a_constructor_that_rejects_however_it_likes_is_a_bad_value():
+    # `Decimal("abc")` raises `decimal.InvalidOperation` — an ArithmeticError,
+    # outside the ValueError/TypeError contract — and the raw exception used
+    # to escape to the user where every other custom type taught the value.
+    # The token came from a command line, so however the constructor refuses
+    # it, it is a bad *value* and reports as one.
+    ran: dict[str, bool] = {}
+
+    def tasks(reg):
+        @reg.task
+        def pay(amount: Decimal = Decimal(0)):
+            ran["it"] = True
+
+    results = run(tasks, "pay --amount=abc")
+    assert not results[0].ok
+    assert not ran.get("it")
+    said = str(results[0].error)
+    assert "'abc' is not a valid Decimal" in said
+    assert "InvalidOperation" not in said
+
+
 def test_a_hidden_parameter_is_out_of_the_listings_and_nothing_else():
     """`hidden` on a parameter means what `hidden=True` means on a task: out
     of what a human reads, and out of nothing else. It still binds, it still

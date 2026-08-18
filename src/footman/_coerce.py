@@ -757,5 +757,10 @@ def coerce_custom(value: str, element: Any) -> Any:
         # contract is "accepts a string"), so the call is deliberately dynamic.
         ctor: Any = element
         return ctor(value)
-    except (ValueError, TypeError) as exc:
+    except Exception as exc:
+        # Not just ValueError/TypeError: `Decimal("abc")` raises
+        # `decimal.InvalidOperation` (an ArithmeticError), and a user type may
+        # reject a bad token however it likes. The value came from a command
+        # line, so a constructor refusing it is a bad *value*, and it reports
+        # as one — the original exception rides the chain for `-v`.
         raise ValueError(f"{value!r} is not a valid {element.__name__}") from exc
