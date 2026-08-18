@@ -8,13 +8,15 @@ task emits; `--json` keeps the envelope.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 from dataclasses import dataclass
 from typing import Annotated
 
 import pytest
 
-from footman import _manifest
+from footman import _app, _manifest
 from footman._coerce import emission_mode, emitted
 from footman._executor import EX_USAGE
 from footman.params import Secret, Stdout, stdin, stdout
@@ -36,10 +38,36 @@ class Credentials:
     token: Secret
 
 
+class Console(io.TextIOWrapper):
+    """A `TextIOWrapper` that claims to be a terminal, for the pretty branch."""
+
+    def isatty(self) -> bool:
+        return True
+
+
 def invoke(build, line, **kw):
     reg = Group("root")
     build(reg)
     return Runner().invoke(line, tasks=reg, **kw)
+
+
+def emitted_bytes(value, annotation, *, encoding="cp1252", tty=False) -> bytes:
+    """*value* emitted as a document, through a byte-backed stdout in *encoding*.
+
+    A `TextIOWrapper` over a `BytesIO` is the console a user has: a codec, an
+    error handler, and bytes underneath. `Runner` captures into a `StringIO`,
+    which has no `.buffer` at all, so every test above rides the fallback and
+    none of them can see what reaches a pipe. `errors="replace"` is what a run
+    leaves behind — `context.routing` reconfigures the real streams so a tool's
+    stray glyph cannot crash a run — and it is why the loss was silent.
+    """
+    raw = io.BytesIO()
+    make = Console if tty else io.TextIOWrapper
+    stream = make(raw, encoding=encoding, errors="replace")
+    with contextlib.redirect_stdout(stream):
+        _app._emit_document(value, emitted(annotation)[1])
+    stream.flush()
+    return raw.getvalue()
 
 
 # --- the annotation -----------------------------------------------------------
@@ -153,6 +181,50 @@ def test_a_failed_task_emits_nothing():
 
     result = invoke(tasks, "broken")
     assert result.exit_code == 1 and result.stdout == ""
+
+
+# --- the wire: a document is UTF-8 --------------------------------------------
+
+
+def test_a_text_document_is_utf8_whatever_the_console_encoding():
+    # The document rode `sys.stdout`'s locale codec, so on a cp1252 console
+    # "café naïve — 日本語" reached the pipe as b'caf\xe9 na\xefve \x97 ???' —
+    # invalid UTF-8, the CJK gone for good, exit 0, nothing on stderr.
+    text = "café naïve — 日本語"
+    assert emitted_bytes(text, Stdout[str]) == f"{text}\n".encode()
+
+
+def test_a_json_document_is_utf8_whatever_the_console_encoding():
+    # Worse than the text case: the damage lands inside a machine payload.
+    value = {"branch": "café", "note": "日本語"}
+    payload = emitted_bytes(value, Stdout[dict[str, str]])
+    assert json.loads(payload.decode("utf-8")) == value
+
+
+def test_the_terminal_form_is_utf8_too():
+    payload = emitted_bytes("café", Stdout[str], tty=True)
+    assert payload == "café\n".encode()
+    # A human still gets the indented shape; only the encoding is pinned.
+    pretty = emitted_bytes({"branch": "café"}, Stdout[dict[str, str]], tty=True)
+    assert pretty.decode("utf-8") == '{\n  "branch": "café"\n}\n'
+
+
+def test_a_bytes_document_stays_raw():
+    # Not every document is text: a byte return goes out untouched, and the
+    # UTF-8 rule must not reach it.
+    assert emitted_bytes(b"\xff\xfe\x00raw", Stdout[bytes]) == b"\xff\xfe\x00raw"
+
+
+def test_a_captured_stdout_without_a_buffer_still_gets_the_text():
+    # The embedded-runner fallback: `Runner` redirects into a `StringIO`,
+    # which has no byte buffer to write past.
+    def tasks(reg):
+        @reg.task
+        def render() -> Stdout[str]:
+            return "café — 日本語"
+
+    result = invoke(tasks, "render")
+    assert result.stdout == "café — 日本語\n"
 
 
 # --- addressing ---------------------------------------------------------------

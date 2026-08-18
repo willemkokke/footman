@@ -312,6 +312,9 @@ The rules, all of them:
   `-> int` exit-code channel applies only to undeclared returns, so a
   counting filter is possible.
 - **A failed task emits nothing**; the exit code talks.
+- **A text or JSON document is UTF-8**, whatever the console's encoding —
+  the payload is footman's to define, so an accent or a CJK glyph reaches
+  the pipe intact. `Stdout[bytes]` is the raw channel and is untouched.
 - **Everything that is not the document goes to stderr**: a declaring
   task's prints and `run()` lines replay there, beside the summary, so
   `fm status > out.json` captures exactly the document.

@@ -14,13 +14,17 @@ from footman import _paths, context
 from footman.context import fail
 from footman.registry import task
 
+# Pure ASCII on purpose: this docstring is the first help text the new
+# tasks file renders, and a console encoding narrower than UTF-8 cannot
+# print a glyph outside its codec. A starter file plants nothing a legacy
+# terminal has to degrade.
 _SCAFFOLD = '''\
 from footman import task
 
 
 @task
 def hello(name: str = "world") -> None:
-    """Say hello — replace me with your first real task."""
+    """Say hello. Replace me with your first real task."""
     print(f"hello {name}")
 '''
 

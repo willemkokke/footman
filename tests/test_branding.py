@@ -720,6 +720,20 @@ def test_new_scaffolds_the_brands_file_and_the_scaffold_runs(tmp_path, monkeypat
     assert "hello world" in ran.stdout
 
 
+def test_the_scaffold_plants_nothing_outside_ascii(tmp_path, monkeypatch):
+    # H39: the starter file's docstring is the first help text a new user's
+    # `--list` renders, and a console encoding narrower than UTF-8 cannot
+    # print a glyph outside its codec. The scaffold stays inside ASCII so
+    # there is nothing there to degrade.
+    empty = tmp_path / "e"
+    empty.mkdir()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / ".cache"))
+    monkeypatch.chdir(empty)
+    app = App(name="acme", prog="acme", builtin=["footman.new"])
+    assert Runner(app).invoke("new").ok
+    assert (empty / "tasks.py").read_bytes().isascii()
+
+
 def test_new_mounted_in_a_project_refuses_to_overwrite(tmp_path, monkeypatch):
     # Inside a project the built-in is absent by design; the ordinary mount
     # offers it — and then a directory that already has its file is refused,
