@@ -263,6 +263,32 @@ class App:
             from footman._complete import complete_cli
 
             return complete_cli(args[1:])
+        # A process started without a stream (the caller closed the fd;
+        # pythonw) gets `None` for it, and every later touch — the
+        # scheduler's isatty, the uv handoff's flush, a body's print —
+        # becomes an AttributeError traceback. A stream nobody connected
+        # means "discard", so it is wired to devnull once, here, and the
+        # whole run downstream never has to ask.
+        import os as _os
+
+        if sys.stdout is None:
+            sys.stdout = open(_os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+        if sys.stderr is None:
+            sys.stderr = open(_os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         from footman import _app
 
-        return _app.run(args, brand=self.brand)
+        code = _app.run(args, brand=self.brand)
+        try:
+            sys.stdout.flush()
+        except BrokenPipeError:
+            # The reader hung up mid-run (`fm … | head`). Flushing here, and
+            # pointing fd 1 at devnull for the interpreter's own shutdown
+            # flush, keeps "Exception ignored while flushing sys.stdout" off
+            # the screen; the code is what a SIGPIPE-default tool reports.
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                devnull = _os.open(_os.devnull, _os.O_WRONLY)
+                _os.dup2(devnull, sys.stdout.fileno())
+            code = code or 141
+        return code

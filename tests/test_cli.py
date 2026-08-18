@@ -320,6 +320,79 @@ def test_an_explicit_tasks_file_still_wins(tmp_path, monkeypatch, capsys):
     assert "theirs" in capsys.readouterr().out
 
 
+def test_a_closed_stdout_means_discard_not_a_traceback(tmp_path):
+    # The caller closed fd 1 (supervisors and cron shells do), so Python
+    # started with `sys.stdout = None` — and the scheduler's isatty, the uv
+    # handoff's flush, and any body print became AttributeError tracebacks.
+    # A stream nobody connected means "discard": the run works, the output
+    # goes nowhere, and a failure still reaches stderr.
+    if sys.platform == "win32":
+        pytest.skip("preexec_fn is POSIX")
+    import subprocess
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n\n@task\ndef hello():\n    print('hi')\n"
+    )
+    env = {
+        **os.environ,
+        "FOOTMAN_NO_UV": "1",
+        "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache"),
+    }
+    env.pop("VIRTUAL_ENV", None)
+    proc = subprocess.run(
+        [sys.executable, "-m", "footman", "hello"],
+        cwd=tmp_path,
+        env=env,
+        stderr=subprocess.PIPE,
+        text=True,
+        preexec_fn=lambda: os.close(1),
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "AttributeError" not in proc.stderr
+    assert "Traceback" not in proc.stderr
+
+
+def test_a_reader_hanging_up_is_a_calm_cut_not_a_traceback(tmp_path):
+    # `fm chatty | head`: once the body writes past the pipe buffer after the
+    # reader closed, its next print raises EPIPE. That used to be a raw
+    # BrokenPipeError traceback plus "Exception ignored while flushing
+    # sys.stdout" — the reader saying "enough" dressed as a crash. Now: one
+    # calm reason, exit 128+SIGPIPE like any SIGPIPE-default tool, so
+    # `set -o pipefail` still sees the cut and `| head` users see no spam.
+    if sys.platform == "win32":
+        pytest.skip("pipes and SIGPIPE semantics are POSIX")
+    import subprocess
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n\n@task\ndef lines():\n"
+        "    for i in range(5000):\n"
+        "        print('line', i, 'x' * 80)\n"
+    )
+    env = {
+        **os.environ,
+        "FOOTMAN_NO_UV": "1",
+        "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache"),
+    }
+    env.pop("VIRTUAL_ENV", None)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "footman", "lines"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert proc.stdout is not None and proc.stderr is not None
+    proc.stdout.readline()  # take one line, like `head -1`
+    proc.stdout.close()  # …and hang up with >64 KiB still to come
+    assert proc.wait(timeout=30) == 141
+    err = proc.stderr.read()
+    assert "output cut short" in err
+    assert "BrokenPipeError" not in err
+    assert "Traceback" not in err
+    assert "Exception ignored" not in err
+
+
 def _ascii_stdout(monkeypatch) -> io.BytesIO:
     """Stand in for a legacy console: ascii, errors='strict', not a tty."""
     raw = io.BytesIO()

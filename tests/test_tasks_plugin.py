@@ -68,6 +68,17 @@ def test_page_all_includes_the_documenter(plugin_project, capsys):
     assert "docs.page" in capsys.readouterr().out
 
 
+def test_page_refuses_a_bad_target_by_teaching_not_traceback(plugin_project, capsys):
+    # The resolver's message already carried the menu; it just escaped as a
+    # raw ValueError. A wrong --target is a deliberate refusal, delivered as
+    # one — named flag, known names, no exception class in sight.
+    assert _app.run(["docs.page", "--target=nope"]) == 1
+    err = capsys.readouterr().err
+    assert "--target" in err
+    assert "no task or group named 'nope'" in err and "know:" in err
+    assert "ValueError" not in err and "Traceback" not in err
+
+
 def test_page_scoped_and_written_to_a_file(plugin_project, capsys):
     dest = plugin_project / "build" / "serve.md"
     line = ["docs.page", "--target=docs.serve", f"--out={dest}"]

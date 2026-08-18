@@ -2403,10 +2403,21 @@ def _run_tree(
         (r.code or 1 for r in failed if not r.cancelled and r.state != "skipped"),
         None,
     )
+
+    def carriable(code: int) -> int:
+        # This number's destiny is a process exit status, and POSIX keeps only
+        # the low byte: a task's 256 would report *success* to the shell, so
+        # `fm deploy || rollback` never rolls back. A failure the shell cannot
+        # carry collapses to 1 — the failure survives, and the real number
+        # stays on the receipt line and the `--json` row.
+        return code if 0 < code < 256 else 1
+
     if genuine is not None:
-        return genuine
+        return carriable(genuine)
     code = next((r.code or 1 for r in failed), 0)
-    return code or (1 if post_error is not None else 0)
+    if code:
+        return carriable(code)
+    return 1 if post_error is not None else 0
 
 
 def run_group(
