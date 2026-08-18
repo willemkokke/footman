@@ -15,15 +15,17 @@ a rebuild. Two rules, in order:
    there any more (background refreshes keep a visited manifest's mtime
    fresh) — collected. Manifests from before the ``cwd`` key, and anything
    in the directory footman did not write, rely on this rule alone.
-3. **The fetch room ages the same way.** ``fetch/`` holds cached downloads
-   keyed by URL — no ``cwd`` to test, so idleness is the whole rule. A cache
-   serve touches the pair's mtimes (`_fetch._touch`), so idle genuinely means
-   nothing asked in `IDLE_DAYS`, and the worst outcome of a deletion stays a
-   re-download. Downloads in flight land there too, as ``.part`` files that
-   `_fetch` renames onto the cache path when they complete. One left behind
-   by a killed process is nobody's cache — it is read by no one and can be
-   gigabytes — so it ages on `PART_DAYS`, a far shorter clock. A download
-   that is still running is writing, which keeps its own mtime fresh.
+3. **The fetch room lives by reference, and only its clocks by age.**
+   ``fetch/`` holds one small manifest per URL naming a content-addressed
+   data file. The manifest is the clock: a cache serve touches it
+   (`_fetch._touch`), so an idle one means nothing asked in `IDLE_DAYS` and
+   it goes. A live manifest pins the data file it names at any age; a data
+   file no manifest names is unreachable — fetch resolves only through
+   manifests — so it is garbage immediately, however young. ``.part``
+   files (downloads in flight, referenced by nothing yet) keep the one
+   remaining clock: a killed process's leftover ages out on `PART_DAYS`,
+   while a live download keeps its own mtime fresh by writing. The old
+   ``<key>.bin`` + ``.meta.json`` pairs age exactly as they always did.
 
 The invoking directory's own pair is never touched, and every failure is
 silent — a concurrently-reading completion child on Windows may hold a file
@@ -89,10 +91,34 @@ def collect(cache_dir: Path, skip_stem: str = "") -> int:
         if _idle(now, times_path):
             unlink(times_path)
 
-    # Rule 3, the fetch room: a body and its validator sidecar age as a
-    # pair; a sidecar whose body is already gone ages alone.
+    # Rule 3, the fetch room. The manifest is the clock and the reference:
+    # an idle manifest goes (nobody asked in IDLE_DAYS — a serve touches
+    # it), and a live one pins the data file it names. Completed data needs
+    # no clock of its own — a data file no manifest names is unreachable
+    # (fetch resolves only through manifests), so it is garbage the moment
+    # it is orphaned, however young. Only a download in flight keeps a
+    # clock, because nothing references it *yet*.
     fetch_room = cache_dir / "fetch"
+    referenced: set[str] = set()
+    for manifest in fetch_room.glob("*.json"):
+        if manifest.name.endswith(".meta.json"):
+            continue  # the old layout's sidecar, aged with its pair below
+        try:
+            data = json.loads(manifest.read_text("utf-8"))
+        except (OSError, ValueError):
+            data = None
+        data_name = data.get("data") if isinstance(data, dict) else None
+        if _idle(now, manifest):
+            unlink(manifest)
+        elif isinstance(data_name, str):
+            referenced.add(data_name)
     for body in fetch_room.glob("*.bin"):
+        if "-" in body.stem:
+            # New layout: content-addressed, reachable only via a manifest.
+            if body.name not in referenced:
+                unlink(body)
+            continue
+        # Old layout (`<key>.bin` + sidecar): the age rule it always had.
         sidecar = fetch_room / f"{body.stem}.meta.json"
         if _idle(now, body, sidecar):
             unlink(body)
