@@ -26,6 +26,7 @@ jobs:
   verify-version:
     name: tag == pyproject == __version__ == changelog
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Verify version consistency
@@ -60,6 +61,7 @@ jobs:
   build:
     needs: [checks, verify-version]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -76,6 +78,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: pypi
     permissions:
       id-token: write # required for Trusted Publishing

@@ -29,6 +29,7 @@ jobs:
   changes:
     name: changes
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -79,6 +80,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -116,6 +118,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -154,6 +157,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -226,6 +230,7 @@ jobs:
     name: coverage ≥ fail_under (merged)
     needs: [test, shells, docs]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -265,6 +270,7 @@ jobs:
     # content (task tables, the globals and config references, the recorded
     # casts), so a source change can break the build with no docs edit at all.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -318,6 +324,7 @@ jobs:
     needs: [changes, quality, test, shells, coverage, docs]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Every job passed or was skipped
         env:
