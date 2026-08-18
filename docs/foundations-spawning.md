@@ -41,8 +41,11 @@ grandchildren running.
 
 `run()` and the toolroom handles spawn with the task's world applied
 per-child, group-isolate what they spawn (so fail-fast's signal reaches the
-whole tree), and register every child so an abort can find it. Beyond its
-own calls:
+whole tree), and register every child so an abort can find it. The one
+deliberate exception is an `@task(atomic=True)` child: unregistered and not
+group-isolated, so neither fail-fast nor a stop signal delivered to footman
+can truncate the write the flag protects — it runs to completion even when
+the run ends without it. Beyond its own calls:
 
 - **Raw `subprocess` is quietly correct.** A spawn that passes neither
   `cwd=` nor `env=` gets both filled from the task's context — the child

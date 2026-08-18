@@ -42,17 +42,32 @@ projects point every task at one directory, that setup is the *common
 case*, not a corner. No detection rule fires, because each rule is checked
 at the moment of one move, and the circle only exists across both.
 
-Footman changes the ingredient instead. Serialisation is **declared on the
-task and granted at the task boundary**, before the body runs, so the
-scheduler *orders* claims instead of letting bodies contend mid-flight. A
-resource acquired only at boundaries can always be scheduled; hold-and-wait
-needs a mid-body wait, and there is none. Lineage makes the fan-out case
-safe by construction: a child of a lane holder *extends* the hold rather
-than contending with it. And the waits that remain are never silent — a
-queued task prints who holds what after a couple of seconds, because an
-invisible wait is a deadlock you haven't confirmed yet.
+Footman narrows the ingredient instead of trusting rules to compose.
+Task-level serialisation is **declared on the task and granted at the task
+boundary**, before the body runs, so the scheduler *orders* those claims
+rather than letting bodies contend mid-flight. One mid-body wait exists — a
+step's `lanes=` claim — and it is allowed to because it cannot complete the
+circle:
+
+- **All lanes at once, or none.** A step's claim is granted atomically in a
+  single check: no partial holds, so holding one lane while waiting for
+  another cannot be spelled, and the fatal composition above has no grammar
+  to be written in.
+- **Lineage extends a hold, never contends with it.** A claim from inside a
+  serial or exclusive task — whose hold already conflicts with every lane —
+  would be waiting for itself; it is exempt, and the hold extends. Fan-out
+  is safe the same way: a child of a lane holder extends the hold instead
+  of queueing behind its parent.
+- **A waiting body says so.** A body blocked on a claim counts itself as
+  parked, so the bookkeeping that decides "is everyone waiting on me?" sees
+  a wait as a wait — never as work still in flight that must be waited for
+  in turn.
+
+And the waits that remain are never silent — a queued claim prints what it
+is waiting for after a couple of seconds, because an invisible wait is a
+deadlock you haven't confirmed yet.
 
 ## The one rule
 
-**Never wait while holding; declare, don't contend — and make every
-remaining wait say its name.**
+**Declare, don't contend; when a body must wait, all-or-nothing and never
+on your own lineage — and make every remaining wait say its name.**

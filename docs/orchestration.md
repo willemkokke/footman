@@ -157,7 +157,14 @@ leaves a keep-going task's child running.
 Three escape hatches for the kill:
 
 - `@task(atomic=True)` opts a task's subprocesses out: they run to completion,
-  so a formatter rewriting a file can't be truncated mid-write.
+  so a formatter rewriting a file can't be truncated mid-write. The opt-out is
+  total on purpose: a stop signal sent to footman itself (`timeout`,
+  `docker stop`, a CI cancel) ends the run and leaves an atomic child to
+  finish on its own — it is unregistered, so nothing footman does on the way
+  out can truncate the write the flag protects. `Ctrl-C` at a terminal
+  reaches it anyway, because the kernel signals the whole foreground group
+  directly; a supervisor that must bound an atomic child does it with its
+  own escalation.
 - An `@task(interactive=True)` task owns the real terminal, so its subprocess
   stays attached to it and isn't group-isolated, so it keeps its controlling tty
   and its own `Ctrl-C`.
