@@ -762,6 +762,7 @@ def coerce_custom(value: str, element: Any) -> Any:
             # be the field's value. Untyped constructors (UUID, Decimal, a
             # user type taking a string) expose no readable fields, so they
             # keep the raw token exactly as before.
+            record: Any = element  # the call is deliberately dynamic, as below
             ftype = fields[0].type
             tags = element_tags(ftype)
             if tags:
@@ -770,8 +771,8 @@ def coerce_custom(value: str, element: Any) -> Any:
                     raise ValueError(
                         f"field {fields[0].name!r} takes {tags[0]}, got {value!r}"
                     )
-                return element(out)
-            return element(coerce_one(value, ftype))
+                return record(out)
+            return record(coerce_one(value, ftype))
         # A user constructor: its call signature is its own business (the
         # contract is "accepts a string"), so the call is deliberately dynamic.
         ctor: Any = element
