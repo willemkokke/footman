@@ -36,7 +36,7 @@ jobs:
     outputs:
       code: ${{ steps.detect.outputs.code }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - id: detect
@@ -82,15 +82,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           python-version: "3.12"
           enable-cache: true
       # --group shots: rich's types, so basedpyright can resolve the lazy
       # imports inside the `docs shots` task body.
-      - run: uv sync --frozen --group shots
+      - run: uv sync --locked --group shots
       - name: Ruff (lint)
         run: uv run ruff check .
       - name: Ruff (format)
@@ -130,15 +130,15 @@ jobs:
         # than Linux and would hide OS-specific races otherwise.
         python: ["3.11", "3.12", "3.13", "3.14", "3.14t"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
       # --group shots: rich (pure Python) so the `docs shots` render test
       # runs on every POSIX job instead of skipping.
-      - run: uv sync --frozen --group shots
+      - run: uv sync --locked --group shots
       # Each job contributes a distinctly-named data file to the merged
       # coverage gate; the per-job threshold is disabled (a single OS or
       # Python can only ever see its own branches).
@@ -146,7 +146,7 @@ jobs:
         run: uv run pytest -q --cov --cov-report= --cov-fail-under=0
         env:
           COVERAGE_FILE: .coverage.${{ matrix.os }}-py${{ matrix.python }}
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-${{ matrix.os }}-py${{ matrix.python }}
           path: .coverage.*
@@ -164,6 +164,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       NU_VERSION: "0.114.1"
+      NU_SHA256_LINUX: "8802b26edcdf1a64477567b5ce909fbae3d72d731c8f0847892ea16c6fa73c53"
+      NU_SHA256_WINDOWS: "71a88cb74f51a9fdd91003273fb1f3361d7b393fb3a03014f43e5f111df9666f"
       # Every shell this platform can drive is installed below, so the functional
       # tests must RUN, not skip — test_ci_provisions_every_testable_shell asserts
       # they are on PATH, turning a broken install into a hard failure instead of
@@ -171,9 +173,9 @@ jobs:
       # @_posix_shell-gated); macOS and Linux drive all five.
       FOOTMAN_REQUIRE_SHELLS: "1"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           python-version: "3.13"
           enable-cache: true
@@ -182,7 +184,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q zsh fish
-          curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          curl -fsSL -o nu.tar.gz "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${NU_SHA256_LINUX}  nu.tar.gz" | sha256sum -c -
+          tar xzf nu.tar.gz
           echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
 
       - name: Install shells (macOS — fish, nushell, pwsh; bash + zsh native)
@@ -199,13 +203,17 @@ jobs:
         run: |
           $url = "https://github.com/nushell/nushell/releases/download/$env:NU_VERSION/nu-$env:NU_VERSION-x86_64-pc-windows-msvc.zip"
           Invoke-WebRequest -Uri $url -OutFile nu.zip
+          $actual = (Get-FileHash -Algorithm SHA256 nu.zip).Hash.ToLower()
+          if ($actual -ne $env:NU_SHA256_WINDOWS) {
+            throw "nu.zip sha256 mismatch: $actual"
+          }
           Expand-Archive -Path nu.zip -DestinationPath nu-bin
           $dir = (Get-ChildItem -Path nu-bin -Recurse -Filter nu.exe | Select-Object -First 1).DirectoryName
           Add-Content -Path $env:GITHUB_PATH -Value $dir
 
       # --group shots: rich + pyte, so the animated-cast test drives a real
       # zsh here alongside the completion hooks.
-      - run: uv sync --frozen --group shots
+      - run: uv sync --locked --group shots
       # -rs reports any skip; the FOOTMAN_REQUIRE_SHELLS guard test fails the run
       # if a shell this platform should drive is missing. These runs drive
       # _complete/_shellcomp through real shells — branches the plain suite
@@ -216,7 +224,7 @@ jobs:
           --cov --cov-report= --cov-fail-under=0
         env:
           COVERAGE_FILE: .coverage.shells-${{ matrix.os }}
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-shells-${{ matrix.os }}
           path: .coverage.*
@@ -232,14 +240,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           python-version: "3.13"
           enable-cache: true
-      - run: uv sync --frozen
-      - uses: actions/download-artifact@v8
+      - run: uv sync --locked
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: coverage-*
           merge-multiple: true
@@ -251,7 +259,7 @@ jobs:
       # slice: render it here, hand it to the docs builds as an artifact.
       - name: Render merged HTML report
         run: uv run coverage html -d htmlcov
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-html
           path: htmlcov
@@ -272,21 +280,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --frozen --group dev --group docs
+      - run: uv sync --locked --group dev --group docs
       # The docs build records completion casts in every shell — install
       # the ones the runner lacks (bash + pwsh are preinstalled).
       - name: Install shells (for the completion casts)
         env:
           NU_VERSION: "0.114.1"
+          NU_SHA256_LINUX: "8802b26edcdf1a64477567b5ce909fbae3d72d731c8f0847892ea16c6fa73c53"
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q zsh fish
-          curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          curl -fsSL -o nu.tar.gz "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${NU_SHA256_LINUX}  nu.tar.gz" | sha256sum -c -
+          tar xzf nu.tar.gz
           echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
       # This job validates that the site *builds*; its output is never
       # published (the Pages deploy fetches the real merged report), so the
@@ -307,7 +318,7 @@ jobs:
           # arms coverage in those children so the completion hot path is
           # measured as the shells actually invoke it.
           COVERAGE_PROCESS_START: pyproject.toml
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-docs-build
           path: .coverage.*
