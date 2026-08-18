@@ -677,6 +677,31 @@ def test_stdin_read_is_a_taught_error_in_a_parallel_task():
     assert "ask()" in str(results[0].error)
 
 
+def test_every_stdin_door_is_guarded_not_just_input():
+    # `input()` reaches the guard through `readline`; `read`, `readlines`
+    # and iteration are their own doors, and any of them deleted from
+    # `_GuardedStdin` left the suite green (audit, suite pass) — a parallel
+    # task could then consume the one terminal through the unguarded door.
+    def build(reader):
+        def tasks(reg):
+            @reg.task
+            def go():
+                reader()
+
+        return tasks
+
+    doors = {
+        "read": lambda: sys.stdin.read(),
+        "readline": lambda: sys.stdin.readline(),
+        "readlines": lambda: sys.stdin.readlines(),
+        "iter": lambda: next(iter(sys.stdin)),
+    }
+    for name, reader in doors.items():
+        results = drive(build(reader), "go")
+        assert not results[0].ok, f"{name} went unguarded"
+        assert "ask()" in str(results[0].error), name
+
+
 def test_stdin_passes_through_for_an_interactive_task(monkeypatch):
     import io as _io
 
@@ -961,6 +986,38 @@ def test_argv_override_mutations_stay_in_the_view(monkeypatch):
             _s.argv.append("three")
             assert list(_s.argv) == ["one", "two", "three"]
         assert list(_globals._argv_saved) == real_before  # the real argv untouched
+    finally:
+        _globals.uninstall()
+
+
+def test_every_argv_mutation_stays_in_the_view():
+    # The proxy overrides every Python-level list operation, and several
+    # could be deleted with the suite staying green (audit, suite pass) —
+    # a legacy main using exactly that operation would then mutate the
+    # process's real argv from inside its private view.
+    import sys as _s
+
+    _globals.install()
+    try:
+        base_before = list(_s.argv)
+        with _globals.argv_override(["tool", "one", "two"]):
+            _s.argv[1] = "ONE"  # __setitem__
+            assert list(_s.argv) == ["tool", "ONE", "two"]
+            del _s.argv[2]  # __delitem__
+            assert list(_s.argv) == ["tool", "ONE"]
+            _s.argv.extend(["x", "y"])  # extend
+            _s.argv.insert(1, "zero")  # insert
+            assert list(_s.argv) == ["tool", "zero", "ONE", "x", "y"]
+            assert "zero" in _s.argv  # __contains__
+            assert _s.argv == ["tool", "zero", "ONE", "x", "y"]  # __eq__
+            # Concatenation on purpose: `+` IS `__add__`, the operation
+            # under test — a splat would test nothing.
+            added = _s.argv + ["tail"]  # noqa: RUF005
+            assert added == ["tool", "zero", "ONE", "x", "y", "tail"]
+            assert "zero" in repr(_s.argv)  # __repr__ shows the view
+            _s.argv.clear()  # clear
+            assert len(_s.argv) == 0
+        assert list(_s.argv) == base_before  # the base never moved
     finally:
         _globals.uninstall()
 
