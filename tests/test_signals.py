@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import signal
@@ -192,6 +193,76 @@ def test_sigterm_reaps_the_child_a_task_was_waiting_on(tmp_path):
     finally:
         if runner.poll() is None:  # pragma: no cover - only on a regression
             runner.kill()
+
+
+def test_an_interrupt_reaps_the_scheduler_pools_children(tmp_path):
+    """The parallel scheduler's own abort reap, exercised at last.
+
+    Deleting `_run_parallel`'s except-BaseException block left the whole
+    suite green (measured by mutation) while a real Ctrl-C would wait out
+    every child in flight: the workers sit in communicate() on
+    group-isolated children the terminal's signal never reaches, so only
+    the scheduler's reap can end them. Two scheduler nodes in flight, so
+    the abort lands in the pool's handler; signalled by pid alone, so the
+    children owe their deaths to the reap and nothing else.
+    """
+    if sys.platform == "win32":
+        pytest.skip("POSIX signals")
+
+    pid_a, pid_b = tmp_path / "a.pid", tmp_path / "b.pid"
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(f"""
+        import sys
+        from footman import run, task
+
+        def _spawn(pidfile):
+            run([sys.executable, "-c",
+                 "import os, time, sys;"
+                 "open(sys.argv[1], 'w').write(str(os.getpid()));"
+                 "time.sleep(120)", pidfile])
+
+        @task
+        def a():
+            _spawn({str(pid_a)!r})
+
+        @task
+        def b():
+            _spawn({str(pid_b)!r})
+        """)
+    )
+    runner = _runner(tmp_path, "a", "b", stderr=subprocess.PIPE)
+    try:
+        _await(
+            lambda: all(p.exists() and p.read_text().strip() for p in (pid_a, pid_b)),
+            "both children started",
+        )
+        children = [int(p.read_text()) for p in (pid_a, pid_b)]
+        os.kill(runner.pid, signal.SIGINT)  # Ctrl-C, to the pid alone
+        assert runner.wait(timeout=30) == 130
+
+        gone_by = time.time() + 15
+        still = list(children)
+        while time.time() < gone_by:
+            still = [pid for pid in children if _alive(pid)]
+            if not still:
+                break
+            time.sleep(0.05)
+        else:
+            for pid in children:  # do not leak them into the suite
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(pid, signal.SIGKILL)
+            pytest.fail(f"children outlived the interrupt: {still}")
+    finally:
+        if runner.poll() is None:  # pragma: no cover - only on a regression
+            runner.kill()
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
 
 
 def test_sigterm_spares_an_atomic_child(tmp_path):

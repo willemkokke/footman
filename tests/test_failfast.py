@@ -382,9 +382,16 @@ def test_fail_fast_kills_grandchildren_not_just_the_direct_child(tmp_path):
 
         @reg.task
         def boom():
-            for _ in range(200):  # let slow's grandchild come fully up first,
-                if pidfile.exists():  # so the kill targets an established tree
-                    break
+            # Wait for the pid *content*, not the file: creation and write
+            # are two steps, and failing fast between them killed the tree
+            # mid-write — the bottom poll then read an empty file forever
+            # (seen on a slow CI runner). Generous ceiling on purpose: the
+            # grandchild sleeps 30 s, so waiting up to that is free, and a
+            # loaded runner spawning python slowly is not a failure.
+            deadline = time.time() + 30
+            while time.time() < deadline:
+                if pidfile.exists() and pidfile.read_text().strip():
+                    break  # the kill targets an established, recorded tree
                 time.sleep(0.02)
             raise SystemExit(1)  # then fail fast → slow's whole tree is killed
 
