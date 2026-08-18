@@ -19,6 +19,17 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **`fetch()`'s curl child no longer draws the "prefer `run()`" note.** In a
+  managed parallel task the Popen injector attributed footman's own spawn to
+  the task — advice to prefer `run()` aimed at a body that never spawned
+  anything, and quite possibly one using `run()` everywhere else. Notes are
+  teach-once per task and kind, so the false one also swallowed the note a
+  real raw spawn in the same task would have earned. The spawn is marked as
+  footman's own now, with `cwd` and the environment passed explicitly:
+  every path on curl's command line was already absolute, and the env is
+  snapshotted through the router first, so a managed task's curl keeps
+  seeing the same proxy variables the urllib backend reads in-process — the
+  injector's work, done by hand, minus the misattribution.
 - **A yielding task body is refused, not reported ok.** `@task` on a
   generator function printed `ok (0.0s)` having run nothing: calling a
   generator function only builds the generator, and nothing ever pumped it.

@@ -356,6 +356,25 @@ def test_curl_backend_downloads(server):
     assert path.read_bytes() == BODY
 
 
+@pytest.mark.skipif(_fetch.shutil.which("curl") is None, reason="curl is not on PATH")
+def test_curl_is_footmans_own_spawn_and_draws_no_note(server, capfd):
+    # The curl child is footman working on the body's behalf. With the Popen
+    # injector armed (a managed parallel task), it used to be attributed to
+    # the task — "spawns via raw subprocess — prefer run()" told a fetch()
+    # caller to prefer what they never left, and notes are teach-once per
+    # task and kind, so the false one swallowed any real one to come.
+    from footman import _globals
+
+    _globals.install()
+    try:
+        with use_context(Context(in_task=True)):
+            path = _fetch.fetch(server, backend="curl")
+    finally:
+        _globals.uninstall()
+    assert path.read_bytes() == BODY
+    assert "raw subprocess" not in capfd.readouterr().err  # nothing to teach
+
+
 def test_curl_reads_the_last_response_in_the_dump():
     """A redirect or a retry appends another block; only the last one
     describes the bytes that landed in the file."""

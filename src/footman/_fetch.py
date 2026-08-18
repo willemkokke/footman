@@ -219,12 +219,27 @@ def _download_curl(
 ) -> tuple[bool, dict[str, Any]]:
     import subprocess
 
+    from footman import _globals
+
     dump = _scratch(dest, suffix=".headers.part")
     argv = ["curl", "-fsSL", "--retry", "2", "-D", str(dump), "-o", str(dest), url]
     for header, value in _conditional_headers(meta).items():
         argv += ["-H", f"{header}: {value}"]
+    # This spawn is footman working on the body's behalf, so the Popen
+    # injector must not attribute it to the task — the "prefer run()" note is
+    # teach-once, and spending it here swallows the note a real raw spawn in
+    # the same task would have earned. `internal()` stands the injector down;
+    # cwd and env are passed explicitly so nothing changes with it gone:
+    # every path on the command line is absolute (cwd is unobservable, pinned
+    # to the cache directory anyway), and the environment is snapshotted
+    # through the router *before* entering `internal()`, so a managed task's
+    # curl sees the same proxy variables the urllib backend reads in-process.
+    env = dict(os.environ)
     try:
-        done = subprocess.run(argv, capture_output=True, text=True)
+        with _globals.internal():
+            done = subprocess.run(
+                argv, capture_output=True, text=True, cwd=dest.parent, env=env
+            )
         if done.returncode != 0:
             # Exit 18 lives here too: curl counts the body against
             # Content-Length itself and calls a short one a failure.
