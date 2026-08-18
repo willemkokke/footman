@@ -19,6 +19,27 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A sibling package leaves with its whole subtree.** The cascade's
+  per-file isolation evicted a sibling package's `__init__` but not its
+  submodules, so a nested tasks file's `import pkg.sub` re-imported `pkg`
+  fresh from its own directory and then took the *stale* `pkg.sub` out of
+  `sys.modules` — the other cascade level's copy, wearing the new package.
+  Eviction is name-prefixed now: `pkg.*` leaves with `pkg`. Plain sibling
+  modules and deeper installed packages behave exactly as before.
+- **A project's `tasks` key renames the project's file, and stops there.**
+  It used to steer the user-level rung too, so any project with a renamed
+  tasks file made the walk look for a personal file the user never wrote —
+  and the personal-tasks rung silently vanished. The user rung's name now
+  comes from the user's own writing (the user-level config, which may
+  legitimately rename it) or the brand default; an explicit `--config`
+  stays total control over both.
+- **A one-field record reads its field's declared type.** The `T(value)`
+  spelling handed the whole raw token to the constructor, and a dataclass
+  constructor validates nothing — `n: int` silently received the string
+  `'abc'`, and even `'5'` arrived as a string. The token now coerces to the
+  field's declared type first, refusing bad values with the field named;
+  untyped constructors (`UUID`, `Decimal`, a user type that takes a string)
+  expose no readable fields and keep the raw token exactly as before.
 - **A branded CLI's script handoff re-enters the brand, not stock `fm`.**
   Handing an invocation to a tasks file's PEP 723 script environment
   re-exec'd `python -m footman` — the stock runner — so a branded child
