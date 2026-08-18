@@ -19,6 +19,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Import-time chatter is never served as a completion candidate.** The
+  dynamic-completer child's stdout is the candidate channel, and computing
+  candidates starts by importing the tasks file — so a `print()` at module
+  scope, in the tasks file or any module it pulls in, reached the shell as
+  a completion the user could insert. The whole computation now runs muted,
+  the policy the completer body already had applied to the import that
+  precedes it, and only the finished candidates touch the real stream.
 - **`fetch()`'s curl child no longer draws the "prefer `run()`" note.** In a
   managed parallel task the Popen injector attributed footman's own spawn to
   the task — advice to prefer `run()` aimed at a body that never spawned
