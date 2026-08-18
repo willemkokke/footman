@@ -644,6 +644,22 @@ def test_suggest_values_runs_the_completer_fresh(tmp_path, monkeypatch):
     assert _suggest._values("target", ["ghost"], {}) == []
 
 
+def test_import_time_chatter_is_not_served_as_candidates(tmp_path, monkeypatch, capsys):
+    # The child's stdout IS the candidate channel, and importing the tasks
+    # file happens before candidates are written — a print() at module scope
+    # used to reach the shell as a completion the user could insert.
+    from footman import _suggest
+
+    proj = _dynamic_project(tmp_path)
+    (proj / "tasks.py").write_text(
+        "print('loading config...')\n" + (proj / "tasks.py").read_text()
+    )
+    monkeypatch.chdir(proj)
+    (proj / "targets.txt").write_text("gamma\ndelta\n")
+    assert _suggest.main(["--param", "target", "--path", "deploy"]) == 0
+    assert capsys.readouterr().out == "gamma\ndelta\n"  # candidates, no chatter
+
+
 def test_suggest_main_swallows_a_failing_completer(tmp_path, monkeypatch, capsys):
     from footman import _suggest
 

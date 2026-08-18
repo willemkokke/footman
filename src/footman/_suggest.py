@@ -143,17 +143,31 @@ def main(argv: list[str]) -> int:
             i += 2 + count
         else:
             i += 1
+    real = sys.stdout
     try:
-        if globopt is not None:
-            values = _global_values(globopt, g)
-        elif param is not None:
-            values = _values(param, path, g)
-        else:
-            return 0
+        # This process's stdout IS the candidate channel, and the calls below
+        # import the user's code before any candidate is written — so a tasks
+        # file that prints at import time (or a plugin imported alongside it)
+        # would have its chatter served to the shell as completions. Muted
+        # for the whole computation — the policy `_fresh` already applies to
+        # the completer body, applied to the import that precedes it — and
+        # only the finished candidates touch the real stream. The re-exec a
+        # script file may trigger in there is unaffected: the redirect
+        # rebinds `sys.stdout`, never fd 1, and exec replaces the process.
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            if globopt is not None:
+                values = _global_values(globopt, g)
+            elif param is not None:
+                values = _values(param, path, g)
+            else:
+                return 0
     except Exception:
         return 0  # any failure → no candidates; the hot path falls back to empty
     if values:
-        sys.stdout.write("\n".join(values) + "\n")
+        real.write("\n".join(values) + "\n")
     return 0
 
 
