@@ -143,6 +143,16 @@ def stitch(blocks: list[Block]) -> str:
 PAGES = [p for p in _handwritten_docs() if "```python" in p.read_text(encoding="utf-8")]
 
 
+def test_the_example_collections_are_not_empty():
+    # Six parametrized cases loop over these collections; empty, every one
+    # of them evaporates into silent green (audit, suite pass) — a moved
+    # docs/ directory or a broken glob would read as "all examples pass".
+    # The floors are deliberately far below reality (a fifty-page site,
+    # twenty-odd with runnable python), so only a collapse trips them.
+    assert len(_handwritten_docs()) >= 30
+    assert len(PAGES) >= 10
+
+
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
 def test_page_examples_run(page: Path):
     """Execute the page's blocks in order, one namespace per session."""

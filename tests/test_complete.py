@@ -684,6 +684,37 @@ def test_suggest_values_runs_the_completer_fresh(tmp_path, monkeypatch):
     assert _suggest._values("target", ["ghost"], {}) == []
 
 
+def test_the_dynamic_child_protocol_holds_from_both_sides(
+    tmp_path, monkeypatch, capsys
+):
+    # Audit M100: the argv the hot path builds and the flags the child
+    # parses were each tested alone — renaming a flag on either side left
+    # the whole suite green while every dynamic TAB quietly returned
+    # nothing. Here the child parses exactly the argv the parent built.
+    from footman import _complete, _suggest
+
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+    (proj / "targets.txt").write_text("gamma\ndelta\n")
+
+    captured: dict[str, list[str]] = {}
+
+    class _Done:
+        returncode = 0
+        stdout = ""
+
+    def capture_run(cmd, **kw):
+        captured["argv"] = list(cmd)
+        return _Done()
+
+    monkeypatch.setattr(_complete.subprocess, "run", capture_run)
+    _complete._fresh_dynamic("target", ["deploy"], ["deploy", "--target="])
+    argv = captured["argv"]
+    assert argv[1:4] == ["-P", "-m", "footman._suggest"]  # the spawn contract
+    assert _suggest.main(argv[4:]) == 0  # the child reads the parent's words
+    assert capsys.readouterr().out.splitlines() == ["gamma", "delta"]
+
+
 def test_import_time_chatter_is_not_served_as_candidates(tmp_path, monkeypatch, capsys):
     # The child's stdout IS the candidate channel, and importing the tasks
     # file happens before candidates are written — a print() at module scope

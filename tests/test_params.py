@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import enum
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
@@ -78,6 +79,11 @@ class Spot:
 @dataclass
 class Port:
     n: int
+
+
+class Colour(enum.Enum):
+    RED = "red"
+    BLUE = "blue"
 
 
 def run(build, line):
@@ -1121,6 +1127,27 @@ def test_an_untyped_constructor_is_not_a_grouped_shape():
     run(tasks, "ident --u=12345678-1234-5678-1234-567812345678 --amount=1.50")
     assert seen["u"] == uuid.UUID("12345678-1234-5678-1234-567812345678")
     assert seen["amount"] == Decimal("1.50")
+
+
+def test_an_enum_options_two_spellings_pinned_as_they_are():
+    # Audit M104, pinned as measured. The channels genuinely disagree about
+    # a member's NAME: the payload channel binds "BLUE" (test_binder), and
+    # `coerce_one` would too — but the eager splitter refuses it at the
+    # gate, choices being baked as *values*. Whether the CLI should accept
+    # names is an open grammar ruling; until it is made, this test keeps
+    # the current line exactly where it is, so the seam cannot MOVE
+    # silently in either direction.
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def grade(level: Colour = Colour.RED):
+            seen["level"] = level
+
+    run(tasks, "grade --level=blue")  # the member's VALUE: the CLI spelling
+    assert seen["level"] is Colour.BLUE
+    with pytest.raises(ChainError, match=r"must be one of red\|blue.*'BLUE'"):
+        run(tasks, "grade --level=BLUE")  # the NAME: refused at the gate
 
 
 def test_a_one_field_record_reads_its_fields_declared_type():

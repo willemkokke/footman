@@ -256,6 +256,50 @@ def test_systemexit_int_code_stays_bare(project, capsys):
     assert "SystemExit" not in err
 
 
+def test_a_raising_strict_completer_is_a_taught_cli_refusal(tmp_path):
+    # Audit M96: the CLI's refusal for a strict completer that raises had
+    # no CLI-level test — it could regress to a raw traceback (or refuse
+    # every other task again, the pre-fix behaviour) with the suite green.
+    import textwrap
+
+    from footman.testing import Runner
+
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from typing import Annotated
+
+            from footman import task
+            from footman.params import suggest
+
+            def boom():
+                raise RuntimeError("registry down")
+
+            @task
+            def deploy(target: Annotated[str, suggest(boom, strict=True)] = ""):
+                "Deploy."
+
+            @task
+            def unrelated():
+                print("fine")
+            """
+        )
+    )
+    result = Runner().invoke("deploy --target=x", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert "dynamic choices from boom() failed" in result.stderr
+    assert "strict=False" in result.stderr  # the way out, named
+    assert "Traceback" not in result.stderr
+    # A broken completer on one task refuses only that task's invocation.
+    ok = Runner().invoke("unrelated", cwd=tmp_path)
+    assert ok.ok and "fine" in ok.stdout
+    # And the --json door keeps its envelope on the same refusal.
+    enveloped = Runner().invoke("--json deploy --target=x", cwd=tmp_path)
+    assert enveloped.exit_code == EX_USAGE
+    payload = json.loads(enveloped.stdout)
+    assert "dynamic choices" in payload["error"]["message"]
+
+
 def test_a_code_the_shell_cannot_carry_still_fails(tmp_path):
     # POSIX keeps only the low byte of an exit status: a task returning 256
     # printed FAIL and exited 0 — `fm deploy || rollback` never rolled back.
