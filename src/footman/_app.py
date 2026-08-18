@@ -1771,7 +1771,23 @@ def _script_handoff(argv: list[str], g: dict[str, object], probe: Path) -> int |
     if found.returncode != 0 or not python:
         return None
     os.environ[_paths.env_var("UV_REEXEC")] = "1"
-    _reexec([python, "-m", "footman", *argv])
+    if _brand.dist == "footman":
+        _reexec([python, "-m", "footman", *argv])
+    else:
+        # `-m footman` is the *stock* CLI, so a branded child re-ran this
+        # handoff — its belt variable above is scoped to the brand, so the
+        # one just set didn't count — and then refused, because the script
+        # declares the brand's dist and not 'footman'. The brand's door in
+        # the script environment is its own console script; loading the
+        # entry point by name runs exactly what that script runs, on any
+        # platform, without guessing at the environment's bin layout.
+        shim = (
+            "import sys;"
+            "from importlib.metadata import entry_points;"
+            f"[ep] = entry_points(group='console_scripts', name={_brand.prog!r});"
+            "sys.exit(ep.load()())"
+        )
+        _reexec([python, "-c", shim, *argv])
     return None  # unreachable: _reexec replaces or exits this process
 
 
