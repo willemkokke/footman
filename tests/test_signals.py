@@ -375,14 +375,23 @@ def test_the_timer_dumps_where_there_is_no_key_to_press(tmp_path):
             tmp_path, "wait", stderr=sink, env={"FOOTMAN_STACKS_AFTER": "0.25"}
         )
         try:
-            # Wait for a dump that names the task's own frame, not merely for
-            # the first dump. The timer is armed at startup and repeats, so on
-            # a runner slower than the interval the first one fires while the
-            # interpreter is still in `runpy` and names nothing useful — which
-            # is not a failure, it is the timer doing its job before there was
-            # anything to see. The task blocks until released below, so dumps
-            # keep coming until one lands inside it. (Free-threaded Windows
-            # found this: 250 ms is less than its startup.)
+            # Two waits, two clocks. Startup first, on the task's own
+            # `ready` file and a generous window: a loaded CI runner can
+            # spend most of a minute just reaching the body, and that is
+            # slowness, not a dump that failed to land (a macOS runner
+            # proved it by spending the whole old window starting up).
+            _await(
+                ready.exists,
+                "the task started",
+                seconds=60,
+                saw=err_file.read_text,
+            )
+            # Then the dump that names the task's own frame, not merely the
+            # first dump — the timer arms at startup and repeats, so early
+            # ones fire inside `runpy` and name nothing useful. With the
+            # body provably running and the timer repeating every 250 ms,
+            # this clock is fair. (Free-threaded Windows found the
+            # first-dump trap: 250 ms is less than its startup.)
             _await(
                 lambda: "in wait" in err_file.read_text(),
                 "a dump naming the task's own frame",

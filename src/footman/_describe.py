@@ -979,16 +979,23 @@ def user_traceback(exc: BaseException) -> str:
     return f"Traceback (most recent call last):\n{body}{tail}"
 
 
-def global_default_suffix(name: str, *, code: bool = False) -> str:
+def global_default_suffix(name: str, *, code: bool = False, live: bool = True) -> str:
     """The `; default: …` tail a global's help line carries — one composition
     for `--help` and the docs table, so the two spellings cannot drift.
     Empty when there is nothing to print: no default at all, or a bare
     reading with no spelling of its own. *code* wraps the value in backticks
-    for a markdown cell."""
+    for a markdown cell. *live* resolves a computed default on this machine
+    — right at a terminal, wrong on a page that outlives it: the docs
+    exporter passes False and gets the symbolic phrase instead, so the
+    published reference stops baking in the build runner's core count."""
     from footman import _split
 
-    shown, computed = _split.global_default(name)
+    shown, computed = _split.global_default(name, resolved=live)
     if not shown:
         return ""
+    if computed and not live:
+        # The phrase is prose, never a copyable value: no backticks, and
+        # "(computed)" would be redundant under a description of how.
+        return f"; default: {shown}"
     value = f"`{shown}`" if code else str(shown)
     return f"; default: {value}{' (computed)' if computed else ''}"

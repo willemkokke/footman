@@ -500,6 +500,7 @@ def _pty_session(
     cwd: Path | None = None,
     answer_cursor: bool = True,
     key_log: list[tuple[float, str]] | None = None,
+    steady: float = 1.0,
 ) -> list[tuple[float, bytes]]:
     """Run *argv* on a pty, play the keystroke script, and record
     (elapsed-seconds, bytes) chunks until output has settled."""
@@ -570,7 +571,14 @@ def _pty_session(
     # event has not been marked yet.
     awaiting: str | None = None
     awaiting_since = start
-    awaiting_bound = _SNAP_IDLE
+    # `steady` widens the quiet-detection windows without touching the hard
+    # caps: on a loaded machine "output went quiet" is often the shell being
+    # CPU-starved mid-redraw, and a key sent into that gap types into a menu
+    # that has not opened yet — the interaction diverges and the beats never
+    # render at all. Slower judgement, same script.
+    snap_gap = _SNAP_GAP * steady
+    settle_gap = _SETTLE_GAP * steady
+    awaiting_bound = _SNAP_IDLE * steady
     awaiting_screen: tuple[str, ...] = ()
     try:
         while True:
@@ -590,7 +598,7 @@ def _pty_session(
             # prompt with nothing completed on it.
             answered = tuple(tracker.display) != awaiting_screen
             if awaiting is not None and (
-                (answered and now - last_output >= _SNAP_GAP)
+                (answered and now - last_output >= snap_gap)
                 or (not answered and now - awaiting_since >= awaiting_bound)
                 or now - awaiting_since >= _SETTLE_MAX
             ):
@@ -614,7 +622,7 @@ def _pty_session(
                     # one that ends at column 0 — can't hang the cast; next_at
                     # holds when the step became due, so the cap counts there.
                     ready = (
-                        now - last_output >= _SETTLE_GAP and tracker.cursor.x > 0
+                        now - last_output >= settle_gap and tracker.cursor.x > 0
                     ) or now - next_at >= _SETTLE_MAX
                 else:
                     # Before the *first* key, a prompt has to be on the line —
@@ -655,7 +663,7 @@ def _pty_session(
                         # character either echoes at once or never will, and
                         # waiting on it only makes every recording slower.
                         awaiting_bound = (
-                            _SETTLE_MAX if step.data == b"\t" else _SNAP_IDLE
+                            _SETTLE_MAX if step.data == b"\t" else _SNAP_IDLE * steady
                         )
                         continue
                     if queue:
@@ -1150,6 +1158,11 @@ def cast(
     pace: Annotated[
         float, between(0.2, 5.0), doc("seconds each keypress stays on screen")
     ] = 1.2,
+    steady: Annotated[
+        float,
+        between(1.0, 5.0),
+        doc("scale the quiet-detection windows; raise on a loaded machine"),
+    ] = 1.0,
 ) -> list[str]:
     """Record an animated SVG of a real interactive shell session.
 
@@ -1194,6 +1207,7 @@ def cast(
                 # nothing can flash. Every other shell self-renders.
                 keep_echo=shell == "bash",
                 cwd=cwd,
+                steady=steady,
                 answer_cursor=shell in _NEEDS_CURSOR_REPLY,
             )
             frames = _event_screens(chunks, key_log, width=width, height=height)

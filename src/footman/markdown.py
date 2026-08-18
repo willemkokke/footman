@@ -84,7 +84,7 @@ def globals_table(*, prog: str = "fm") -> str:
         # thing while `--help` says another — the drift that hand-written
         # "(default: …)" prose in a help string always ended in. The suffix
         # is composed once, shared with `--help` itself.
-        effect += _describe.global_default_suffix(name, code=True)
+        effect += _describe.global_default_suffix(name, code=True, live=False)
         rows.append((label, _cell(effect)))
     width = max(len(label) for label, _ in rows)
     lines = [

@@ -485,6 +485,20 @@ _GLOBAL_HINT = {name: hint for name, _, _, hint, _, _ in GLOBALS if hint}
 # no default task, so a word behind it is taught rather than quietly becoming
 # the task to run. The bracketed metavar is help notation now, not the rule.
 _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
+
+# What a *computed* default is, in words — for surfaces that outlive the
+# machine they were rendered on. `--help` resolves the value live, which is
+# exactly right at a terminal: the reader is on the machine the number
+# answers for. A docs build is not: it baked `3` and `never` (the build
+# runner's core count, and CI's NO_COLOR) into the published reference,
+# machine-specific answers dressed as the product's. Keyed beside the one
+# grammar table so a new computed default cannot ship without its phrase —
+# `global_default` refuses a computed name missing here when asked to speak
+# symbolically.
+_COMPUTED_PHRASE = {
+    "--jobs": "the machine's cores minus one, never below 2",
+    "--color": "auto (or what NO_COLOR/FORCE_COLOR says)",
+}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
 # Flag -> entry point, for globals that *would* exist had their provider been
@@ -567,7 +581,7 @@ def _own_plugin_flags() -> dict[str, str]:
     return found
 
 
-def global_default(name: str) -> tuple[Any, bool]:
+def global_default(name: str, *, resolved: bool = True) -> tuple[Any, bool]:
     """A global's default **value**, and whether it was computed — resolved
     *now*, so a computed one answers for this machine rather than whichever one
     last wrote a manifest.
@@ -591,6 +605,14 @@ def global_default(name: str) -> tuple[Any, bool]:
     # callable at all" and cannot be called safely.
     if isinstance(value, str):
         return value, False
+    if not resolved:
+        # The symbolic reading, for pages that outlive this machine: the
+        # docs exporter must not bake the build runner's core count into
+        # the published reference. Refusing an unphrased computed default
+        # keeps the phrase table complete by construction.
+        if name not in _COMPUTED_PHRASE:
+            raise KeyError(f"computed default {name!r} has no symbolic phrase")
+        return _COMPUTED_PHRASE[name], True
     return value(), True
 
 
