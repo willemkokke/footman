@@ -35,6 +35,15 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A broken annotation is an advisory line, not a Python `UserWarning`.**
+  A mis-spelled marker, an unresolvable annotation, or a docstring
+  documenting a parameter that does not exist printed as
+  `…/site-packages/footman/_manifest.py:416: UserWarning:` with footman's
+  own source line quoted underneath — the framework's internals above
+  every `--help` and `--list`, pointing away from the user's file the
+  message already names. The message was always the whole story; it now
+  prints as one clean line on stderr, once per message, like every other
+  advisory footman writes.
 - **A sibling package leaves with its whole subtree.** The cascade's
   per-file isolation evicted a sibling package's `__init__` but not its
   submodules, so a nested tasks file's `import pkg.sub` re-imported `pkg`
