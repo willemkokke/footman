@@ -19,6 +19,20 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A branded CLI's script handoff re-enters the brand, not stock `fm`.**
+  Handing an invocation to a tasks file's PEP 723 script environment
+  re-exec'd `python -m footman` — the stock runner — so a branded child
+  re-ran the handoff as the wrong brand and died on the mismatch refusal:
+  the loop belt is brand-scoped, and the script block declares the brand's
+  dist, not `footman`. The documented `dist=` handoff was broken for every
+  brand. A brand now re-enters through its own console script's entry
+  point, loaded by name inside the script environment; stock keeps the
+  proven `-m footman`.
+- **A provider mounted twice contributes its lifecycle once.** `include()`
+  of one provider at two addresses registered its `@pre_tasks`/`@post_tasks`
+  hooks once per mount — so they ran twice per run, silently, side effects
+  and all. The tree mounts twice; the contribution now contributes once,
+  deduplicated by identity at the mount engine.
 - **A reader hanging up is a calm cut, not a crash.** `fm chatty | head`:
   once the body wrote past the pipe buffer after `head` exited, the next
   print raised EPIPE and footman dressed the reader's "enough" as a crash —
