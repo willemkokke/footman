@@ -365,6 +365,29 @@ def test_the_user_tasks_file_answers_where_a_project_has_none(tmp_path, monkeypa
     assert "ship" in out
 
 
+def test_a_projects_tasks_key_cannot_rename_the_users_own_file(tmp_path, monkeypatch):
+    # The `tasks` key renames the *project's* file and stops there. It used
+    # to steer the user rung too, so any project with a renamed tasks file
+    # made the walk look for a personal file the user never wrote — and the
+    # personal rung silently vanished.
+    cfg = tmp_path / "cfg"
+    (cfg / "acme").mkdir(parents=True)
+    (cfg / "acme" / "tasks.py").write_text(TASKS)  # the user's own, default name
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[project]\nname = "p"\n\n[tool.acme]\ntasks = "chores.py"\n'
+    )
+    (project / "chores.py").write_text(
+        'from footman import task\n\n\n@task\ndef sweep():\n    "Sweep."\n'
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
+    monkeypatch.chdir(project)
+    out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
+    assert "sweep" in out  # the project's renamed file answers…
+    assert "ship" in out  # …and the personal rung still rides along
+
+
 def test_config_dir_moves_the_users_writing_together(tmp_path, monkeypatch):
     # `ACME_CONFIG_DIR` relocates the brand's config corner — config file and
     # user tasks file travel together. The narrow, brand-scoped alternative

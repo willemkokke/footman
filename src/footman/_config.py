@@ -344,6 +344,21 @@ def sort_listing(cfg: dict[str, Any]) -> bool:
     return raw
 
 
+def user_level_value(key: str) -> Any:
+    """One key from the user-level file alone, or None.
+
+    For the settings whose meaning must not be steered by a nearer file:
+    the user tasks file's *name* is the user's own writing, so a project's
+    `tasks` key — which renames the project's file — must not reach into
+    the user's home and silently drop the personal rung by looking for a
+    file the user never wrote.
+    """
+    try:
+        return _footman_table(_paths.footman_config_file()).get(key)
+    except ConfigError:
+        return None  # the load_config walk warns about it; quiet here
+
+
 def load_config(
     cwd: Path,
     ceiling: Path,

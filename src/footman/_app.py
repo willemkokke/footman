@@ -235,7 +235,20 @@ def resolve_task_files(
     name = filename if isinstance(filename, str) else _brand.tasks_file
     files = _paths.task_files(cwd, ceiling, name)
     root = str(files[0].parent) if files else ""
-    user = _paths.user_tasks_file(name)
+    if _config_arg(g):
+        # An explicit --config is total control, the user rung included:
+        # the user named exactly what applies.
+        user_name = name
+    else:
+        # The user rung's own name comes from the user's own writing — the
+        # user-level file — never from a project's `tasks` key, which
+        # renames the *project's* file and stops there. Steered by the
+        # project, the walk looked for a personal file the user never
+        # wrote, and the personal rung silently vanished under any project
+        # that renames its tasks file.
+        setting = _config.user_level_value("tasks")
+        user_name = setting if isinstance(setting, str) else _brand.tasks_file
+    user = _paths.user_tasks_file(user_name)
     if user.is_file():
         # The cascade's outermost rung: personal tasks ride everywhere, and
         # anything nearer shadows them — project > user, the nearest-wins
