@@ -154,11 +154,12 @@ where an author asked for one.
 ## Where this went next
 
 Pulling the transports frame away from footman entirely — what the general
-system is, the four-way security decomposition, capability attenuation as the
-ergonomics problem, and what other languages need to join — became
-[20260817-typed-call-fabric.md](20260817-typed-call-fabric.md). A thought
-experiment rather than a plan: nothing in it revises this note's rulings, and
-its "what this note is not" section draws the line explicitly.
+system is, its security decomposition, and where it could lead as a product —
+became its own thread, kept **outside the repository** with the launch
+material rather than in `notes/`: it is exploratory product thinking, not
+footman design. Nothing in it revises this note's rulings; anything from it
+that ever lands in footman arrives through the existing threads (services,
+incremental caching, this note) on their own merits.
 
 ## Open
 
