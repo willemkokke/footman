@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 import textwrap
 
@@ -458,6 +459,66 @@ def test_include_two_submodules_of_one_package(tmp_path, monkeypatch):
         pytest.raises(RegistrationError, match=r"no task or group at 'gamma'"),
     ):
         compose.include("provpkg.gamma")
+
+
+def test_a_pre_imported_empty_parent_is_walked_through(tmp_path, monkeypatch):
+    # H7: the monorepo shape — constants in the package, tasks in a submodule.
+    # `from devkit import REGISTRY` puts `devkit` in sys.modules, and the
+    # already-imported branch refused before it ever read `allow_empty`, so
+    # `include("devkit.tasks")` died naming `devkit` — a module the caller
+    # never wrote — with advice about capturing tasks the package never had.
+    # An import that registered nothing is empty, not spent.
+    pkg = tmp_path / "devkit"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("REGISTRY = 'ghcr.io/acme'\n")
+    (pkg / "tasks.py").write_text("from footman import task\n@task\ndef lint(): ...\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    for name in [n for n in sys.modules if n == "devkit" or n.startswith("devkit.")]:
+        monkeypatch.delitem(sys.modules, name)
+
+    importlib.import_module("devkit")  # what the tasks file's own import does
+    with registry.capture() as captured:
+        compose.include("devkit.tasks")
+    assert set(captured.tasks) == {"lint"}
+
+
+def test_a_pre_imported_module_with_tasks_still_refuses(tmp_path, monkeypatch):
+    # The other side of the same ladder: this one really was spent. Something
+    # is here, and the import that would have captured it is gone — so the
+    # refusal stays, and now it only fires when it is true.
+    (tmp_path / "spent.py").write_text(
+        "from footman import task\n@task\ndef go(): ...\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    monkeypatch.delitem(sys.modules, "spent", raising=False)
+
+    importlib.import_module("spent")
+    with (
+        registry.capture(),
+        pytest.raises(RegistrationError, match=r"already imported outside include"),
+    ):
+        compose.include("spent")
+
+
+def test_a_pre_imported_empty_module_named_directly_says_it_is_empty(
+    tmp_path, monkeypatch
+):
+    # Named as the terminal module rather than walked through, an empty one is
+    # still an error — but the one that describes it: nothing to mount, rather
+    # than a story about import order it had no part in.
+    (tmp_path / "inert.py").write_text("VERSION = '1.0'\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    monkeypatch.delitem(sys.modules, "inert", raising=False)
+
+    importlib.import_module("inert")
+    with (
+        registry.capture(),
+        pytest.raises(RegistrationError, match=r"registered no tasks"),
+    ):
+        compose.include("inert")
 
 
 def test_include_carries_a_providers_hook_to_the_merged_tree(tmp_path, monkeypatch):
