@@ -521,6 +521,67 @@ def test_a_pre_imported_empty_module_named_directly_says_it_is_empty(
         compose.include("inert")
 
 
+def test_the_mount_failure_paths_teach_and_are_pinned(tmp_path, monkeypatch):
+    # Audit M97: the taught refusals below had no test — any of them could
+    # regress to a raw traceback (or vanish) with the suite staying green.
+    monkeypatch.setattr(compose, "_module_trees", {})
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("prov_ok", None)
+    (tmp_path / "prov_ok.py").write_text(
+        "from footman import task\n\n\n@task\ndef ping(): ...\n"
+    )
+
+    with registry.capture():
+
+        @registry.task
+        def fmt(): ...
+
+        with pytest.raises(
+            compose.RegistrationError, match=r"'fmt' is a task — into= names a group"
+        ):
+            compose.include("prov_ok", into="fmt")
+
+    with (
+        registry.capture(),
+        pytest.raises(compose.RegistrationError, match=r"'default' is a task"),
+    ):
+        compose.include("prov_ok", into="x.default")
+
+    sys.modules.pop("provpkg", None)
+    (tmp_path / "provpkg").mkdir()
+    (tmp_path / "provpkg" / "__init__.py").write_text("")
+    (tmp_path / "provpkg" / "real.py").write_text(
+        "from footman import task\n\n\n@task\ndef pong(): ...\n"
+    )
+    with (
+        registry.capture(),
+        pytest.raises(
+            compose.RegistrationError,
+            match=r"no task or group at 'nosuch'.*has: nothing",
+        ),
+    ):
+        compose.include("provpkg.nosuch")
+
+
+def test_a_provider_that_raises_on_import_names_the_tasks_file(tmp_path, monkeypatch):
+    # The provider's own error is the story; discovery wraps it at the file
+    # boundary, so the refusal names the tasks file whose include() pulled
+    # the broken module in, with the original riding the chain.
+    from footman import _discover
+
+    monkeypatch.setattr(compose, "_module_trees", {})
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("prov_boom", None)
+    (tmp_path / "prov_boom.py").write_text('raise RuntimeError("boom at import")\n')
+    root = tmp_path / "tasks.py"
+    root.write_text("from footman import include\n\ninclude('prov_boom')\n")
+    with pytest.raises(_discover.TasksImportError) as caught:
+        _discover.load_tree([root])
+    assert "boom at import" in str(caught.value) or "boom at import" in str(
+        caught.value.__cause__
+    )
+
+
 def test_mounting_one_provider_twice_registers_its_hooks_once(tmp_path, monkeypatch):
     # The mount engine extended the live root's contributions on every
     # mount, and a fork shares the provider's hook functions — so including
