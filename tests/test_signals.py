@@ -173,7 +173,13 @@ def test_sigterm_reaps_the_child_a_task_was_waiting_on(tmp_path):
     )
     runner = _runner(tmp_path, "slow", stderr=subprocess.PIPE)
     try:
-        _await(pid_file.exists, "the child started")
+        # Content, not existence: creating the file and writing the pid are
+        # two steps, and `int("")` off the mid-write gap took a CI run down
+        # — the third test this same race has bitten, same cure as the rest.
+        _await(
+            lambda: pid_file.exists() and bool(pid_file.read_text().strip()),
+            "the child recorded its pid",
+        )
         child = int(pid_file.read_text())
 
         os.kill(runner.pid, signal.SIGTERM)  # what a supervisor does
