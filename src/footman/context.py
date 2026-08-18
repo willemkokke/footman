@@ -630,7 +630,11 @@ class Context:
     REPL. Mid-body `prompt()`/`confirm()`/`select()` are allowed only here."""
     atomic: bool = False
     """`@task(atomic=True)`: this task's subprocesses opt out of fail-fast's
-    kill — they run to completion so a mid-write can't be truncated."""
+    kill — they run to completion so a mid-write can't be truncated. Total
+    on purpose: the child is unregistered and not group-isolated, so a stop
+    signal to footman's own pid (`timeout`, `docker stop`) ends the run and
+    leaves the child to finish; a terminal's Ctrl-C reaches it only because
+    the kernel signals the whole foreground group itself."""
     keep_going: bool = False
     """This task's resolved (per-subtree) failure policy, tagged onto the
     subprocesses it spawns so a fail-fast failure elsewhere reaps only the

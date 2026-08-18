@@ -194,6 +194,49 @@ def test_sigterm_reaps_the_child_a_task_was_waiting_on(tmp_path):
             runner.kill()
 
 
+def test_sigterm_spares_an_atomic_child(tmp_path):
+    """The atomic carve-out, as documented: a stop ends the run, not the child.
+
+    `atomic=True` promises the subprocess runs to completion so a mid-write
+    can't be truncated — and "to completion" has to survive the one signal a
+    supervisor actually sends. The child is deliberately unregistered, so
+    the stop's reaper never sees it: footman exits 143 and the child
+    finishes its write on its own, which is the promise kept, not a leak.
+    """
+    if sys.platform == "win32":
+        pytest.skip("POSIX process groups and SIGTERM")
+
+    pid_file = tmp_path / "child.pid"
+    marker = tmp_path / "finished"
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(f"""
+        import sys
+        from footman import run, task
+
+        @task(atomic=True)
+        def protected():
+            run([sys.executable, "-c",
+                 "import os, time;"
+                 "open({str(pid_file)!r}, 'w').write(str(os.getpid()));"
+                 "time.sleep(1.5);"
+                 "open({str(marker)!r}, 'w').write('done')"])
+        """)
+    )
+    runner = _runner(tmp_path, "protected", stderr=subprocess.PIPE)
+    try:
+        _await(pid_file.exists, "the child started")
+        os.kill(runner.pid, signal.SIGTERM)  # what a supervisor does
+        assert runner.wait(timeout=30) == 143
+        _await(
+            marker.exists,
+            "the atomic child finished its write",
+            saw=lambda: sorted(p.name for p in tmp_path.iterdir()),
+        )
+    finally:
+        if runner.poll() is None:  # pragma: no cover - only on a regression
+            runner.kill()
+
+
 # --- the dump, which is diagnostic and not a stop -----------------------------
 
 
