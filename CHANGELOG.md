@@ -86,6 +86,18 @@ versions may include breaking changes.
   mark is the one encoding hint that is never a guess: a UTF-8 one is
   stripped and the settings behind it apply, and a UTF-16 one is refused by
   name rather than decoded into settings no other TOML tool would read.
+- **The listings survive a console that cannot spell every glyph.** A
+  terminal whose encoding is narrower than UTF-8 — `PYTHONIOENCODING=ascii`,
+  a legacy Windows console on cp1252 — encodes with `errors='strict'`, and
+  `--list`, `--tree`, `--plugins` and `--help` all died there with a raw
+  `UnicodeEncodeError` traceback and exit 1, the listing cut off mid-row.
+  `--tree` and `--plugins` fell over on footman's own strings — the box
+  characters that draw the branches, the dash in a plugin header — so pure
+  ASCII task names were no protection. footman degrades an unencodable
+  glyph to `?` on the way out instead, the same way it already does for a
+  tool's output inside a run. The starter file `fm new` writes is plain
+  ASCII too: its `hello` docstring carried an em dash, so a brand-new
+  project's first `fm --list` was the crash.
 - **The cache collector sweeps downloads abandoned mid-flight.** It globbed
   only bodies and sidecars, so a `.part` file left behind by a killed
   process — a multi-gigabyte tarball, possibly — sat in the cache forever.

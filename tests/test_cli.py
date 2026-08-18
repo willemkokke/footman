@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
@@ -317,6 +318,70 @@ def test_an_explicit_tasks_file_still_wins(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         footman.main(str(mine))
     assert "theirs" in capsys.readouterr().out
+
+
+def _ascii_stdout(monkeypatch) -> io.BytesIO:
+    """Stand in for a legacy console: ascii, errors='strict', not a tty."""
+    raw = io.BytesIO()
+    monkeypatch.setattr(
+        sys, "stdout", io.TextIOWrapper(raw, encoding="ascii", errors="strict")
+    )
+    return raw
+
+
+def _ascii_project(tmp_path, monkeypatch, tasks: str) -> None:
+    from footman import _paths
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(tasks, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FOOTMAN_NO_UV", "1")
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+
+
+def test_the_tree_survives_a_non_utf8_stdout(tmp_path, monkeypatch):
+    # H39: a console encoding narrower than UTF-8 (PYTHONIOENCODING=ascii,
+    # cp1252 on a legacy Windows terminal) encodes with errors='strict', and
+    # `--tree` draws its branches with `|- +- |` in box-drawing glyphs — so
+    # the listing died half-written with a raw UnicodeEncodeError on
+    # *footman's own* strings, with every task name here pure ASCII.
+    _ascii_project(
+        tmp_path,
+        monkeypatch,
+        "from footman import group\n\n"
+        "sub = group('sub', help='Sub tasks')\n\n"
+        "@sub.task\ndef one():\n    'Do one.'\n\n"
+        "@sub.task\ndef two():\n    'Do two.'\n",
+    )
+    raw = _ascii_stdout(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["fm", "--tree"])
+    with pytest.raises(SystemExit) as exc:
+        footman.main()
+    sys.stdout.flush()
+    assert exc.value.code == 0
+    out = raw.getvalue().decode("ascii")
+    assert "Do one." in out and "Do two." in out  # the whole listing, not a prefix
+    assert "?" in out  # the branch glyphs degraded rather than killing the row
+
+
+def test_the_listing_survives_non_ascii_task_help(tmp_path, monkeypatch):
+    # The same crash from the other side: `--list` prints only user strings,
+    # so one accented docstring was enough to lose the listing.
+    _ascii_project(
+        tmp_path,
+        monkeypatch,
+        "from footman import task\n\n"
+        "@task\ndef build():\n    'Baké the café.'\n\n"
+        "@task\ndef ship():\n    'Ship it.'\n",
+    )
+    raw = _ascii_stdout(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["fm", "--list"])
+    with pytest.raises(SystemExit) as exc:
+        footman.main()
+    sys.stdout.flush()
+    assert exc.value.code == 0
+    out = raw.getvalue().decode("ascii")
+    assert "Bak? the caf?." in out and "Ship it." in out
 
 
 def test_task_decorator_protocol_matches_group_task():
