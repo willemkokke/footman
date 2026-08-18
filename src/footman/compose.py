@@ -678,7 +678,15 @@ def _mount(
                         item._mounted = registry._MANY_MOUNTS
                 elif getattr(item, registry._MOUNTED, None) is None:
                     setattr(item, registry._MOUNTED, identity)
-        registry.root.contributions[kind].extend(bucket)
+        # By identity, not equality: forks share the provider's hook and
+        # option *objects*, so a provider mounted at two addresses arrives
+        # here twice with the same items — and a second registration would
+        # run its lifecycle twice per run, silently, side effects and all.
+        # The tree mounts twice; the contribution contributes once.
+        existing = registry.root.contributions[kind]
+        for item in bucket:
+            if not any(item is have for have in existing):
+                existing.append(item)
         bucket.clear()
     if fork.name == "root":
         # An anonymous container (a module capture's root): mounting it lands

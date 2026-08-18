@@ -521,6 +521,46 @@ def test_a_pre_imported_empty_module_named_directly_says_it_is_empty(
         compose.include("inert")
 
 
+def test_mounting_one_provider_twice_registers_its_hooks_once(tmp_path, monkeypatch):
+    # The mount engine extended the live root's contributions on every
+    # mount, and a fork shares the provider's hook functions — so including
+    # one provider at two addresses ran its @pre_tasks twice per run,
+    # silently, side effects and all.
+    from footman import _discover
+
+    monkeypatch.setattr(compose, "_module_trees", {})
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("twice_tasks", None)
+    (tmp_path / "twice_tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task, pre_tasks
+
+            @task
+            def ping(): ...
+
+            @pre_tasks
+            def hook(inv): ...
+            """
+        )
+    )
+    root = tmp_path / "tasks.py"
+    root.write_text(
+        textwrap.dedent(
+            """
+            from footman import include
+
+            include("twice_tasks", into="a")
+            include("twice_tasks", into="b")
+            """
+        )
+    )
+    tree = _discover.load_tree([root])
+    assert "ping" in tree.groups["a"].tasks and "ping" in tree.groups["b"].tasks
+    hooks = [f.__name__ for f in tree.contributions["pre_tasks"]]
+    assert hooks == ["hook"]  # once — not once per address
+
+
 def test_include_carries_a_providers_hook_to_the_merged_tree(tmp_path, monkeypatch):
     # An included provider's `@pre_tasks` must run over the *merged* tree — the
     # env-guard pattern the cascade relies on. include() moves the provider's
