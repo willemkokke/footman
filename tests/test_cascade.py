@@ -167,6 +167,35 @@ def test_cascade_isolates_sibling_helpers(tmp_path, capsys):
     assert "root" in out and "svc" in out  # each resolved its own sibling
 
 
+def test_cascade_isolates_sibling_packages_submodules(tmp_path, capsys):
+    # H3, F14's package sibling: eviction dropped a sibling package's
+    # __init__ but not its *submodules*, so the nested file's
+    # `import pkg.sub` re-imported `pkg` fresh and then took `pkg.sub`
+    # straight out of sys.modules — the root's copy, silently.
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("")
+    (tmp_path / "pkg" / "sub.py").write_text("VALUE = 'root'\n")
+    root = _write(
+        tmp_path / "tasks.py",
+        "from footman import task\nimport pkg.sub\n"
+        "@task\ndef a():\n    print(pkg.sub.VALUE)\n",
+    )
+    svc = tmp_path / "svc"
+    (svc / "pkg").mkdir(parents=True)
+    (svc / "pkg" / "__init__.py").write_text("")
+    (svc / "pkg" / "sub.py").write_text("VALUE = 'svc'\n")
+    sub = _write(
+        svc / "tasks.py",
+        "from footman import task\nimport pkg.sub\n"
+        "@task\ndef b():\n    print(pkg.sub.VALUE)\n",
+    )
+    merged = _discover.load_tree([root, sub])
+    merged.tasks["a"]()
+    merged.tasks["b"]()
+    out = capsys.readouterr().out
+    assert "root" in out and "svc" in out  # each bound its own package
+
+
 def test_failed_cascade_import_resets_registry(tmp_path):
     # F62: a file that registers a task then raises must not strand ghost tasks
     # in the global registry for the rest of the process.
