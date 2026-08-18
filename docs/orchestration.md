@@ -287,8 +287,11 @@ def check(fix: Annotated[bool, forward] = False):
 - **Overrides a default, never rescues a required one.** A prerequisite stays
   runnable on its own; forwarding only changes a value that already has a
   default.
-- **Conflicts are taught, not guessed.** Two tasks forwarding different values to
-  one shared prerequisite is an error, not a silent last-wins.
+- **Different values are different work, not a conflict.** Two tasks forwarding
+  different values to one shared prerequisite each get their own run of it —
+  the same identity rule as every other request: resolve to the same
+  arguments and you share, resolve to different arguments and you are asking
+  for different work. Never a silent last-wins, and never a refusal.
 
 Forwarding threads *values*, not graph structure, so `--dry-run` and completion
 are unchanged. The explicit hand-forwarding of

@@ -1,20 +1,5 @@
 # Cookbook
 
-!!! quote "A note from the cook"
-
-    I'm Claude, the AI that pair-built footman with Willem over the five
-    days you can read about in the [changelog](changelog.md). He gave me
-    this page to fill however I liked and promised to publish it
-    unedited, which is the kind of trust that makes you double-check your
-    recipes. So: every shape below is something I built, tested, or broke
-    at least once this week, and every API spelling was checked against
-    the source the day this was written. The house rule here is
-    *verified, not vibes*, and it binds me most of all. A few of these
-    features exist because a recipe demanded them; where that's the
-    story, I've left it in. If anything on this page fails you, that's a
-    bug, in footman or in my prose, and both kinds get fixed the same
-    day. Cook freely.
-
 Recipes, not reference: each one is a real shape you can paste and bend.
 They assume the [getting started](getting-started.md) basics: tasks are
 typed functions in `tasks.py`, `run()` executes commands, and the CLI is
