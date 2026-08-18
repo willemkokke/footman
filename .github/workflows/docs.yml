@@ -35,21 +35,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/configure-pages@v6
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --frozen --group dev --group docs
+      - run: uv sync --locked --group dev --group docs
       # The docs build records completion casts in every shell — install
       # the ones the runner lacks (bash + pwsh are preinstalled).
       - name: Install shells (for the completion casts)
         env:
           NU_VERSION: "0.114.1"
+          NU_SHA256_LINUX: "8802b26edcdf1a64477567b5ce909fbae3d72d731c8f0847892ea16c6fa73c53"
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q zsh fish
-          curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          # Verified before it runs: this job holds pages/id-token grants,
+          # and an unverified binary in here would hold them too.
+          curl -fsSL -o nu.tar.gz "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${NU_SHA256_LINUX}  nu.tar.gz" | sha256sum -c -
+          tar xzf nu.tar.gz
           echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
       # The coverage page embeds the matrix-merged report CI gates on. It
       # must be THIS commit's run: "newest successful run" is the previous
@@ -87,8 +92,8 @@ jobs:
       - name: Build site
         # The same task devs run — regenerates llms.txt, then builds strictly.
         run: uv run fm docs.build --check
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: site
-      - uses: actions/deploy-pages@v5
+      - uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
         id: deployment
