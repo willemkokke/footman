@@ -118,9 +118,15 @@ def page(
     drops into zensical/mkdocs via a snippet include.
     """
     tree = _project_tree(all)
-    text = markdown.render_page(
-        tree, path=_path_of(target), heading=heading, flavor=flavor, prog=prog
-    )
+    try:
+        text = markdown.render_page(
+            tree, path=_path_of(target), heading=heading, flavor=flavor, prog=prog
+        )
+    except ValueError as exc:
+        # An unknown --target: the resolver's message already teaches (the
+        # menu of what it does know), so it only needs delivering as the
+        # deliberate refusal it is, not as a raw ValueError with a traceback.
+        context.fail(f"--target: {exc}")
     if out is None:
         print(text, end="")
         return None
@@ -149,7 +155,13 @@ def site(
     to the nav. Regenerate on each docs build so they can't drift.
     """
     tree = _project_tree(all)
-    files = markdown.render_site(tree, path=_path_of(target), flavor=flavor, prog=prog)
+    try:
+        files = markdown.render_site(
+            tree, path=_path_of(target), flavor=flavor, prog=prog
+        )
+    except ValueError as exc:
+        # Same delivery as `page` above: teach, don't traceback.
+        context.fail(f"--target: {exc}")
     written: list[str] = []
     for rel, content in files.items():
         dest = out / rel
