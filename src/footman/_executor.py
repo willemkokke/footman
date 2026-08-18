@@ -1334,6 +1334,16 @@ def _call(
         # A `run()` command failed: propagate its own exit code, not a flat 1,
         # so `fm` mirrors the command's code (docs/ci.md's "exited N" contract).
         return (exc.result.code or 1), None, exc
+    except BrokenPipeError as exc:
+        # `fm chatty | head`: the reader closed the pipe, the body's next
+        # print raised EPIPE. Not the task's defect and not a crash worth a
+        # traceback — the reader said "enough". Reported the way a
+        # SIGPIPE-default tool reports it: a calm reason and 128+SIGPIPE,
+        # so `set -o pipefail` still sees the cut while `| head` users see
+        # no exception spam. Delivered as `Failed`, the deliberate-stop
+        # carrier, so the renderer prints the reason without the class name.
+        del exc
+        return 141, None, Failed("stdout closed by the reader — output cut short")
     except (KeyboardInterrupt, GeneratorExit, _signals.Stop):
         # None of these is the task failing, so none becomes a receipt: all are
         # control flow, and the layer that owns each must be the one to see it.

@@ -352,6 +352,47 @@ def test_a_closed_stdout_means_discard_not_a_traceback(tmp_path):
     assert "Traceback" not in proc.stderr
 
 
+def test_a_reader_hanging_up_is_a_calm_cut_not_a_traceback(tmp_path):
+    # `fm chatty | head`: once the body writes past the pipe buffer after the
+    # reader closed, its next print raises EPIPE. That used to be a raw
+    # BrokenPipeError traceback plus "Exception ignored while flushing
+    # sys.stdout" — the reader saying "enough" dressed as a crash. Now: one
+    # calm reason, exit 128+SIGPIPE like any SIGPIPE-default tool, so
+    # `set -o pipefail` still sees the cut and `| head` users see no spam.
+    if sys.platform == "win32":
+        pytest.skip("pipes and SIGPIPE semantics are POSIX")
+    import subprocess
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n\n@task\ndef lines():\n"
+        "    for i in range(5000):\n"
+        "        print('line', i, 'x' * 80)\n"
+    )
+    env = {
+        **os.environ,
+        "FOOTMAN_NO_UV": "1",
+        "FOOTMAN_CACHE_DIR": str(tmp_path / ".cache"),
+    }
+    env.pop("VIRTUAL_ENV", None)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "footman", "lines"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert proc.stdout is not None and proc.stderr is not None
+    proc.stdout.readline()  # take one line, like `head -1`
+    proc.stdout.close()  # …and hang up with >64 KiB still to come
+    assert proc.wait(timeout=30) == 141
+    err = proc.stderr.read()
+    assert "output cut short" in err
+    assert "BrokenPipeError" not in err
+    assert "Traceback" not in err
+    assert "Exception ignored" not in err
+
+
 def _ascii_stdout(monkeypatch) -> io.BytesIO:
     """Stand in for a legacy console: ascii, errors='strict', not a tty."""
     raw = io.BytesIO()

@@ -277,4 +277,18 @@ class App:
             sys.stderr = open(_os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         from footman import _app
 
-        return _app.run(args, brand=self.brand)
+        code = _app.run(args, brand=self.brand)
+        try:
+            sys.stdout.flush()
+        except BrokenPipeError:
+            # The reader hung up mid-run (`fm … | head`). Flushing here, and
+            # pointing fd 1 at devnull for the interpreter's own shutdown
+            # flush, keeps "Exception ignored while flushing sys.stdout" off
+            # the screen; the code is what a SIGPIPE-default tool reports.
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                devnull = _os.open(_os.devnull, _os.O_WRONLY)
+                _os.dup2(devnull, sys.stdout.fileno())
+            code = code or 141
+        return code
