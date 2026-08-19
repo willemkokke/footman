@@ -146,6 +146,17 @@ That run dumps its stacks every 30 seconds and carries on each time. The timer
 counts wall-clock, not stuckness, so pick a number comfortably longer than a
 healthy run and the log stays quiet until something genuinely wedges.
 
+!!! note "Python 3.11 and 3.12"
+
+    The repeating timer rides CPython's `faulthandler` watchdog, and on
+    3.11/3.12 that watchdog can be lost to an interpreter race: a dump that
+    fires while threads are starting or stopping can land on a freed thread
+    state (`<tstate is freed>` in the output, or a dump cut off mid-line),
+    after which no further dumps arrive. Python 3.13 fixed the race. The
+    key press is unaffected — `SIGQUIT` dumps from the signal, not the
+    watchdog — so on an older Python treat a timer that has gone quiet as
+    suspect and reach for <kbd>Ctrl</kbd>+<kbd>\</kbd> where a keyboard exists.
+
 Both forms write to stderr, so `--json` keeps stdout a clean document.
 
 ## Timing estimates
