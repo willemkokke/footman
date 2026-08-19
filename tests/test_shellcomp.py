@@ -1436,8 +1436,8 @@ def broken_project_dir(home, tmp_path, monkeypatch):
 @_posix_shell
 @pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
 def test_zsh_broken_tree_reads_the_reason(home, broken_project_dir):
-    """The hook's 103 idiom: the reason is capturable exactly as the hook
-    captures it (`2>&1` with stdout empty), ready for `_message`."""
+    """The hook's 103 idiom: the reason is fetchable exactly as the hook
+    fetches it (`--why` on stdout), ready for `_message`."""
     script = home / "completion.zsh"
     script.write_text(_shellcomp.script_for("zsh", "fm"), encoding="utf-8")
     body = (
@@ -1447,7 +1447,7 @@ def test_zsh_broken_tree_reads_the_reason(home, broken_project_dir):
         'raw="$(fm --complete -- "${(@)words[2,CURRENT]}" 2>/dev/null)"\n'
         "ret=$?\n"
         'print -r -- "ret=$ret out=<$raw>"\n'
-        'why="$(fm --complete -- "${(@)words[2,CURRENT]}" 2>&1)"\n'
+        'why="$(fm --complete --why -- "${(@)words[2,CURRENT]}" 2>/dev/null)"\n'
         'print -r -- "why=$why"\n'
     )
     out = subprocess.run(

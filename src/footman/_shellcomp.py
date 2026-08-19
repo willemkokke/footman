@@ -165,13 +165,13 @@ _{fn}_complete() {{
     # Exit 101 = a comma-splitting path value mid-list: strip through the
     # last `=` or comma too, so each list item completes as its own path.
     (( ret == 101 )) && {{ compset -P '*[=,]'; _files; return; }}
-    # Exit 103 = the tasks file failed to import; the reason rides stderr
-    # (stdout stays empty so older hooks show plain silence). One more call
-    # captures it — stdout is empty, so `2>&1` is the stderr line alone —
-    # and `_message` displays without offering anything for insertion.
+    # Exit 103 = the tasks file failed to import (stdout stays empty so
+    # older hooks show plain silence). One more call with `--why` fetches
+    # the reason on stdout — the one channel every shell captures the same
+    # way — and `_message` displays it without offering anything to insert.
     (( ret == 103 )) && {{
         local why
-        why="$({prog} --complete -- "${{(@)words[2,CURRENT]}}" 2>&1)"
+        why="$({prog} --complete --why -- "${{(@)words[2,CURRENT]}}" 2>/dev/null)"
         [[ -n $why ]] && _message -r "${{why%%$'\\n'*}}"
         return
     }}
@@ -246,13 +246,14 @@ function __{fn}_complete
             __fish_complete_path $tok
         end
     else if test $ret -eq 103
-        # A broken tasks file: the reason rides stderr (stdout stays empty
-        # so older hooks show plain silence). fish has no message row, so
-        # re-offer the typed word — a no-op insert — carrying the reason as
-        # its description; a bare Tab stays silent.
+        # A broken tasks file (stdout stays empty so older hooks show plain
+        # silence). One more call with `--why` fetches the reason on stdout;
+        # fish has no message row, so re-offer the typed word — a no-op
+        # insert — carrying the reason as its description; a bare Tab stays
+        # silent.
         set -l tok (commandline -ct)
         if test -n "$tok"
-            set -l why ({prog} --complete -- $words[2..-1] 2>&1)
+            set -l why ({prog} --complete --why -- $words[2..-1] 2>/dev/null)
             if set -q why[1]
                 printf '%s\\t%s\\n' $tok $why[1]
             end
@@ -321,12 +322,15 @@ Register-ArgumentCompleter -Native -CommandName {prog} -ScriptBlock {{
             }}
     }}
     if ($LASTEXITCODE -eq 103) {{
-        # A broken tasks file: the reason rides stderr (stdout stays empty
-        # so older hooks show plain silence). Re-offer the typed word — a
-        # no-op insert — with the reason as its tooltip; a bare Tab keeps
-        # PowerShell's default behaviour (an empty word cannot be a result).
+        # A broken tasks file (stdout stays empty so older hooks show plain
+        # silence). One more call with `--why` fetches the reason on stdout
+        # — the completion host swallows a native stderr merge outright.
+        # Re-offer the typed word — a no-op insert — with the reason as its
+        # tooltip; a bare Tab keeps PowerShell's default behaviour (an
+        # empty word cannot be a result).
         if ($wordToComplete) {{
-            $why = (@(& {prog} --complete $empty -- @words 2>&1) -join ' ').Trim()
+            $why = (@(& {prog} --complete --why $empty -- @words 2>$null) `
+                -join ' ').Trim()
             if (-not $why) {{ $why = ' ' }}
             return ,[System.Management.Automation.CompletionResult]::new(
                 $wordToComplete, $wordToComplete, 'ParameterValue', $why)
@@ -381,10 +385,12 @@ $env.config.completions.external.completer = {{|spans|
         }} else if $r.exit_code == 103 {{
             # A broken tasks file: `complete` already captured the reason
             # from stderr (stdout stays empty so older hooks show plain
-            # silence). Re-offer the typed word — a no-op insert — with the
-            # reason in the description column; a bare Tab stays silent.
+            # silence; `default ""` because some hosts hand back a null
+            # stderr, which `lines` refuses). Re-offer the typed word — a
+            # no-op insert — with the reason in the description column; a
+            # bare Tab stays silent.
             let tok = ($spans | last)
-            let why = ($r.stderr | lines | get 0? | default "")
+            let why = ($r.stderr | default "" | lines | get 0? | default "")
             if $tok != "" and $why != "" {{
                 [{{value: $tok, description: $why}}]
             }} else {{

@@ -956,6 +956,15 @@ def complete_cli(args: list[str]) -> int:
     # WinPS 5.1 and pwsh 7.0-7.2 drop empty-string args to native commands, so
     # the hook can't pass the trailing "" partial itself — it flags the empty
     # position and we append the "" here instead.
+    # `--why` re-asks a broken-tree answer with the reason on *stdout*: a
+    # hook that saw exit 103 makes one more call with it, because stdout
+    # capture is the one channel every shell reads identically — stderr
+    # merge semantics vary by host (pwsh's completion engine swallowed the
+    # merge outright on Windows). A hook that never sends it keeps the
+    # stdout-empty silence it always had.
+    why = False
+    if args and args[0] == "--why":
+        why, args = True, args[1:]
     empty_partial = False
     if args and args[0] == "--empty-partial":
         empty_partial, args = True, args[1:]
@@ -1032,7 +1041,7 @@ def complete_cli(args: list[str]) -> int:
         # the (cwd, file) manifest it marks, not the cwd cascade's.
         assert data is not None
         _maybe_refresh(manifest, data, spawn_in, override=override)
-        sys.stderr.write(line + "\n")
+        (sys.stdout if why else sys.stderr).write(line + "\n")
         return _EXIT_BROKEN
     if (
         data is None
@@ -1049,7 +1058,7 @@ def complete_cli(args: list[str]) -> int:
             # The very first TAB against a broken file already says why —
             # the child failed fast and left the marker where the tree
             # would have been.
-            sys.stderr.write(line + "\n")
+            (sys.stdout if why else sys.stderr).write(line + "\n")
             return _EXIT_BROKEN
         if (
             not isinstance(data, dict)

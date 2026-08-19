@@ -631,6 +631,13 @@ def test_a_broken_tasks_file_answers_103_with_the_reason(tmp_path, monkeypatch, 
     marker = _complete._load_manifest(str(_paths.cwd_manifest_path()))
     assert _complete._broken_line(marker)
     assert complete_cli(["--", ""]) == _complete._EXIT_BROKEN
+    capsys.readouterr()
+    # `--why` re-asks with the reason on stdout — the channel every shell
+    # captures identically — for the hooks' second call.
+    assert complete_cli(["--why", "--", ""]) == _complete._EXIT_BROKEN
+    asked = capsys.readouterr()
+    assert "failed to import" in asked.out
+    assert asked.err == ""
 
 
 def test_a_fixed_tasks_file_recovers_past_the_marker_age(tmp_path, monkeypatch, capsys):
