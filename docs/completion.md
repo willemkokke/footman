@@ -66,6 +66,18 @@ it drifts (you added a task) past `max_age`, footman serves the cached answer an
 spawns a **detached** rebuild for next time (stale-while-revalidate), so a warm
 <kbd>Tab</kbd> never waits on it, and concurrent presses spawn at most one rebuild.
 
+**Is it safe to press <kbd>Tab</kbd> in a repository you just cloned?**
+Treat it like running the code, because the cold build above *is* an
+import of the repo's `tasks.py` — the same import a run does, in a
+detached subprocess. That is the honest answer for every tool in this
+category: a tasks file is a program. What footman guarantees is narrower
+and precise: the process answering the keystroke never imports anything
+(the children carry `-P`, so a planted `footman.py` in the directory
+cannot hijack the import either), and nothing executes twice that a plain
+`fm --list` would not already have executed once. Don't trust the repo?
+Read `tasks.py` first — it is the same trust decision as `make` or `npm
+install`, made visible.
+
 ``` mermaid
 graph LR
   tab["Tab press"] --> fresh{cache fresh?}

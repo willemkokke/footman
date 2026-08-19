@@ -242,10 +242,10 @@ exactly the named file, no rung.
 
 ## Tasks built into the product
 
-Outside a project, a branded CLI used to be empty, and the tasks someone
-needs *before* a project exists (log in, create a project) were exactly the
-unreachable ones. `builtin=` names the surface your CLI offers with no
-project at all:
+Outside a project, a branded CLI has nothing to offer by default — while
+the tasks someone needs *before* a project exists (log in, create a
+project) are exactly the ones it should offer there. `builtin=` names the
+surface your CLI provides with no project at all:
 
 ```python
 app = App(name="Acme", prog="acme", dist="acme-cli",

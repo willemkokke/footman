@@ -56,7 +56,7 @@ failed task result with the same wording, plus the source:
 | `dynamic choices from projects() failed: FileNotFoundError: ... — fix the completer, or pass suggest(fn, strict=False) if this data is best-effort` | a strict completer raised | strict promises validation, so it fails loudly rather than validating nothing |
 | `include('shared_tasks'): the module was already imported outside include(), so its tasks were never captured — ...` | a bare `import` beat your `include()`, and that module *does* define tasks | `include()` first, or expose an explicit `Group` |
 | `include('empty_helpers'): the module registered no tasks and has no module-level Group to adopt — ...` | the module holds nothing footman can mount | mount the module that has the tasks — a package you only pass *through* (`include("devkit.tasks")` walks `devkit`) may be empty and is not an error |
-| `include(): 'shared_tasks' has no task or group named 'lnt' (has: fmt, lint)` | a typo in `only=`/`exclude=` | the message lists what the provider has |
+| `include('shared_tasks'): no task or group at 'lnt' in the provider's tree (has: fmt, lint)` | a typo in `only=`/`exclude=` or a dotted sub-path | the message lists what the provider has |
 | `plugin('mkdocs'): no 'footman.tasks' entry point matches (installed: footman.docs, footman.env_files, ...)` | the mounted plugin isn't installed | install the package that advertises it, or drop the `plugin("mkdocs")` line from your tasks file — mounts are authored there, never in config |
 | `plugin 'mkdocs': failed to import (ModuleNotFoundError: ...)` | the plugin is installed but its own import failed (a missing optional dep) | install what the plugin needs, or drop it — footman names the cause, never a traceback |
 
@@ -81,6 +81,26 @@ In a chain, a failed task's dependents are skipped; `-k/--keep-going` runs
 every independent branch anyway. Output from parallel tasks never
 interleaves: each task's buffer is flushed as one block to stdout, while
 the `ok`/`FAIL` summary itself is stderr commentary.
+
+## Seeing more: the debugging ladder
+
+A failing task prints one line by design — the innermost frame that is
+*yours*, footman's own frames dropped — because at a terminal the culprit
+line usually is the story. When it isn't, each rung shows more:
+
+1. **`-v`** prints the full traceback for an unexpected exception (and it
+   prints anyway whenever stderr is not a terminal, so CI logs always
+   carry everything).
+2. **`--json`** puts the same `traceback` on the failing task's row, plus
+   the captured output and exit code, machine-readable.
+3. **A run that stops moving** answers to <kbd>Ctrl</kbd>+<kbd>\</kbd> (`SIGQUIT`):
+   every thread's stack dumps to stderr and the run carries on — press it
+   twice and compare frames to tell a deadlock from slow progress. Nobody
+   is at a keyboard in CI, so `FOOTMAN_STACKS_AFTER=30` arms the same
+   dump on a repeating timer. Both are covered in
+   [When a run stops moving](#when-a-run-stops-moving) below.
+4. **`fm --profile <chain>`** writes a Perfetto trace when the question is
+   *where the time went* rather than what broke.
 
 ## Config errors
 

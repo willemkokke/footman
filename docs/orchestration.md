@@ -259,7 +259,7 @@ graph LR
 
 This is the **declared** graph: static, so `--dry-run` and completion show it
 without running anything, and deduped by identity. A cycle in it is a taught
-error naming the loop. A dep is named by reference, so it runs with its
+error naming the loop. A prerequisite is named by reference, so it runs with its
 **defaults**: a task used as a prerequisite needs every parameter defaulted (a
 required one errors with `missing required positional(s)`). To run a prerequisite
 with specific arguments, name it in the chain: `fm build --release deploy` runs
@@ -385,11 +385,12 @@ The one other difference from a plain call: a queued failure surfaces when
 the block ends, not at the line that queued it.
 
 Unlike `pre`/`post`, a `parallel()` fan-out is **in-body**, so footman can't see
-it without running the task. That is the trade: declared deps are static and
-show up in `--dry-run`; an in-body fan-out is dynamic, since its shape can
-depend on a `run()`'s output, but opaque to the planner, which stops at the task body.
-Reach for declared deps when you want the plan to *see* the work, and
-`parallel()` when the fan-out has to be computed at run time.
+it without running the task. That is the trade: declared prerequisites are
+static and show up in `--dry-run`; an in-body fan-out is dynamic, since its
+shape can depend on a `run()`'s output, but opaque to the planner, which
+stops at the task body. Reach for declared prerequisites when you want the
+plan to *see* the work, and `parallel()` when the fan-out has to be
+computed at run time.
 
 ??? note "Passing data between tasks"
 

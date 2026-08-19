@@ -158,7 +158,10 @@ from the repo's `comparison/` directory.
 uv add --dev footman        # or: pip install footman
 ```
 
-Requires Python 3.11+. Zero runtime dependencies.
+Requires Python 3.11+. Zero runtime dependencies. Linux, macOS and
+Windows are all first-class: CI runs the full suite on all three (five
+Pythons each, free-threaded included) and drives real shell completion on
+bash, zsh, fish, PowerShell and nushell.
 
 ## A first taste
 

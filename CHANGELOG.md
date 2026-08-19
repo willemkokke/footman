@@ -524,7 +524,7 @@ versions may include breaking changes.
   The canned table also answers `uname` emptily — the simulated echo was
   leaking into the platform string as its processor field.
 
-## [0.41.0] - 2026-08-16
+## [0.41.0] — 2026-08-16
 
 ### Added
 
@@ -654,7 +654,7 @@ versions may include breaking changes.
   the way pytest always was, so each example carries its own install
   cost and the page stays light.
 
-## [0.40.0] - 2026-08-14
+## [0.40.0] — 2026-08-14
 
 ### Changed
 
@@ -1726,7 +1726,7 @@ versions may include breaking changes.
   is gone with it, and there is no shim. footman's own gate runs through
   toolroom as a dev dependency; the runtime keeps zero dependencies.
 
-## [0.31.0] - 2026-08-05
+## [0.31.0] — 2026-08-05
 
 ### Added
 
@@ -1815,7 +1815,7 @@ versions may include breaking changes.
   `not installed`. Presence and readability are different facts, and the
   version probe already knew which one failed.
 
-## [0.30.0] - 2026-08-05
+## [0.30.0] — 2026-08-05
 
 ### Added
 
