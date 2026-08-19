@@ -252,7 +252,7 @@ def test_fresh_dynamic_addresses_a_global_by_name(monkeypatch):
         captured["cmd"] = cmd
         return subprocess.CompletedProcess(cmd, 0, "prod\npreview\n", "")
 
-    monkeypatch.setattr(_complete.subprocess, "run", ok)
+    monkeypatch.setattr(subprocess, "run", ok)
     assert _complete._fresh_dynamic("target", [], ["--target=", ""]) == [
         "prod",
         "preview",

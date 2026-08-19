@@ -111,3 +111,70 @@ def test_the_completion_hot_path_imports_no_framework_and_no_tasks():
     assert loaded <= {"footman", "footman._complete", "footman._paths"}, sorted(loaded)
     forbidden = {"footman.registry", "footman._app", "footman._split"}
     assert not (loaded & forbidden), sorted(loaded & forbidden)
+
+
+def test_a_warm_tab_pays_for_no_heavyweight_stdlib(tmp_path, monkeypatch):
+    """A WARM press — manifest on disk — must not import the heavy stdlib.
+
+    pathlib drags glob and re (~5 ms), subprocess ~3 ms, typing ~1.4 ms:
+    together they were most of footman's ~11 ms above interpreter startup.
+    The spawn paths (a rebuild, a dynamic completer) may import what they
+    like — they cost 100 ms+ anyway — but the warm answer is one file read,
+    a JSON parse and a tree walk, and its imports must look like it.
+    """
+    import os
+
+    from footman import _manifest, _paths, registry
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\n")
+    monkeypatch.chdir(proj)
+    reg = registry.Group("root")
+
+    @reg.task
+    def build(): ...
+
+    _manifest.sync_manifest(reg, Path.cwd(), completion_max_age=0)
+    assert _paths.cwd_manifest_path().is_file()
+
+    probe = (
+        "import json, sys\n"
+        "from footman import main\n"
+        "try:\n"
+        "    main()\n"
+        "except SystemExit:\n"
+        "    pass\n"
+        "heavy = sorted(\n"
+        "    n for n in ('pathlib', 'subprocess', 'glob', 'typing', 'fnmatch')\n"
+        "    if n in sys.modules\n"
+        ")\n"
+        "print('HEAVY ' + json.dumps(heavy))\n"
+    )
+    # Coverage's .pth hook starts itself in every python child when the
+    # gate runs under it, and coverage imports pathlib and typing — which
+    # would be measured as the hot path's sins. The probe testifies about
+    # footman, so it runs uninstrumented.
+    env = {
+        **os.environ,
+        "FOOTMAN_CACHE_DIR": str(tmp_path / "cache"),
+    }
+    for key in list(env):
+        if key.startswith(("COVERAGE_", "COV_CORE_")):
+            del env[key]
+    done = subprocess.run(
+        [sys.executable, "-c", probe, "--complete", "--", ""],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=proj,
+        env=env,
+    )
+    line = next(
+        (ln for ln in done.stdout.splitlines() if ln.startswith("HEAVY ")), None
+    )
+    assert line is not None, done.stdout + done.stderr
+    assert "build" in done.stdout  # the press actually answered, warm
+    heavy = json.loads(line[len("HEAVY ") :])
+    assert heavy == [], heavy

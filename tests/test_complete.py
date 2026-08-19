@@ -931,7 +931,7 @@ def test_the_dynamic_child_protocol_holds_from_both_sides(
         captured["argv"] = list(cmd)
         return _Done()
 
-    monkeypatch.setattr(_complete.subprocess, "run", capture_run)
+    monkeypatch.setattr(subprocess, "run", capture_run)
     _complete._fresh_dynamic("target", ["deploy"], ["deploy", "--target="])
     argv = captured["argv"]
     assert argv[1:4] == ["-P", "-m", "footman._suggest"]  # the spawn contract
@@ -1016,7 +1016,7 @@ def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
         captured["cmd"] = cmd
         return subprocess.CompletedProcess(cmd, 0, "gamma\ndelta\n", "")
 
-    monkeypatch.setattr(_complete.subprocess, "run", ok)
+    monkeypatch.setattr(subprocess, "run", ok)
     args = ["-f=x.py", "--config=c.toml", "deploy", "--target="]
     assert _complete._fresh_dynamic("target", ["deploy"], args) == ["gamma", "delta"]
     cmd = captured["cmd"]  # the subprocess carries the target and the context
@@ -1031,13 +1031,13 @@ def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
     def timeout(*a, **k):
         raise subprocess.TimeoutExpired(cmd="x", timeout=2)
 
-    monkeypatch.setattr(_complete.subprocess, "run", timeout)
+    monkeypatch.setattr(subprocess, "run", timeout)
     assert _complete._fresh_dynamic("target", ["deploy"], ["a", ""]) is None
 
     def nonzero(*a, **k):
         return subprocess.CompletedProcess("x", 1, "", "")
 
-    monkeypatch.setattr(_complete.subprocess, "run", nonzero)
+    monkeypatch.setattr(subprocess, "run", nonzero)
     assert _complete._fresh_dynamic("target", ["deploy"], ["a", ""]) is None
 
 

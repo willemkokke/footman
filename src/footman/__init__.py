@@ -14,8 +14,10 @@ imported lazily. A bare `import footman` pays for nothing but this module.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+# The literal-False spelling both checkers honour without importing `typing`
+# (~1.4 ms) — the completion dispatch runs through this module on every TAB
+# press, and a bare `import footman` should pay for nothing it doesn't use.
+TYPE_CHECKING = False
 if TYPE_CHECKING:
     # Give type-checkers the real types for the lazily re-exported names below;
     # at runtime these are served by `__getattr__` without importing registry
