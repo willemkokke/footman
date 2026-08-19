@@ -56,6 +56,12 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **PowerShell no longer offers files as tasks.** When the resolver had
+  no candidates, the pwsh hook yielded nothing and PowerShell's default
+  completion stepped in — filesystem entries offered at the task-name
+  position. The hook now re-offers the typed word itself, a visual no-op
+  that keeps the line as it is (a bare <kbd>Tab</kbd> keeps PowerShell's
+  default behaviour: an empty word has nothing to re-offer).
 - **Built-in globals complete by the both-spellings rule.** Completing a
   value-taking built-in offered only its bare name — the value path
   (`--color=<TAB>`) stayed undiscoverable, while task options and plugin

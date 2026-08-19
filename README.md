@@ -11,7 +11,6 @@ that cache does import it, once, in a detached subprocess: the first
 Ships two console scripts, `footman` and the two-letter `fm`. Zero runtime
 dependencies. Python 3.11+.
 
-> [!NOTE]
 > **Beta.** footman is pre-1.0: the surface is settling, but minor versions
 > may still include breaking changes — always called out in the
 > [changelog](https://github.com/willemkokke/footman/blob/main/CHANGELOG.md),
@@ -87,7 +86,6 @@ fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you m
 $ fm --install-completion               # detects your shell; TAB answers in ~30 ms
 ```
 
-> [!NOTE]
 > That `from toolroom import …` is optional.
 > [toolroom](https://willemkokke.github.io/toolroom/) makes command-line
 > calls Python: it wraps **any** program, not a fixed list, with keyword

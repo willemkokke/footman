@@ -66,6 +66,14 @@ it drifts (you added a task) past `max_age`, footman serves the cached answer an
 spawns a **detached** rebuild for next time (stale-while-revalidate), so a warm
 <kbd>Tab</kbd> never waits on it, and concurrent presses spawn at most one rebuild.
 
+The flip side of never waiting: a task you just wrote can stay invisible to
+<kbd>Tab</kbd> for up to `max_age` (10 minutes by default — see below to
+tune it). The cache refreshes by age, not by watching your file, and an
+aged press still answers from the old cache while the rebuild lands behind
+it. Any real `fm` run rebuilds the manifest as part of its work, so when
+you want the new task on the menu right now, run anything — `fm --list` is
+the cheapest — and the very next <kbd>Tab</kbd> knows it.
+
 **Is it safe to press <kbd>Tab</kbd> in a repository you just cloned?**
 Treat it like running the code, because the cold build above *is* an
 import of the repo's `tasks.py` — the same import a run does, in a
@@ -275,7 +283,7 @@ session-only form, and how to style the completion menu, colours included:
 | [zsh](completion-zsh.md) | aligned column (`_describe`) | script + rc line | `eval "$(fm --setup-completion=zsh)"` |
 | [fish](completion-fish.md) | aligned column, native | one auto-loaded file | `fm --setup-completion=fish \| source` |
 | [PowerShell](completion-pwsh.md) | tooltip (menu completion) | script + `$PROFILE`(s) | `… \| Out-String \| Invoke-Expression` |
-| [nushell](completion-nushell.md) | description column, native | script + config line | — (install only) |
+| [nushell](completion-nushell.md) | description column, native | script + config line | `fm --setup-completion=nushell` (save to a file, `source` it) |
 
 Every installer and uninstaller is idempotent: running one twice changes
 nothing. A custom-branded CLI installs completion for *its* name the same
