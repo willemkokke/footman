@@ -1155,16 +1155,33 @@ def _core_global_help() -> dict[str, str]:
     brand-scoped and it already bakes `tasks_file`), so the brand's own
     command name is the honest thing to store. Left raw, a Tab would offer
     "help for {prog}" in braces.
-    """
-    from footman import _app, _split
 
-    return {
-        flag: help_text.replace("{prog}", _app._brand.prog)
-        for name, alias, _kind, _hint, _default, help_text in _split.GLOBALS
-        if help_text
-        for flag in (name, alias)
-        if flag
-    }
+    The keys are the *offerable spellings*, exactly as the splitter reads
+    them — what plugin options always got from `_opt_rows`, the core table
+    now gets too. An option's value goes attached, so `--opt=` is a key of
+    its own; its bare mention stands for its default, so only a defaulted
+    option gets a bare key (bare `--where` is a taught refusal, and a menu
+    must not offer what the grammar refuses). The bare key's line carries
+    the resolved default — a manifest belongs to this machine, so `--jobs`
+    naming its actual width is the honest thing to store.
+    """
+    from footman import _app, _describe, _split
+
+    rows: dict[str, str] = {}
+    for name, alias, kind, _hint, default, help_text in _split.GLOBALS:
+        if not help_text:
+            continue
+        line = help_text.replace("{prog}", _app._brand.prog)
+        for flag in (name, alias):
+            if not flag:
+                continue
+            if kind != "option":
+                rows[flag] = line
+                continue
+            rows[flag + "="] = line
+            if default is not None:
+                rows[flag] = line + _describe.global_default_suffix(name)
+    return rows
 
 
 _REPLACE_ATTEMPTS = 25

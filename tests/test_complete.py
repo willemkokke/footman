@@ -368,10 +368,42 @@ def test_root_flag_partial_offers_globals(tree):
     # A flag-shaped partial at the root offers fm's own globals — each with
     # its own line beside it now, so `_names` is what asks about the names.
     dd = _names(complete(tree, ["--"]))
-    assert {"--help", "--list", "--install-completion", "--config"} <= set(dd)
-    assert _names(complete(tree, ["--inst"])) == ["--install-completion"]
-    # A single dash reaches the short aliases too.
-    assert {"-C", "-h", "-s"} <= set(_names(complete(tree, ["-"])))
+    # Both spellings of a defaulted option, only `=` for a value-required
+    # one: bare `--config` is a taught refusal, and a menu must not offer
+    # what the grammar refuses.
+    assert {"--help", "--list", "--install-completion", "--config="} <= set(dd)
+    assert "--config" not in dd
+    assert {"--color", "--color="} <= set(dd)
+    assert set(_names(complete(tree, ["--inst"]))) == {
+        "--install-completion",
+        "--install-completion=",
+    }
+    # A single dash reaches the short aliases too — `-C` value-required,
+    # so only its attached spelling is offered.
+    assert {"-C=", "-h", "-s"} <= set(_names(complete(tree, ["-"])))
+    assert "-C" not in _names(complete(tree, ["-"]))
+
+
+def test_value_taking_globals_follow_the_both_spellings_rule():
+    # The documented rule: completing an option offers both of its
+    # spellings — the bare mention (standing for its default) and the
+    # attached `--opt=` (the only way to pass a value). Task options and
+    # plugin globals always followed it; the built-in globals now do too.
+    reg = registry.Group("root")
+
+    @reg.task
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    names = set(_names(complete(tree, ["--"])))
+    for defaulted in ("--color", "--jobs", "--describe"):
+        assert {defaulted, defaulted + "="} <= names
+    for required in ("--where", "--directory", "--tasks-file", "--config"):
+        assert required + "=" in names
+        assert required not in names
+    for flag in ("--json", "--quiet", "--keep-going"):
+        assert flag in names
+        assert flag + "=" not in names
 
 
 def test_root_globals_offered_after_a_leading_global(tree):
@@ -1529,7 +1561,12 @@ def test_a_core_globals_words_ride_in_the_manifest():
     tree = _manifest.build_manifest(reg)["tree"]
     offered = _described(complete(tree, ["--jo"]))
     assert offered["--jobs"], "a core global arrived with no description"
-    assert offered["--jobs"] == _declared("--jobs")
+    # The bare mention stands for its default, so its line names the
+    # resolved value (this manifest belongs to this machine); the attached
+    # spelling carries the declared words alone.
+    assert offered["--jobs"].startswith(_declared("--jobs") + "; default: ")
+    assert offered["--jobs"].endswith("(computed)")
+    assert offered["--jobs="] == _declared("--jobs")
 
 
 def test_an_alias_carries_its_long_forms_words():
@@ -1541,7 +1578,9 @@ def test_an_alias_carries_its_long_forms_words():
     def build(): ...
 
     tree = _manifest.build_manifest(reg)["tree"]
-    assert _described(complete(tree, ["-j"]))["-j"] == _declared("--jobs")
+    offered = _described(complete(tree, ["-j"]))
+    assert offered["-j"].startswith(_declared("--jobs") + "; default: ")
+    assert offered["-j="] == _declared("--jobs")
 
 
 def test_prog_is_substituted_before_it_reaches_a_shell():

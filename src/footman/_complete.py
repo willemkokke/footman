@@ -587,14 +587,17 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         # noise there.
         if not prior and partial.startswith("-"):
             # The core flags are this module's own frozenset (it may not import
-            # `_split`), but their words ride in the manifest — `_manifest`
-            # writes them from the one table that declares them.
+            # `_split`), but their words — and their offerable spellings —
+            # ride in the manifest: `_manifest` writes both from the one
+            # table that declares them, so an option shows `--opt=` beside
+            # its bare mention (and a value-required one shows `--opt=`
+            # alone, its bare spelling being a taught refusal). A manifest
+            # from before the spellings rode along falls back to the names.
             said = tree.get("global_help")
             lines: dict[str, str] = said if isinstance(said, dict) else {}
+            spellings = sorted(lines) if lines else sorted(_GLOBALS)
             out += [
-                _cand(g, lines.get(g, ""))
-                for g in sorted(_GLOBALS)
-                if g.startswith(partial)
+                _cand(g, lines.get(g, "")) for g in spellings if g.startswith(partial)
             ]
             for g in tree.get("globals", ()):
                 summary = str(g.get("help", ""))

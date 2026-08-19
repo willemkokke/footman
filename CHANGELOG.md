@@ -56,6 +56,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Built-in globals complete by the both-spellings rule.** Completing a
+  value-taking built-in offered only its bare name — the value path
+  (`--color=<TAB>`) stayed undiscoverable, while task options and plugin
+  globals showed both spellings, and worse, value-required globals like
+  `--where` were offered bare, a spelling the grammar refuses. The menu
+  now speaks the grammar exactly: `--opt=` beside a bare mention only
+  where a default backs it (the bare row naming this machine's resolved
+  default), and `--opt=` alone where a value is required.
 - **Help fits the terminal.** Seven lines of `fm --help` overflowed an
   80-column terminal and hard-wrapped mid-column, shearing the option
   table apart. The globals table and every parameter listing now wrap
