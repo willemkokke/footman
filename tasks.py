@@ -923,44 +923,28 @@ def _api_markdown() -> str:
     return "".join(parts)
 
 
-@docs.task(name="build")
-def docs_build(check: bool = False):  # pragma: no cover — see below
-    """Build the docs site into ./site; regenerates llms.txt and docs/tasks/.
+def _generate_pages() -> None:
+    """Every generated page except the pty-recorded shots and casts.
 
-    Not unit-tested, and deliberately: the body is orchestration over
-    zensical, a pty screenshotter and five real shells, so a test could only
-    stub twenty collaborators and assert the call order back — a change
-    detector that passes while the site breaks. Its real test is CI's
-    strict docs build, which runs the whole thing against the actual tools.
-    The pieces with logic of their own — the llms.txt generator, the cast
-    guard, the scratch projects — are tested separately, where a test can
-    say something true.
-
-    Args:
-        check: build strictly (what CI runs)
+    The cheap, pure prefix of the docs build — API reference, task pages,
+    the grammar/config/errors tables, latest-changes — split out so the
+    llms drift guard can regenerate it from an empty checkout: the guard
+    failed on a fresh CI tree precisely because these pages are gitignored
+    and only the full build had ever written them.
     """
-    # Dogfood the first-party plugin: regenerate the live task-reference
-    # pages (site mode) and the single-page example the taskdocs guide
-    # embeds (page mode). Plain calls — @task returns plain functions.
-    # Order matters on a fresh checkout: llms.txt walks the nav, and the
-    # nav includes the generated tasks/ pages — generate them first.
     import shutil
     from pathlib import Path
 
     from footman.tasks.docs import config as taskdocs_config
+    from footman.tasks.docs import errors as taskdocs_errors
     from footman.tasks.docs import globals_ as taskdocs_globals
     from footman.tasks.docs import page as taskdocs_page
-    from footman.tasks.docs import shots as taskdocs_shots
     from footman.tasks.docs import site as taskdocs_site
 
     # Start from nothing, which is the only state that ever gets validated:
     # both trees are gitignored, so CI builds them from an empty checkout
     # while a working copy accumulates whatever an older layout left behind.
-    # A stale `docs/_generated/tools/` — pages for stubs that moved out to
-    # toolroom releases ago — failed a local strict build with
-    # `Could not collect 'footman._stubs.nu.Nu'`, a module this repo has not
-    # had in months. Clearing costs nothing: every file below is rewritten
-    # unconditionally anyway.
+    # Clearing costs nothing: every file below is rewritten unconditionally.
     for stale in (Path("docs/_generated"), Path("docs/tasks")):
         shutil.rmtree(stale, ignore_errors=True)
 
@@ -982,10 +966,36 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     taskdocs_config(out=Path("docs/_generated/config.md"))
     # Every error and note the runtime can say, extracted from the source —
     # a reference page that regenerates each build and so can never drift.
-    from footman.tasks.docs import errors as taskdocs_errors
-
     taskdocs_errors(out=Path("docs/_generated/errors.md"))
     _write_latest_changes()
+
+
+@docs.task(name="build")
+def docs_build(check: bool = False):  # pragma: no cover — see below
+    """Build the docs site into ./site; regenerates llms.txt and docs/tasks/.
+
+    Not unit-tested, and deliberately: the body is orchestration over
+    zensical, a pty screenshotter and five real shells, so a test could only
+    stub twenty collaborators and assert the call order back — a change
+    detector that passes while the site breaks. Its real test is CI's
+    strict docs build, which runs the whole thing against the actual tools.
+    The pieces with logic of their own — the llms.txt generator, the cast
+    guard, the scratch projects — are tested separately, where a test can
+    say something true.
+
+    Args:
+        check: build strictly (what CI runs)
+    """
+    # Dogfood the first-party plugin: regenerate the live task-reference
+    # pages (site mode) and the single-page example the taskdocs guide
+    # embeds (page mode). Plain calls — @task returns plain functions.
+    # Order matters on a fresh checkout: llms.txt walks the nav, and the
+    # nav includes the generated tasks/ pages — generate them first.
+    from pathlib import Path
+
+    from footman.tasks.docs import shots as taskdocs_shots
+
+    _generate_pages()
     # Terminal screenshots, captured from the real CLI on a pty and framed
     # as SVGs — the pages show footman exactly as a terminal does, and a
     # rebuild regenerates them, so they cannot drift either.

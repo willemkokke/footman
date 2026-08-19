@@ -798,6 +798,10 @@ def test_the_llms_files_generate_clean(tmp_path, monkeypatch):
     import tasks as repo_tasks
 
     monkeypatch.chdir(ROOT)
+    # The nav includes generated pages a fresh checkout does not have —
+    # the cheap generation prefix (no pty, no casts) runs first, exactly
+    # as the docs build orders it.
+    repo_tasks._generate_pages()
     repo_tasks._write_llms_txt()
     index = (DOCS / "llms.txt").read_text(encoding="utf-8")
     assert not re.search(r"\): (\d+\.|\|)", index)  # descriptions are prose
