@@ -105,6 +105,14 @@ _{fn}_complete() {{
             compopt -o nospace 2>/dev/null
         return 0
     fi
+    # Exit 103 = the tasks file failed to import; the reason is on stderr.
+    # bash has no way to display a line without offering it for insertion,
+    # so stay silent — but switch the filename fallback off first, or the
+    # silence fills with files offered as if they were tasks.
+    if (( ret == 103 )); then
+        compopt +o default 2>/dev/null
+        return 0
+    fi
     # Not a file: on bash 4+ switch the default filename fallback off so a value
     # with no candidates stays empty. bash 3.2 has no compopt and keeps the
     # blunt fallback — no regression, it already behaved that way.
@@ -157,6 +165,16 @@ _{fn}_complete() {{
     # Exit 101 = a comma-splitting path value mid-list: strip through the
     # last `=` or comma too, so each list item completes as its own path.
     (( ret == 101 )) && {{ compset -P '*[=,]'; _files; return; }}
+    # Exit 103 = the tasks file failed to import (stdout stays empty so
+    # older hooks show plain silence). One more call with `--why` fetches
+    # the reason on stdout — the one channel every shell captures the same
+    # way — and `_message` displays it without offering anything to insert.
+    (( ret == 103 )) && {{
+        local why
+        why="$({prog} --complete --why -- "${{(@)words[2,CURRENT]}}" 2>/dev/null)"
+        [[ -n $why ]] && _message -r "${{why%%$'\\n'*}}"
+        return
+    }}
     for line in ${{(f)raw}}; do
         # `value:description` feeds _describe, which right-aligns the
         # descriptions into a column and honours the user's completion colours
@@ -227,6 +245,19 @@ function __{fn}_complete
         else
             __fish_complete_path $tok
         end
+    else if test $ret -eq 103
+        # A broken tasks file (stdout stays empty so older hooks show plain
+        # silence). One more call with `--why` fetches the reason on stdout;
+        # fish has no message row, so re-offer the typed word — a no-op
+        # insert — carrying the reason as its description; a bare Tab stays
+        # silent.
+        set -l tok (commandline -ct)
+        if test -n "$tok"
+            set -l why ({prog} --complete --why -- $words[2..-1] 2>/dev/null)
+            if set -q why[1]
+                printf '%s\\t%s\\n' $tok $why[1]
+            end
+        end
     else if test $ret -eq 102; and set -q out[1]
         # Exit 102 = the candidates continue a comma-splitting value: fish
         # inserts a candidate that ends in a comma with no trailing space,
@@ -290,6 +321,22 @@ Register-ArgumentCompleter -Native -CommandName {prog} -ScriptBlock {{
                     $_.ResultType, $_.ToolTip)
             }}
     }}
+    if ($LASTEXITCODE -eq 103) {{
+        # A broken tasks file (stdout stays empty so older hooks show plain
+        # silence). One more call with `--why` fetches the reason on stdout
+        # — the completion host swallows a native stderr merge outright.
+        # Re-offer the typed word — a no-op insert — with the reason as its
+        # tooltip; a bare Tab keeps PowerShell's default behaviour (an
+        # empty word cannot be a result).
+        if ($wordToComplete) {{
+            $why = (@(& {prog} --complete --why $empty -- @words 2>$null) `
+                -join ' ').Trim()
+            if (-not $why) {{ $why = ' ' }}
+            return ,[System.Management.Automation.CompletionResult]::new(
+                $wordToComplete, $wordToComplete, 'ParameterValue', $why)
+        }}
+        return
+    }}
     if ($out.Count -eq 0 -or -not $out[0]) {{
         # No candidates. Yielding nothing hands the position to PowerShell's
         # default completion — filesystem entries offered as if they were
@@ -335,6 +382,25 @@ $env.config.completions.external.completer = {{|spans|
             # current directory. An unfiltered walk that reaches every file
             # beats a filtered one that reaches only this directory's.
             null
+        }} else if $r.exit_code == 103 {{
+            # A broken tasks file (stdout stays empty so older hooks show
+            # plain silence). One more call with `--why` fetches the reason
+            # on stdout — the record's stderr is not reliably a string on
+            # every host, and stdout capture is. Re-offer the typed word —
+            # a no-op insert — with the reason in the description column; a
+            # bare Tab stays silent.
+            # `into binary | decode`: hosts disagree on the captured type
+            # (string on some, binary on others) and each coercion alone
+            # accepts only one of them; binary-then-decode accepts both.
+            let tok = ($spans | last)
+            let why = ((^{prog} --complete --why -- ...($spans | skip 1)
+                | complete).stdout | into binary | decode utf-8
+                | lines | get 0? | default "")
+            if $tok != "" and $why != "" {{
+                [{{value: $tok, description: $why}}]
+            }} else {{
+                null
+            }}
         }} else {{
             # Split `value<tab>description` into a record so nushell renders the
             # description column; a tab-less line (option/choice) is a bare value.

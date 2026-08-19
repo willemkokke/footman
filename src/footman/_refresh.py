@@ -118,7 +118,11 @@ def _rebuild() -> None:
         # Same sealing the app layer does, for the same reason — this child
         # rebuilds the very manifest that answers TAB outside a project.
         registry.seal_needs_project(base)
-        reg = _discover.load_tree(files, base=base)
+        try:
+            reg = _discover.load_tree(files, base=base)
+        except Exception as exc:
+            _write_marker(_paths.global_manifest_path(), exc)
+            return
         _manifest.sync_manifest(
             reg,
             cwd,
@@ -133,9 +137,47 @@ def _rebuild() -> None:
 
     # Mirror the app layer's cwd cascade build; plugin mounts are authored in
     # the tasks files themselves, so discovery alone rebuilds the whole tree.
-    reg = _discover.load_tree(files, base=base)
+    try:
+        reg = _discover.load_tree(files, base=base)
+    except Exception as exc:
+        _write_marker(_paths.manifest_path(cwd), exc)
+        return
     _manifest.sync_manifest(
         reg, cwd, completion_max_age=_config.completion_max_age(cfg), tasks_file=name
+    )
+
+
+# Seconds a broken-tree marker stays authoritative. Short on purpose: within
+# the window every TAB answers instantly (no spawn storm against a file that
+# is still broken), and past it stale-while-revalidate rebuilds — so a fixed
+# file recovers on the press after next, without the marker ever needing to
+# watch the file.
+_MARKER_MAX_AGE = 5
+
+
+def _write_marker(path: Path, exc: BaseException) -> None:
+    """A broken tree is an answer too.
+
+    Without this, a tasks file that fails to import leaves nothing behind:
+    the hot path stays cold, every TAB pays the full cold bound, and the
+    silence never says why. The marker rides the manifest slot — same
+    schema, a `broken` line instead of a `tree` — so the hot path can say
+    what the import said (exit 103) and answer instantly while it does.
+    """
+    from footman import _manifest
+
+    # The message alone when it tells the story (discovery errors carry
+    # file and cause already); the type name only when there is nothing
+    # else to show.
+    told = str(exc).strip()
+    line = (told.splitlines()[0] if told else type(exc).__name__)[:200]
+    _manifest.write_manifest(
+        {
+            "schema": _manifest.SCHEMA_VERSION,
+            "broken": f"tasks failed to import — {line}",
+            "completion_max_age": _MARKER_MAX_AGE,
+        },
+        path,
     )
 
 
@@ -174,7 +216,11 @@ def _rebuild_source(tasks_file: str) -> None:
     # under the (cwd, file) key with max_age=0 — no background refresh,
     # rebuilt on the next -f run or the next cold TAB.
     base = registry.Group("root")
-    reg = _discover.load_tree([one], base=base)
+    try:
+        reg = _discover.load_tree([one], base=base)
+    except Exception as exc:
+        _write_marker(_paths.source_manifest_path(cwd, one), exc)
+        return
     _manifest.sync_manifest(
         reg,
         cwd,

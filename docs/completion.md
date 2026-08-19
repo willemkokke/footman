@@ -74,6 +74,15 @@ it. Any real `fm` run rebuilds the manifest as part of its work, so when
 you want the new task on the menu right now, run anything — `fm --list` is
 the cheapest — and the very next <kbd>Tab</kbd> knows it.
 
+A tasks file that **fails to import** is an answer too, not a silence:
+the rebuild leaves behind what the import said, and <kbd>Tab</kbd> shows
+it where the shell can — zsh as a message line, fish, nushell and
+PowerShell as a note beside the word you typed (accepting it changes
+nothing), bash stays quiet. Either way the press answers instantly rather
+than paying the cold build's wait into nothing, and the note ages out in
+seconds once the file imports again. The full story is one line, so `fm
+--list` prints the same error with its traceback when you want the rest.
+
 **Is it safe to press <kbd>Tab</kbd> in a repository you just cloned?**
 Treat it like running the code, because the cold build above *is* an
 import of the repo's `tasks.py` — the same import a run does, in a

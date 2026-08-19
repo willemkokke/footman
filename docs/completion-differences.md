@@ -78,3 +78,20 @@ each shell continues it in its own accent:
   the final item is harmless — the value parses the same without it.
 - **pwsh** and **nushell** already land the cursor right after every
   completion they insert, which is this behaviour by default.
+
+## When the tasks file is broken
+
+A tasks file that fails to import cannot offer tasks, and each shell says
+so as loudly as it can:
+
+- **zsh** shows the import error as a message line — nothing is offered
+  for insertion.
+- **fish**, **nushell** and **pwsh** re-offer the word you typed with the
+  error beside it (description column or tooltip); accepting it changes
+  nothing on the line.
+- **bash** has no way to display a line without offering to insert it, so
+  it stays silent — but it no longer falls back to offering filenames as
+  if they were tasks.
+
+The full error, traceback included, is one `fm --list` away, and the note
+clears itself within seconds of the file importing again.

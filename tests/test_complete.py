@@ -603,6 +603,114 @@ def test_directory_global_missing_target_stays_silent(tmp_path, monkeypatch, cap
     assert capsys.readouterr().out == ""
 
 
+# --- a broken tasks file: exit 103, the reason, instant answers, recovery -----
+
+
+def _broken_project(tmp_path, monkeypatch):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (proj / "tasks.py").write_text("import footman\n\nthis is a syntax error\n")
+    monkeypatch.chdir(proj)
+    return proj
+
+
+def test_a_broken_tasks_file_answers_103_with_the_reason(tmp_path, monkeypatch, capsys):
+    _broken_project(tmp_path, monkeypatch)
+    rc = complete_cli(["--", ""])
+    captured = capsys.readouterr()
+    assert rc == _complete._EXIT_BROKEN
+    # stdout stays EMPTY: an older hook reads candidates from stdout with
+    # stderr discarded, so it shows exactly the silence it always did.
+    assert captured.out == ""
+    assert "failed to import" in captured.err
+    assert "SyntaxError" in captured.err
+    # The child failed fast and left a marker in the manifest slot, so the
+    # next press answers instantly instead of paying the cold bound again.
+    marker = _complete._load_manifest(str(_paths.cwd_manifest_path()))
+    assert _complete._broken_line(marker)
+    assert complete_cli(["--", ""]) == _complete._EXIT_BROKEN
+    capsys.readouterr()
+    # `--why` re-asks with the reason on stdout — the channel every shell
+    # captures identically — for the hooks' second call.
+    assert complete_cli(["--why", "--", ""]) == _complete._EXIT_BROKEN
+    asked = capsys.readouterr()
+    assert "failed to import" in asked.out
+    assert asked.err == ""
+
+
+def test_a_fixed_tasks_file_recovers_past_the_marker_age(tmp_path, monkeypatch, capsys):
+    import os
+
+    from footman import _refresh
+
+    proj = _broken_project(tmp_path, monkeypatch)
+    assert complete_cli(["--", ""]) == _complete._EXIT_BROKEN
+    capsys.readouterr()
+    # Fix the file. The marker still stands but is short-lived: age it out by
+    # hand and run the stale-while-revalidate spawn inline, so the dance is
+    # deterministic — one stale-served press, then the healthy tree.
+    (proj / "tasks.py").write_text("import footman\n\n@footman.task\ndef hi(): ...\n")
+    manifest = _paths.cwd_manifest_path()
+    old = time.time() - 60
+    os.utime(manifest, (old, old))
+    monkeypatch.setattr(
+        _complete,
+        "_spawn_refresh",
+        lambda override=None, spawn_in=None: _refresh.refresh_cwd(*_paths.child_args()),
+    )
+    assert complete_cli(["--", ""]) == _complete._EXIT_BROKEN  # served once, stale
+    capsys.readouterr()
+    rc = complete_cli(["--", ""])
+    out = capsys.readouterr().out.split()
+    assert rc == 0
+    assert "hi" in out
+
+
+def test_a_broken_f_file_marks_its_own_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+    tf = proj / "custom.py"
+    tf.write_text("import footman\n\nthis is a syntax error\n")
+    rc = complete_cli(["--", f"-f={tf}", ""])
+    captured = capsys.readouterr()
+    assert rc == _complete._EXIT_BROKEN
+    assert captured.out == ""
+    assert "failed to import" in captured.err
+    # The marker sits under the (cwd, file) key — a broken -f file must not
+    # poison the plain-cwd cache.
+    key = _paths.source_manifest_path(Path.cwd(), tf)
+    assert _complete._broken_line(_complete._load_manifest(str(key)))
+    assert not _paths.cwd_manifest_path().is_file()
+
+
+def test_the_marker_ages_fast_and_spawns_with_the_override(tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+    tf = proj / "custom.py"
+    tf.write_text("import footman\n\nthis is a syntax error\n")
+    assert complete_cli(["--", f"-f={tf}", ""]) == _complete._EXIT_BROKEN
+    key = _paths.source_manifest_path(Path.cwd(), tf)
+    old = time.time() - 60
+    os.utime(key, (old, old))
+    spawns: list[tuple[str | None, str | None]] = []
+    monkeypatch.setattr(
+        _complete,
+        "_spawn_refresh",
+        lambda override=None, spawn_in=None: spawns.append((override, spawn_in)),
+    )
+    assert complete_cli(["--", f"-f={tf}", ""]) == _complete._EXIT_BROKEN
+    # The aged marker spawned a rebuild of ITS OWN key: the override rides.
+    assert spawns == [(str(tf), None)]
+
+
 def test_stock_complete_dispatch_keys_the_brand_version(tmp_path, monkeypatch):
     import footman
     from footman import _paths
