@@ -1,6 +1,6 @@
 # One walk for discovery: ceiling, config and task files in a single ascent
 
-*Status: PROPOSED, not built. Raised while landing the branded-tasks-file fix
+*Status: DEFERRED, not built. Raised while landing the branded-tasks-file fix
 (#364). Recorded because the reasoning about **why the config chicken-and-egg
 is harmless** is the expensive part, and it will otherwise be re-derived every
 time someone reads `project_markers()`.*
