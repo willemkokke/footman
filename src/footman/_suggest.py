@@ -167,7 +167,11 @@ def main(argv: list[str]) -> int:
     except Exception:
         return 0  # any failure → no candidates; the hot path falls back to empty
     if values:
-        real.write("\n".join(values) + "\n")
+        # The candidate protocol is newline-delimited, so a value carrying a
+        # newline would split into two bogus candidates — the second being
+        # whatever came after the break. A completion token has no legal
+        # newline; the value's first line is the whole candidate.
+        real.write("\n".join(v.splitlines()[0] for v in values if v.strip()) + "\n")
     return 0
 
 

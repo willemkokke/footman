@@ -56,6 +56,32 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A single-dash misspelling refuses instead of acting.** `-version=1`
+  printed the version and exited 0, and `-install-completion=zsh` would
+  have edited a shell rc — the lenient pre-discovery walk carried the
+  unknown token through, and the dash-stripping normalisation quietly made
+  it drive the real global before the parse that refuses `-version` ever
+  ran. An unknown spelling populates nothing now — and a long name missing
+  one dash is taught its spelling (`-jobs` → "did you mean --jobs?")
+  instead of the fused-short reading's comic "did you mean -j=obs?".
+- **A union carrying `None` admits a JSON null at any width.**
+  `int | str | None` refused `null` — the optional walk recognised
+  exactly-two-member `T | None`, and a third member cost the union its
+  nullability. The remainder keeps union shape and binds as before.
+- **A deleted working directory is one taught line.** Running from a
+  directory another process removed crashed as a raw `FileNotFoundError`
+  traceback out of the first thing that needed a cwd. One line at the
+  door now: cd to a real directory and try again.
+- **A mistyped `tasks` config key refuses loudly.** `tasks = 123` behaved
+  as if unset while every option-backed key refused its wrong TOML type
+  by name; the config-only key now teaches the same way.
+- **A completer value with a newline is one candidate.** The completion
+  protocol is newline-delimited, so a multiline value split into two
+  bogus candidates; the value's first line is the whole candidate.
+- **`--profile`'s scratch directory cannot leak.** It was consumed only
+  by the embed pass, so a run that mentioned the flag and stopped before
+  the trace (a refusal, an interrupt) left one temp directory per
+  mention, forever. An exit sweep backstops the consume path.
 - **The published CLI reference describes computed defaults, never this
   machine's answers.** The docs exporter resolved `--jobs` and `--color` on
   the build runner, so the published reference said `3` and `never` — the

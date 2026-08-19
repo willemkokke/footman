@@ -275,6 +275,19 @@ class App:
             sys.stdout = open(_os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         if sys.stderr is None:
             sys.stderr = open(_os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+        try:
+            _os.getcwd()
+        except OSError:
+            # A shell sitting in a directory another process deleted: every
+            # later step needs a cwd (discovery, config, the cache key), and
+            # each used to fail as its own raw FileNotFoundError traceback.
+            # One taught line, at the door.
+            print(
+                f"{self.brand.prog}: the working directory no longer exists "
+                f"— cd to a real directory and try again",
+                file=sys.stderr,
+            )
+            return 1
         from footman import _app
 
         code = _app.run(args, brand=self.brand)

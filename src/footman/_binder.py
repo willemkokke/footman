@@ -79,11 +79,21 @@ def _strip(ann: Any) -> Any:
 
 
 def _optional_member(ann: Any) -> Any:
-    """For `T | None`, the lone `T`; `None` when *ann* is not that shape."""
+    """The union minus its `None` member, or `None` when *ann* admits none.
+
+    Any union carrying `None` admits a JSON null — `int | str | None` no
+    less than `int | None`. The old exactly-two-members reading refused
+    null for the wider shape: the union kept its other members and lost
+    its nullability. More than one member left keeps union shape, so the
+    remainder binds through the same walk.
+    """
     if _coerce._is_union(ann):
         members = [m for m in typing.get_args(ann) if m is not type(None)]
-        if len(members) == 1 and len(typing.get_args(ann)) == 2:
-            return members[0]
+        if members and len(members) < len(typing.get_args(ann)):
+            remainder = members[0]
+            for member in members[1:]:
+                remainder = remainder | member
+            return remainder
     return None
 
 

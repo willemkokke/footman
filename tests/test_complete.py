@@ -731,6 +731,27 @@ def test_import_time_chatter_is_not_served_as_candidates(tmp_path, monkeypatch, 
     assert capsys.readouterr().out == "gamma\ndelta\n"  # candidates, no chatter
 
 
+def test_a_multiline_completer_value_is_one_candidate(tmp_path, monkeypatch, capsys):
+    # The candidate protocol is newline-delimited, so a value carrying a
+    # newline split into two bogus candidates (audit L48). A completion
+    # token has no legal newline: the value's first line is the candidate.
+    from footman import _suggest
+
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+    (proj / "targets.txt").write_bytes(b"gamma\ndelta broken\nrest\n")
+    (proj / "tasks.py").write_text(
+        (proj / "tasks.py")
+        .read_text()
+        .replace(
+            "return Path('targets.txt').read_text().split()",
+            "return ['gamma', 'delta\\nbroken']",
+        )
+    )
+    assert _suggest.main(["--param", "target", "--path", "deploy"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["gamma", "delta"]
+
+
 def test_suggest_main_swallows_a_failing_completer(tmp_path, monkeypatch, capsys):
     from footman import _suggest
 
