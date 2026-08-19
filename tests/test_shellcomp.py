@@ -1425,11 +1425,21 @@ def test_hook_reattaches_the_head_of_an_attached_path_value(shell):
 
 @pytest.fixture
 def broken_project_dir(home, tmp_path, monkeypatch):
-    """A project whose tasks file does not import — the exit-103 lane."""
+    """A project whose tasks file does not import — the exit-103 lane.
+
+    The marker is warmed in-process first (the generous test budget
+    applies here; the shells' own subprocess calls carry the real 1 s
+    cold bound, which a loaded CI runner's detached child can miss — and
+    a cold miss is the by-design silent answer, not this lane)."""
+    from footman import _complete
+    from footman._complete import complete_cli
+
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text("import footman\n\nthis is a syntax error\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 30.0)
+    assert complete_cli(["--", ""]) == 103  # the child lands the marker
     return tmp_path
 
 
