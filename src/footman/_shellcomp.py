@@ -389,9 +389,13 @@ $env.config.completions.external.completer = {{|spans|
             # every host, and stdout capture is. Re-offer the typed word —
             # a no-op insert — with the reason in the description column; a
             # bare Tab stays silent.
+            # `into binary | decode`: hosts disagree on the captured type
+            # (string on some, binary on others) and each coercion alone
+            # accepts only one of them; binary-then-decode accepts both.
             let tok = ($spans | last)
             let why = ((^{prog} --complete --why -- ...($spans | skip 1)
-                | complete).stdout | into string | lines | get 0? | default "")
+                | complete).stdout | into binary | decode utf-8
+                | lines | get 0? | default "")
             if $tok != "" and $why != "" {{
                 [{{value: $tok, description: $why}}]
             }} else {{
