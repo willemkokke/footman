@@ -201,3 +201,53 @@ Also worth knowing: this note's stated limit — *"a body running
 `while True: pass` runs forever, exactly as it does under fail-fast today"* —
 is the same wall the services note hit from the other direction, and is why a
 service body must return and yield rather than block.
+
+## Build these in from the start (added 2026-08-19)
+
+Four decisions that are free to make while this is being built and expensive
+to change once it has shipped. Each exists because planned work will meet
+this mechanism later; none of them revises a ruling above.
+
+**The stated limit is a property of the body, not of Python.** Part 1's
+sentence — a body running `while True: pass` runs forever — is true for an
+ordinary function and not for every shape footman plans to accept. An
+`async def` body has a cancellation point at every `await`, so a deadline can
+stop one cleanly instead of waiting for a checkpoint that may never come.
+Two consequences: write the user-facing sentence as *"cancelled at the first
+checkpoint or subprocess boundary past the deadline"* rather than as a claim
+about Python, and put the deadline check where a second stop mechanism can
+be issued from later. `timeout=` will mean "will be stopped" for some bodies
+and "will be reported" for others; document that asymmetry the day it becomes
+true rather than the day someone trips over it.
+
+**A timeout must record whether the work is known to have stopped.** Today it
+always is — the deadline kills the process tree, so a timed-out task
+certainly did not finish. That is a property of running in this process, not
+a property of timeouts. Planned work has calls crossing a process or machine
+boundary, where a deadline expiring says nothing about whether the far side
+ran. So do not spell "timed out" as though it implied "did not run", and do
+not let the retry path assume a timeout is always safe to retry. One field
+now; a change to every consumer later.
+
+**Decide whether `retries` is manifest-visible before shipping it.** A caller
+that can see a task already retries will not wrap it in a retry of its own; a
+caller that cannot see it will. This note already flags that multiplication
+with curl's `--retry`, and every later caller — another tool, a CI wrapper,
+planned work that reaches tasks from outside the CLI — is one more layer that
+can stack. Baking the field in with the rest of `TaskOpts` is free while the
+schema is being touched anyway, and a version bump afterwards.
+
+**Gates are per call, not per attempt.** `pre=` already runs once; the same
+must hold for everything that *guards* an attempt rather than performing it —
+availability (`@requires_*`), `needs_project`, and above all the confirm
+gate. A retry that re-prompts a human is a bug found late and read as broken
+rather than as an oversight. The rule also generalises to planned work in
+which a call carries its own permission to run: the permission belongs to the
+call, and the attempts happen inside it.
+
+One clarification while the rulings are being read. Ruling 3 (*no theory
+about what deserves retry*) is about **failure kinds** — footman does not
+decide that a deliberate `fail()` is more final than a crash. It says nothing
+about **declared task properties**, so a future rule that keys retry
+behaviour on something the author wrote down is consistent with it rather
+than a reversal of it.
