@@ -40,7 +40,7 @@ operator, footman refuses with a taught error rather than passing `|` as a
 literal argument. Ask for a shell (`shell=True`, or a named one like
 `shell="bash"`), split the pipeline into separate `run()` steps, or pass a
 list to use the character literally. A shell you *ask* for is resolved by a
-policy (`[tool.footman] shell`), can be hardened (`strict=True` for
+policy (`[tool.footman] shell.default`), can be hardened (`strict=True` for
 `set -eo pipefail`, `clean=True` to skip startup files), and receives the
 whole string to interpret, punctuation and all.
 

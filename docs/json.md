@@ -374,9 +374,12 @@ $ fm --json --list
 Each parameter always has `name` and `kind` (`flag` | `option` | `positional`
 | `variadic` | `stdin`, the last being a whole-document parameter with no
 token spelling; see [Pipelines](pipelines.md)), plus whichever apply:
-`required`, `choices`, `types`, `multiple`, `mapping`, `nosplit`, `path`,
-`min`/`max`, `env`, `stdin` (how the value binds the pipe), `shape`,
-`group`, `dynamic`, and `doc`, the author's
+`required`, `default`, `computed` (the default resolves live), `choices`,
+`accepts` (input synonyms beyond the choices — an enum's aliases and value
+faces), `types`, `multiple`, `mapping`, `key_types`/`value_types`/
+`value_choices` (a dict parameter's two sides), `nosplit`, `path`, `glob`,
+`min`/`max`, `env`, `secret`, `hidden`, `stdin` (how the value binds the
+pipe), `shape`, `group`, `dynamic`, and `doc`, the author's
 [per-parameter help](typing.md#validation-markers), whether from a
 `doc("…")` marker or a parsed docstring. A task node carries
 `help` (the docstring's first line) and, when the docstring has a body,

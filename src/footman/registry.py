@@ -659,7 +659,19 @@ def _empty_body(fn: object) -> bool:
         and isinstance(stmts[0].value.value, str)
     ):
         stmts = stmts[1:]  # drop the docstring
-    return all(isinstance(s, ast.Pass) for s in stmts)
+
+    # `...` counts as empty exactly like `pass`: it is the stub idiom this
+    # codebase's own examples teach, and a `@group.default` written
+    # `def lint_all(): ...` used to read as a real body — the group then
+    # silently ran nothing, which is the one thing a default must not do.
+    def inert(stmt: ast.stmt) -> bool:
+        return isinstance(stmt, ast.Pass) or (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and stmt.value.value is ...
+        )
+
+    return all(inert(s) for s in stmts)
 
 
 # The orchestration options `.opts()` can override, mapped to their task

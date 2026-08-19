@@ -78,7 +78,7 @@ invocation.
 
 ```console
 $ fm docs.site docs/tasks
-wrote 19 pages under docs/tasks
+wrote 20 pages under docs/tasks
 ```
 
 One file per task, an `index.md` per group with relative links, directories

@@ -147,7 +147,7 @@ spellings, so you never have to know that in advance:
 ```
 
 Take the bare one to mean "use its default" (a
-[bare mention](orchestration.md)); take the `=` one and press <kbd>Tab</kbd>
+[bare mention](plugins.md)); take the `=` one and press <kbd>Tab</kbd>
 again to pick a value. A flag has one spelling only: it takes no value, and
 `--no-fix` is how you turn one off.
 

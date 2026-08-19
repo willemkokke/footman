@@ -781,3 +781,33 @@ def test_the_threat_model_allows_the_completion_build():
         "SECURITY.md solicits reports for 'a completion path that executes "
         "something' — the cold-cache build is exactly that, by design."
     )
+
+
+def test_the_llms_files_generate_clean(tmp_path, monkeypatch):
+    """The agent-facing index and full-text file, generated and audited.
+
+    Four defects shipped for a release apiece (audit M34-M37): a generated
+    index page linked at .../tasks/index/ where the site publishes
+    .../tasks/; quiz admonitions and table rows served as one-line
+    descriptions ("1.", "| Task | Description |"); relative .md links that
+    404 the moment an agent resolves them against the site root; and six
+    raw --8<-- directives standing where llms-full.txt promised sections.
+    The generator runs here against the real docs tree, and every class is
+    asserted absent.
+    """
+    import tasks as repo_tasks
+
+    monkeypatch.chdir(ROOT)
+    # The nav includes generated pages a fresh checkout does not have —
+    # the cheap generation prefix (no pty, no casts) runs first, exactly
+    # as the docs build orders it.
+    repo_tasks._generate_pages()
+    repo_tasks._write_llms_txt()
+    index = (DOCS / "llms.txt").read_text(encoding="utf-8")
+    assert not re.search(r"\): (\d+\.|\|)", index)  # descriptions are prose
+    assert "Skip to" not in index  # the quiz admonition's tail is chrome
+    assert not re.search(r"\]\((?!https?://)[^)]*\.md\)", index)  # links live
+    assert "/tasks/index/" not in index  # a dir index publishes at the dir
+    assert "https://willemkokke.github.io/footman/tasks/)" in index
+    full = (DOCS / "llms-full.txt").read_text(encoding="utf-8")
+    assert "--8<--" not in full  # every include resolved to its section

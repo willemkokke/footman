@@ -11,7 +11,9 @@ console scripts, `footman` and the two-letter `fm`. Added to a project, they
 live in that project's environment, so reach them with `uv run fm …` (or
 activate the virtualenv and type `fm` directly).
 
-You can also install it once, globally (`uv tool install "footman[uv]"`),
+You can also install it once, globally (`uv tool install "footman[uv]"` —
+the `[uv]` extra bundles uv itself, so the handoffs below work even where
+no uv is on the PATH),
 and still type plain `fm` everywhere: a project whose lockfile pins footman
 runs its own pinned copy, and a standalone tasks file can carry its own
 dependencies inline. The full rules, and the opt-out, live in the

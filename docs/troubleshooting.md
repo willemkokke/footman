@@ -25,7 +25,7 @@ executing anything, so a typo never half-runs a chain.
 | You'll see | It means | The fix |
 | ---------- | -------- | ------- |
 | `no task named 'linnt' (know: deploy, lint, up)` | no task by that name here | the `know:` list is your menu; `fm --list` for help text |
-| `lint: unknown option --fx (task options come right after their task; globals go before the first task)` | the option isn't lint's | `fm --help lint` shows its real options |
+| `lint: unknown option --fx — did you mean '--fix'?` | a near-miss on one of lint's options | take the hint; with no close match the message explains placement instead (task options come right after their task; globals go before the first task) |
 | `deploy: missing required positional(s): <target>` | a positional with no default wasn't given | required params have no default — pass a value |
 | `deploy: <target> must be one of dev\|staging\|prod (got 'produ') — did you mean 'prod'?` | eager choice validation (`Literal`, `Enum`, strict `suggest`) | take the hint |
 | `deploy: <target> must be one of dev\|staging\|prod — 'check' looks like the next task; did you forget <target>?` | a chain word landed where a required value belongs | give the value, then the next task |

@@ -15,6 +15,13 @@ simply stops, forever, with no stack trace pointing anywhere. That silence
 is what makes deadlocks worse than crashes: a crash tells you where; a
 deadlock tells you nothing.
 
+The classic analysis names **four conditions that must all hold** — the
+quiz question above, answered: *mutual exclusion* (the resource serves one
+holder at a time), *hold-and-wait* (taking one resource, then blocking for
+another while still holding), *no preemption* (nothing takes a held
+resource away), and *circular wait* (the holders form a ring). Break any
+one and deadlock is impossible.
+
 The ingredient that matters most in practice is **hold-and-wait**: taking
 a resource, then blocking for another while still holding the first. Code
 that never waits while holding cannot complete the circle. The strongest

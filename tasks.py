@@ -528,18 +528,40 @@ def _write_llms_txt() -> None:
     walk(nav)
 
     def first_sentence(text: str) -> str:
-        """The first sentence of the page's first prose paragraph."""
+        """The first sentence of the page's first *prose* paragraph.
+
+        Prose, strictly: list items and table rows are structure, not
+        description — a quiz admonition's `1. What four conditions…` and a
+        generated page's `| Task | Description |` both used to be served
+        as the page's one-line summary, which read as junk in every agent
+        index built on this file.
+        """
         if text.startswith("---\n"):  # strip front-matter
             _, _, text = text.partition("\n---\n")
-        skip = ("#", "---", "[![", "!!!", ">", "<", "--8<--")
+        skip = ("#", "---", "[![", "!!!", ">", "<", "--8<--", "|", "- ", "* ")
         fenced = False
+        admonition = False
         paragraph: list[str] = []
-        for line in text.splitlines():
-            line = line.strip()
+        for raw in text.splitlines():
+            line = raw.strip()
+            if admonition:
+                # An admonition's whole indented body is chrome — the quiz
+                # block's numbered questions AND its "skip ahead" prose
+                # both read as junk when served as a page description.
+                if not line or raw.startswith((" ", "\t")):
+                    continue
+                admonition = False
+            if line.startswith("!!!"):
+                admonition = True
+                continue
             if line.startswith("```"):
                 fenced = not fenced
                 continue
-            if fenced or line.startswith(skip):
+            digits = line.split(".", 1)[0]
+            numbered = digits.isdigit() and line.startswith(f"{digits}.")
+            if fenced or line.startswith(skip) or numbered:
+                if paragraph:
+                    break  # structure ends the paragraph it follows
                 continue
             if not line:
                 if paragraph:
@@ -547,6 +569,17 @@ def _write_llms_txt() -> None:
                 continue
             paragraph.append(line)
         prose = " ".join(paragraph)
+
+        # A relative .md link 404s the moment an agent resolves it against
+        # the site root; rewrite to the published URL, index pages included.
+        def absolute(match: re.Match[str]) -> str:
+            target = match.group(1)
+            if target == "index.md" or target.endswith("/index.md"):
+                stem = target.removesuffix("index.md").rstrip("/")
+                return f"]({site}{stem + '/' if stem else ''})"
+            return f"]({site}{target.removesuffix('.md')}/)"
+
+        prose = re.sub(r"\]\((?!https?://)([^)#]+\.md)\)", absolute, prose)
         end = prose.find(". ")
         return prose[: end + 1] if end != -1 else prose
 
@@ -564,16 +597,53 @@ def _write_llms_txt() -> None:
         "",
     ]
     full = ["# footman — full documentation", ""]
+
+    def resolve_snippets(text: str) -> str:
+        """Inline `--8<-- "path"` includes, the way the site build does.
+
+        llms-full.txt promises the whole site's text in one file; a raw
+        directive where a section belongs is six missing sections and a
+        syntax no reader resolves. Paths are repo-relative, matching the
+        pymdownx configuration; a missing file keeps the directive so the
+        gap is visible rather than silent.
+        """
+
+        def inline(match: re.Match[str]) -> str:
+            path = Path(match.group(1))
+            if not path.is_file():
+                return match.group(0)
+            return resolve_snippets(path.read_text(encoding="utf-8").rstrip())
+
+        return re.sub(
+            r"""^--8<-- ["']([^"']+)["']$""", inline, text, flags=re.MULTILINE
+        )
+
     for title, name in pages:
         if name == "coverage.md":
             continue  # an embedded HTML report; nothing for a reader here
         text = (Path("docs") / name).read_text(encoding="utf-8")
-        if name == "changelog.md":  # the page is a snippet include; inline it
-            text = Path("CHANGELOG.md").read_text(encoding="utf-8")
-        url = site if name == "index.md" else f"{site}{name.removesuffix('.md')}/"
-        desc = first_sentence(text)
+        if name.endswith("index.md"):
+            # A directory's index publishes at the directory, not at
+            # …/index/ — the generated Task reference 404'd on the wrong
+            # form for as long as nothing read this file critically.
+            stem = name.removesuffix("index.md").rstrip("/")
+            url = f"{site}{stem + '/' if stem else ''}"
+        else:
+            url = f"{site}{name.removesuffix('.md')}/"
+        # Snippets resolve before anything reads the page: the description
+        # of a page that IS an include (changelog.md) lives in the included
+        # text, and llms-full.txt carries the sections, not the directives.
+        resolved = resolve_snippets(text.rstrip())
+        desc = first_sentence(resolved)
         index.append(f"- [{title}]({url}): {desc}" if desc else f"- [{title}]({url})")
-        full += ["", "---", "", f"<!-- {title} — {url} -->", "", text.rstrip()]
+        full += [
+            "",
+            "---",
+            "",
+            f"<!-- {title} — {url} -->",
+            "",
+            resolved,
+        ]
     (Path("docs") / "llms.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
     joined = "\n".join(full) + "\n"
     (Path("docs") / "llms-full.txt").write_text(joined, encoding="utf-8")
@@ -853,44 +923,28 @@ def _api_markdown() -> str:
     return "".join(parts)
 
 
-@docs.task(name="build")
-def docs_build(check: bool = False):  # pragma: no cover — see below
-    """Build the docs site into ./site; regenerates llms.txt and docs/tasks/.
+def _generate_pages() -> None:
+    """Every generated page except the pty-recorded shots and casts.
 
-    Not unit-tested, and deliberately: the body is orchestration over
-    zensical, a pty screenshotter and five real shells, so a test could only
-    stub twenty collaborators and assert the call order back — a change
-    detector that passes while the site breaks. Its real test is CI's
-    strict docs build, which runs the whole thing against the actual tools.
-    The pieces with logic of their own — the llms.txt generator, the cast
-    guard, the scratch projects — are tested separately, where a test can
-    say something true.
-
-    Args:
-        check: build strictly (what CI runs)
+    The cheap, pure prefix of the docs build — API reference, task pages,
+    the grammar/config/errors tables, latest-changes — split out so the
+    llms drift guard can regenerate it from an empty checkout: the guard
+    failed on a fresh CI tree precisely because these pages are gitignored
+    and only the full build had ever written them.
     """
-    # Dogfood the first-party plugin: regenerate the live task-reference
-    # pages (site mode) and the single-page example the taskdocs guide
-    # embeds (page mode). Plain calls — @task returns plain functions.
-    # Order matters on a fresh checkout: llms.txt walks the nav, and the
-    # nav includes the generated tasks/ pages — generate them first.
     import shutil
     from pathlib import Path
 
     from footman.tasks.docs import config as taskdocs_config
+    from footman.tasks.docs import errors as taskdocs_errors
     from footman.tasks.docs import globals_ as taskdocs_globals
     from footman.tasks.docs import page as taskdocs_page
-    from footman.tasks.docs import shots as taskdocs_shots
     from footman.tasks.docs import site as taskdocs_site
 
     # Start from nothing, which is the only state that ever gets validated:
     # both trees are gitignored, so CI builds them from an empty checkout
     # while a working copy accumulates whatever an older layout left behind.
-    # A stale `docs/_generated/tools/` — pages for stubs that moved out to
-    # toolroom releases ago — failed a local strict build with
-    # `Could not collect 'footman._stubs.nu.Nu'`, a module this repo has not
-    # had in months. Clearing costs nothing: every file below is rewritten
-    # unconditionally anyway.
+    # Clearing costs nothing: every file below is rewritten unconditionally.
     for stale in (Path("docs/_generated"), Path("docs/tasks")):
         shutil.rmtree(stale, ignore_errors=True)
 
@@ -912,10 +966,36 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     taskdocs_config(out=Path("docs/_generated/config.md"))
     # Every error and note the runtime can say, extracted from the source —
     # a reference page that regenerates each build and so can never drift.
-    from footman.tasks.docs import errors as taskdocs_errors
-
     taskdocs_errors(out=Path("docs/_generated/errors.md"))
     _write_latest_changes()
+
+
+@docs.task(name="build")
+def docs_build(check: bool = False):  # pragma: no cover — see below
+    """Build the docs site into ./site; regenerates llms.txt and docs/tasks/.
+
+    Not unit-tested, and deliberately: the body is orchestration over
+    zensical, a pty screenshotter and five real shells, so a test could only
+    stub twenty collaborators and assert the call order back — a change
+    detector that passes while the site breaks. Its real test is CI's
+    strict docs build, which runs the whole thing against the actual tools.
+    The pieces with logic of their own — the llms.txt generator, the cast
+    guard, the scratch projects — are tested separately, where a test can
+    say something true.
+
+    Args:
+        check: build strictly (what CI runs)
+    """
+    # Dogfood the first-party plugin: regenerate the live task-reference
+    # pages (site mode) and the single-page example the taskdocs guide
+    # embeds (page mode). Plain calls — @task returns plain functions.
+    # Order matters on a fresh checkout: llms.txt walks the nav, and the
+    # nav includes the generated tasks/ pages — generate them first.
+    from pathlib import Path
+
+    from footman.tasks.docs import shots as taskdocs_shots
+
+    _generate_pages()
     # Terminal screenshots, captured from the real CLI on a pty and framed
     # as SVGs — the pages show footman exactly as a terminal does, and a
     # rebuild regenerates them, so they cannot drift either.

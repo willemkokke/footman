@@ -15,7 +15,8 @@ released the moment a thread waits on the outside world: a subprocess
 finishing, a file, a socket. Threads that mostly *wait* run concurrently
 in every way that matters; threads that mostly *compute Python* do not.
 (The free-threaded builds remove the lock entirely; well-behaved threaded
-code runs unchanged, just faster, and footman's CI runs them.)
+code runs unchanged — faster where threads genuinely compute in parallel,
+at a measurable single-thread cost — and footman's CI runs them.)
 
 ## Why it matters to a task runner
 

@@ -24,6 +24,8 @@ graph TD
   P --> S["Spawning programs"]
   P --> T["Threads & the GIL"]
   C --> D["Deadlocks"]
+  E --> Sh["The shell"]
+  Sh --> S
   E --> S
   S --> D
   T --> D

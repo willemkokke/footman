@@ -23,9 +23,10 @@ bridge, …) instead of replacing it: `fm` lines are answered by footman,
 every other command passes through untouched. Running the installer twice
 changes nothing.
 
-nushell is the one shell without a session-only `--setup-completion` form:
-the hook mutates `$env.config`, which an `eval` can't apply. Install and
-`exec nu` (or open a new shell) instead.
+`fm --setup-completion=nushell` prints the same hook for a session-only
+try-out — nushell sources it rather than `eval`-ing it, so save it to a
+file and `source` that. For everyday use, install and `exec nu` (or open
+a new shell).
 
 ## What you get
 

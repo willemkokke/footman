@@ -60,7 +60,7 @@ fm -s a b c         # -s/--sequential runs them one at a time -> ~3.0s
 ```
 
 In the measured [comparison](comparison.md), this default is most of the
-story: the 4× gap on a real gate is architecture, not dispatch speed.
+story: the gap on a real gate is architecture, not dispatch speed.
 
 Two flags size the concurrency, and they reach **both** engines: the scheduler
 and a `parallel()` inside a task body.
@@ -461,7 +461,9 @@ def lint_all(fix: Forward[bool] = False):
   group-typed default would make bare `fm lint` resolve to another bare
   group, which could point at another still, a regress with no floor).
 - An **empty body** fans out the group's own tasks; a non-empty body is the
-  escape hatch where you write the fan-out yourself.
+  escape hatch where you write the fan-out yourself. Empty means a body of
+  only a docstring, `pass`, or `...` — the three stub spellings all read
+  the same way, so the idiom you reach for first is the one that works.
 - On an empty-body default, **mark a parameter `Forward` if you want it to reach
   the members.** The default has no body, so a plain parameter binds to it and
   goes nowhere: `fix: bool` accepts `--fix` and then nothing happens with it.
