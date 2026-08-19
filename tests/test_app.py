@@ -1396,6 +1396,22 @@ def _tty_streams(monkeypatch):
     return out, err
 
 
+def test_ansi_capable_gates_on_tty_and_windows_console(monkeypatch):
+    import os
+
+    from footman import _describe
+
+    # Not a tty: never capable, whatever the platform.
+    assert not _describe.ansi_capable(io.StringIO())
+    # A POSIX tty is an ANSI surface as-is.
+    assert _describe.ansi_capable(_Tty())
+    # A Windows tty is not yet one: the console must prove it interprets
+    # escapes (VT processing), or bold prints as `←[1m` noise. A fake tty
+    # with no console behind it must refuse rather than paint.
+    monkeypatch.setattr(os, "name", "nt")
+    assert not _describe.ansi_capable(_Tty())
+
+
 def test_global_help_paints_on_a_tty(project, monkeypatch):
     out, _ = _tty_streams(monkeypatch)
     assert _app.run(["--help"]) == 0

@@ -56,6 +56,18 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Windows paints only where the console can.** Colour and the live
+  status line gated on tty-ness alone, and a legacy Windows console shows
+  raw `←[1m` escapes rather than bold. Every ANSI surface now asks the
+  console for VT processing first — a no-op under Windows Terminal, an
+  upgrade on a conhost that has it off, and a refusal exactly where the
+  escapes would print as noise.
+- **A tasks file's name is case-exact.** On a case-insensitive filesystem
+  a `Tasks.py` was silently accepted (and `--where` then reported a path
+  that does not exist on disk) — a project that stops working the day it
+  reaches a Linux box. The cascade walk and the project/repo markers now
+  match the on-disk spelling exactly, on every platform — and ask each
+  directory once instead of once per marker while they're at it.
 - **`--help` lists mounted plugin globals.** `--profile` and `--env-file`
   rode the same pre-task position as every global yet appeared on no help
   surface, while the troubleshooting page said `fm --help` lists them all.
