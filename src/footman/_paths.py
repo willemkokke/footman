@@ -45,12 +45,27 @@ def project_markers() -> tuple[str, ...]:
     return (*PROJECT_MARKERS, config_basename(), _tasks_file)
 
 
+def _entries(directory: Path) -> set[str]:
+    """The directory's entry names, exactly as spelled on disk.
+
+    Membership here is the case-exact `exists()`: on a case-insensitive
+    filesystem `(d / "tasks.py").exists()` answers True for a file named
+    `Tasks.py`, and a project silently accepted that way stops working the
+    day it reaches a Linux box. One listing also asks the directory once
+    rather than once per marker."""
+    try:
+        return set(os.listdir(directory))
+    except OSError:
+        return set()
+
+
 def find_project_root(start: Path | None = None) -> Path:
     """Nearest ancestor of *start* (default: cwd) containing a project marker."""
     start = (start or Path.cwd()).resolve()
     markers = project_markers()
     for directory in (start, *start.parents):
-        if any((directory / marker).exists() for marker in markers):
+        names = _entries(directory)
+        if any(marker in names for marker in markers):
             return directory
     return start
 
@@ -69,7 +84,8 @@ def find_repo_root(start: Path | None = None) -> Path:
     """
     start = (start or Path.cwd()).resolve()
     for directory in (start, *start.parents):
-        if any((directory / marker).exists() for marker in REPO_MARKERS):
+        names = _entries(directory)
+        if any(marker in names for marker in REPO_MARKERS):
             return directory
     return find_project_root(start)
 
@@ -92,8 +108,15 @@ def dir_chain(cwd: Path, ceiling: Path) -> list[Path]:
 def task_files(
     cwd: Path, ceiling: Path, filename: str = DEFAULT_TASKS_FILE
 ) -> list[Path]:
-    """Existing task files from *ceiling* down to *cwd* (root first, cwd last)."""
-    return [f for d in dir_chain(cwd, ceiling) if (f := d / filename).is_file()]
+    """Existing task files from *ceiling* down to *cwd* (root first, cwd last).
+
+    Case-exact: a `Tasks.py` is not a tasks file, even where the filesystem
+    would happily open it under the documented name."""
+    return [
+        f
+        for d in dir_chain(cwd, ceiling)
+        if filename in _entries(d) and (f := d / filename).is_file()
+    ]
 
 
 # The brand's locations, set once by `App.run` before anything reads them —
@@ -386,8 +409,13 @@ def source_manifest_path(cwd: Path, tasks_file: Path) -> Path:
     so the task set depends on the pair — the same file opened from two projects
     is two caches. A separate key from `manifest_path`, so a `-f` run never
     poisons the plain-cwd completion cache.
+
+    `expanduser` here, in the one key function, so every keyer agrees:
+    `resolve()` alone leaves `~` literal, and a `-f=~/tasks.py` TAB would key
+    `<cwd>/~/tasks.py` while the refresh child (which expands before loading)
+    keys the home-anchored truth — a manifest that then never warms.
     """
-    joined = f"{cwd.resolve()}\0{tasks_file.resolve()}"
+    joined = f"{cwd.resolve()}\0{tasks_file.expanduser().resolve()}"
     key = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
     return footman_cache_dir() / f"{key}.json"
 

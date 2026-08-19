@@ -48,13 +48,61 @@ def wants_color(stream: Any, mode: str = "auto") -> bool:
         return False
     if mode == "always":
         return True
+    import os as _os
+
+    return (
+        ansi_capable(stream)
+        and "NO_COLOR" not in _os.environ
+        and _os.environ.get("TERM") != "dumb"
+    )
+
+
+def ansi_capable(stream: Any) -> bool:
+    """tty-ness plus, on Windows, a console that interprets ANSI.
+
+    A Windows tty is not yet an ANSI surface: legacy conhost prints the
+    escapes as `←[1m` noise. Ask the console for VT processing the way
+    every modern CLI does — a no-op where it is already on (Windows
+    Terminal), an upgrade where it is off but available (Windows 10's
+    conhost), and a refusal exactly where the escapes would show as noise.
+    """
     try:
         tty = bool(stream.isatty())
     except Exception:
-        tty = False
+        return False
     import os as _os
 
-    return tty and "NO_COLOR" not in _os.environ and _os.environ.get("TERM") != "dumb"
+    if not tty or _os.name != "nt":
+        return tty
+    try:
+        fileno = stream.fileno()
+    except Exception:
+        # No OS handle to interrogate: a tty-claiming stream without one is
+        # a wrapper (or a test fake) that answers for its own rendering, so
+        # its claim stands. Every real console stream has a fileno, so the
+        # probe below still covers the console that cannot paint.
+        return True
+    try:
+        import ctypes
+        import msvcrt
+
+        # getattr with a default, not attribute access: both exist only on
+        # Windows, and the checkers read this file on every platform.
+        get_handle = getattr(msvcrt, "get_osfhandle", None)
+        windll = getattr(ctypes, "windll", None)
+        if get_handle is None or windll is None:
+            return False
+        handle = get_handle(fileno)
+        kernel32 = windll.kernel32
+        mode = ctypes.c_uint32()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False
+        vt = 0x0004  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        if mode.value & vt:
+            return True
+        return bool(kernel32.SetConsoleMode(handle, mode.value | vt))
+    except Exception:
+        return False
 
 
 def bold(text: str, on: bool) -> str:

@@ -713,3 +713,33 @@ def test_two_providers_one_section_is_refused():
     assert not result.ok
     assert "plugins.acme-devkit" in result.stderr
     assert "acme.devkit" in result.stderr and "other.kit" in result.stderr
+
+
+def test_global_help_lists_plugin_globals_with_provenance():
+    # `fm --help` claims to list the globals; a mounted plugin's ride the
+    # same pre-task position, so the page must list them too — under their
+    # own heading, with where each came from.
+    reg = Group("root")
+    opt = _adopt(reg, "env-file", Path, help="load this .env file")
+    opt.owner = "footman.env_files"
+
+    @reg.task(uses=[opt])
+    def build(): ...
+
+    result = Runner().invoke("--help", tasks=reg)
+    assert result.ok, result.stderr
+    assert "plugin globals (before the first task):" in result.stdout
+    assert "--env-file" in result.stdout
+    assert "load this .env file" in result.stdout
+    assert "from footman.env_files" in result.stdout
+
+
+def test_global_help_without_plugin_globals_has_no_plugin_heading():
+    reg = Group("root")
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("--help", tasks=reg)
+    assert result.ok, result.stderr
+    assert "plugin globals" not in result.stdout

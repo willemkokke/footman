@@ -412,7 +412,12 @@ def _make_ctx(
     # onto `real`, so its children style exactly as parallel() children
     # style for their parent's terminal — both engines, one look. Only
     # liveness (sink is None, judged in run()) gates in-place rewrites.
-    ctx.tty = not capture and real.isatty() and not _plain_output(ctx.no_color)
+    # `ansi_capable`, not bare tty-ness: the live line repaints with escape
+    # codes, and a Windows console that cannot interpret them would show
+    # the cursor dance as noise rather than a status line.
+    ctx.tty = (
+        not capture and _describe.ansi_capable(real) and not _plain_output(ctx.no_color)
+    )
     # `--color=always` forces colour even off a terminal, but not into a captured
     # envelope: ANSI in `--json` stdout would corrupt it, so capture wins here
     # exactly as it does for `tty` above.

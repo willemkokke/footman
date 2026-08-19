@@ -90,6 +90,37 @@ def test_task_files_collects_existing_only(tmp_path):
     assert files == [tmp_path / "tasks.py", deep / "tasks.py"]
 
 
+def test_task_files_are_case_exact(tmp_path):
+    # On a case-insensitive filesystem `(d / "tasks.py").is_file()` answers
+    # True for a file named `Tasks.py`; accepting it means a project that
+    # stops working the day it reaches a Linux box. The walk must match the
+    # on-disk spelling exactly — on every platform.
+    # Two directories, not one file renamed: on a case-insensitive
+    # filesystem writing `tasks.py` beside `Tasks.py` opens the SAME file
+    # under its first name, and the test would be testing nothing.
+    wrong = tmp_path / "wrong"
+    right = tmp_path / "right"
+    wrong.mkdir()
+    right.mkdir()
+    (wrong / "Tasks.py").write_text("")
+    assert _paths.task_files(wrong, wrong) == []
+    (right / "tasks.py").write_text("")
+    assert _paths.task_files(right, right) == [right / "tasks.py"]
+
+
+def test_project_markers_are_case_exact(tmp_path):
+    # Separate trees for the two spellings — see the note above about
+    # case-insensitive filesystems collapsing them into one file.
+    wrong = tmp_path / "wrong" / "inner"
+    right = tmp_path / "right" / "inner"
+    wrong.mkdir(parents=True)
+    right.mkdir(parents=True)
+    (wrong.parent / "PyProject.toml").write_text("")  # not a marker, anywhere
+    assert _paths.find_project_root(wrong) == wrong.resolve()
+    (right.parent / "pyproject.toml").write_text("")
+    assert _paths.find_project_root(right) == right.parent.resolve()
+
+
 def test_manifest_path_is_per_directory(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     assert _paths.manifest_path(a) != _paths.manifest_path(b)

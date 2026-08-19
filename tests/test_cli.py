@@ -62,7 +62,9 @@ def _aged_manifest(tree, tmp_path, max_age, age_s=3600):
 
 def test_swr_fresh_manifest_does_not_spawn(tree, tmp_path, monkeypatch):
     spawns: list[int] = []
-    monkeypatch.setattr(_complete, "_spawn_refresh", lambda: spawns.append(1))
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda spawn_in=None: spawns.append(1)
+    )
     path = tmp_path / "m.json"
     path.write_text(
         json.dumps(
@@ -75,7 +77,9 @@ def test_swr_fresh_manifest_does_not_spawn(tree, tmp_path, monkeypatch):
 
 def test_swr_aged_manifest_spawns_and_bumps_mtime(tree, tmp_path, monkeypatch):
     spawns: list[int] = []
-    monkeypatch.setattr(_complete, "_spawn_refresh", lambda: spawns.append(1))
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda spawn_in=None: spawns.append(1)
+    )
     path = _aged_manifest(tree, tmp_path, 600)
     complete_cli(["--manifest", str(path), "--", ""])
     assert spawns == [1]
@@ -84,7 +88,9 @@ def test_swr_aged_manifest_spawns_and_bumps_mtime(tree, tmp_path, monkeypatch):
 
 def test_swr_disabled_never_spawns(tree, tmp_path, monkeypatch):
     spawns: list[int] = []
-    monkeypatch.setattr(_complete, "_spawn_refresh", lambda: spawns.append(1))
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda spawn_in=None: spawns.append(1)
+    )
     path = _aged_manifest(tree, tmp_path, None)  # off
     complete_cli(["--manifest", str(path), "--", ""])
     assert spawns == []
@@ -92,7 +98,9 @@ def test_swr_disabled_never_spawns(tree, tmp_path, monkeypatch):
 
 def test_swr_rapid_tabs_spawn_exactly_once(tree, tmp_path, monkeypatch):
     spawns: list[int] = []
-    monkeypatch.setattr(_complete, "_spawn_refresh", lambda: spawns.append(1))
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda spawn_in=None: spawns.append(1)
+    )
     path = _aged_manifest(tree, tmp_path, 600)
     complete_cli(["--manifest", str(path), "--", ""])  # aged → spawn + bump mtime
     complete_cli(["--manifest", str(path), "--", ""])  # now fresh → no spawn

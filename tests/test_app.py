@@ -751,15 +751,30 @@ def test_global_help_marks_a_computed_default(project, capsys, monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
     assert _app.run(["--help"]) == 0
-    lines = capsys.readouterr().out.splitlines()
-    jobs = next(line for line in lines if "--jobs=N" in line)
-    colour = next(line for line in lines if "--color=WHEN" in line)
+    out = capsys.readouterr().out
     # A bare number reads as an arbitrary constant; it is this machine's cores
     # minus one, and a reader who copies it should know that. Colour's default
     # is computed too — it reads NO_COLOR/FORCE_COLOR — so with a clean
-    # environment it answers auto, and says it worked for the answer.
+    # environment it answers auto, and says it worked for the answer. Search
+    # the whole page, not one line: a narrow terminal wraps the suffix onto
+    # the row's continuation line.
+    jobs = out[out.index("--jobs=N") : out.index("--yes")]
     assert "(computed)" in jobs
-    assert "default: auto (computed)" in colour
+    assert "default: auto (computed)" in out
+
+
+def test_global_help_fits_the_terminal(project, capsys, monkeypatch):
+    # Seven lines used to overflow 80 columns and hard-wrap in the terminal,
+    # shearing the option column apart. Every row now wraps to the reported
+    # width with a hanging indent.
+    monkeypatch.setenv("COLUMNS", "80")
+    monkeypatch.setenv("LINES", "24")
+    assert _app.run(["--help"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    from footman import _describe
+
+    wide = [ln for ln in lines if _describe.display_width(ln) > 80]
+    assert wide == []
 
 
 def test_a_global_that_must_be_given_a_value_shows_no_default(project, capsys):
@@ -1394,6 +1409,35 @@ def _tty_streams(monkeypatch):
     monkeypatch.setattr(sys, "stdout", out)
     monkeypatch.setattr(sys, "stderr", err)
     return out, err
+
+
+def test_ansi_capable_gates_on_tty_and_windows_console(monkeypatch, tmp_path):
+    import os
+
+    from footman import _describe
+
+    # Not a tty: never capable, whatever the platform.
+    assert not _describe.ansi_capable(io.StringIO())
+    # A POSIX tty is an ANSI surface as-is.
+    assert _describe.ansi_capable(_Tty())
+    monkeypatch.setattr(os, "name", "nt")
+    # A Windows tty without an OS handle keeps its own claim — that shape
+    # is a wrapper (or a test fake) answering for its own rendering.
+    assert _describe.ansi_capable(_Tty())
+
+    # A handle-backed Windows tty must prove its console interprets escapes
+    # (VT processing), or bold prints as `←[1m` noise. A handle with no
+    # console behind it must refuse rather than paint.
+    class _HandleTty(_Tty):
+        def __init__(self, fd: int) -> None:
+            super().__init__()
+            self._fd = fd
+
+        def fileno(self) -> int:
+            return self._fd
+
+    with open(tmp_path / "not-a-console", "w") as fh:
+        assert not _describe.ansi_capable(_HandleTty(fh.fileno()))
 
 
 def test_global_help_paints_on_a_tty(project, monkeypatch):

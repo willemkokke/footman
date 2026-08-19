@@ -56,6 +56,61 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Built-in globals complete by the both-spellings rule.** Completing a
+  value-taking built-in offered only its bare name — the value path
+  (`--color=<TAB>`) stayed undiscoverable, while task options and plugin
+  globals showed both spellings, and worse, value-required globals like
+  `--where` were offered bare, a spelling the grammar refuses. The menu
+  now speaks the grammar exactly: `--opt=` beside a bare mention only
+  where a default backs it (the bare row naming this machine's resolved
+  default), and `--opt=` alone where a value is required.
+- **Help fits the terminal.** Seven lines of `fm --help` overflowed an
+  80-column terminal and hard-wrapped mid-column, shearing the option
+  table apart. The globals table and every parameter listing now wrap
+  their details to the terminal's width with a hanging indent — the same
+  two-band layout the task listings always drew — with the dimmed
+  mechanics moving to their own lines when a row cannot share one.
+- **Windows paints only where the console can.** Colour and the live
+  status line gated on tty-ness alone, and a legacy Windows console shows
+  raw `←[1m` escapes rather than bold. Every ANSI surface now asks the
+  console for VT processing first — a no-op under Windows Terminal, an
+  upgrade on a conhost that has it off, and a refusal exactly where the
+  escapes would print as noise.
+- **A tasks file's name is case-exact.** On a case-insensitive filesystem
+  a `Tasks.py` was silently accepted (and `--where` then reported a path
+  that does not exist on disk) — a project that stops working the day it
+  reaches a Linux box. The cascade walk and the project/repo markers now
+  match the on-disk spelling exactly, on every platform — and ask each
+  directory once instead of once per marker while they're at it.
+- **`--help` lists mounted plugin globals.** `--profile` and `--env-file`
+  rode the same pre-task position as every global yet appeared on no help
+  surface, while the troubleshooting page said `fm --help` lists them all.
+  A `plugin globals` section now follows the built-in table, each row with
+  its words, its mechanics, and where it came from.
+- **Completion follows `-C`.** `fm -C=<dir> <TAB>` offered the invoking
+  directory's tasks: the manifest key, the cascade walk, and the spawned
+  builders all stood where the shell stood rather than where the run
+  would. All of them now stand in the target directory — a `-f` value
+  anchors there too — and a mistyped target answers nothing rather than
+  someone else's tasks.
+- **`-f=~/tasks.py` completion warms.** The hot path keyed the literal
+  `~` (`resolve()` does not expand it) while the refresh child keyed the
+  expansion, so the manifest the child wrote was never the one TAB read
+  and every keystroke paid the full cold bound for silence. The key
+  function expands now, so every keyer agrees.
+- **Stock `fm`'s completion keys the real version.** The `--complete`
+  dispatch configured the built-ins but not the brand version, so global
+  mode kept two manifests — one keyed `""` for TAB, one keyed the real
+  version for runs. One triple everywhere now.
+- **A docstring may open with `Args:`.** A docstring whose first line is
+  a section header made `Args:` the task's help text and silently dropped
+  every parameter doc — the summary is empty now and the section parses
+  whole, for Google, NumPy, Sphinx and `Returns:` openers alike.
+- **`Note:` under a parameter is prose, not a parameter.** A Google-style
+  continuation line reading `Note: rewrites in place` became a phantom
+  parameter — its text vanished from the entry it documented and a raw
+  warning fired on every invocation. A line indented deeper than its
+  entry now continues it, whatever it says before a colon.
 - **A single-dash misspelling refuses instead of acting.** `-version=1`
   printed the version and exited 0, and `-install-completion=zsh` would
   have edited a shell rc — the lenient pre-discovery walk carried the
