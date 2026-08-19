@@ -608,7 +608,13 @@ def json_default(value: object) -> object:
     if isinstance(value, PurePath):
         return str(value)
     if isinstance(value, enum.Enum):
-        return value.value
+        # The one output face: the member's token. Int/str-subclassed enums
+        # never reach this hook (they ride the encoder's fast paths), which
+        # is why the `redact` pre-walk transforms them first — this branch
+        # covers the plain-Enum stragglers that arrive through `default`.
+        from footman import _coerce
+
+        return _coerce.token_of(value)
     if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
         return value.isoformat()
     if isinstance(value, uuid.UUID):
@@ -739,7 +745,17 @@ def returned_mismatch(
             return None
         return f"{path}: expected {word}, got {_got(value)}"
     if kind == "enum":
-        encoded = value.value if isinstance(value, enum.Enum) else value
+        # The spec speaks tokens, so the member is compared in the same
+        # face — validating `.value` against a token spec would refuse
+        # every declared member (the wrong-face bug the lockstep exists to
+        # prevent). An already-encoded value (a post-walk token string)
+        # compares as itself.
+        if isinstance(value, enum.Enum):
+            from footman import _coerce
+
+            encoded: Any = _coerce.token_of(value)
+        else:
+            encoded = value
         if any(v == encoded for v in spec["values"]):
             return None
         return f"{path}: {encoded!r} is not one of the declared values"
@@ -864,6 +880,16 @@ def redact(value: Any) -> Any:
 
     if isinstance(value, Secret):
         return "***"
+    if isinstance(value, enum.Enum):
+        # The enum wire face, in the same pre-walk and for the same reason
+        # as Secret: `IntEnum` and str-valued enums subclass int/str, ride
+        # `json.dumps`' fast paths, and never reach the `default` hook —
+        # and dict *keys* never consult the hook for any type. The walk is
+        # the only reliable interception, values and keys both; a member
+        # always speaks its canonical token on a self-describing surface.
+        from footman import _coerce
+
+        return _coerce.token_of(value)
     if isinstance(value, dict):
         return {redact(k): redact(v) for k, v in value.items()}
     if dataclasses.is_dataclass(value) and not isinstance(value, type):

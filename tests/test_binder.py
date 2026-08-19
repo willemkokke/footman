@@ -19,7 +19,7 @@ from typing import Annotated, Any, Literal, NamedTuple, TypedDict
 import pytest
 
 from footman import _manifest, context
-from footman._describe import json_default, param_detail, usage_fragment
+from footman._describe import param_detail, usage_fragment
 from footman._executor import EX_USAGE, run_chain
 from footman._split import ChainError, split_chain
 from footman.params import stdin
@@ -230,9 +230,13 @@ def test_a_bad_literal_choice_names_the_path(piped):
     assert "unit|functional" in str(results[0].error)
 
 
-def test_a_numeric_enum_round_trips_through_json(piped):
-    """The document footman prints is one it can read back: `json_default`
-    writes an enum as its `.value`, so a number has to bind."""
+def test_an_enum_document_round_trips_speaking_tokens(piped):
+    """The document footman prints is one it can read back — and it speaks
+    tokens now: the redact pre-walk carries every enum (IntEnum included,
+    which rides json.dumps' int fast path and never meets the hook) to its
+    canonical token, and the binder reads the token straight back."""
+    from footman._describe import redact
+
     seen = {}
 
     def tasks(reg):
@@ -240,8 +244,8 @@ def test_a_numeric_enum_round_trips_through_json(piped):
         def grade(report: Annotated[Report, stdin]):
             seen["report"] = report
 
-    document = json.dumps(Report(Level.HIGH, Rank.SECOND), default=json_default)
-    assert document == '{"level": 2, "rank": 2}'
+    document = json.dumps(redact(Report(Level.HIGH, Rank.SECOND)))
+    assert document == '{"level": "high", "rank": "second"}'
     piped(document)
     results = run(tasks, "grade")
     assert results[0].code == 0, results[0].error
@@ -249,7 +253,11 @@ def test_a_numeric_enum_round_trips_through_json(piped):
     assert seen["report"].rank is Rank.SECOND
 
 
-def test_an_enum_still_binds_by_name_and_by_string(piped):
+def test_an_enum_binds_every_declared_face_and_only_those(piped):
+    """The three-face input set at the document door: token, JSON-typed
+    value (bool/int guard intact), and the argv-spelled value string. A raw
+    member NAME is deliberately not a fourth face — its one legal spelling
+    is the token."""
     seen = {}
 
     def tasks(reg):
@@ -257,12 +265,20 @@ def test_an_enum_still_binds_by_name_and_by_string(piped):
         def grade(report: Annotated[Report, stdin]):
             seen["report"] = report
 
-    piped('{"level": "HIGH"}')
+    piped('{"level": "high"}')  # the token
     run(tasks, "grade")
     assert seen["report"].level is Level.HIGH
-    piped('{"level": "2"}')
+    piped('{"level": 2}')  # the JSON-typed value face — the foreign document
     run(tasks, "grade")
     assert seen["report"].level is Level.HIGH
+    piped('{"level": "2"}')  # the stringified value face
+    run(tasks, "grade")
+    assert seen["report"].level is Level.HIGH
+    seen.clear()
+    piped('{"level": "HIGH"}')  # the raw NAME: not a face, refused
+    results = run(tasks, "grade")
+    assert results[0].code != 0
+    assert "report" not in seen
 
 
 def test_a_bool_does_not_answer_an_int_valued_member(piped):

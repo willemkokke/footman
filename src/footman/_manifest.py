@@ -41,7 +41,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _warned: set[str] = set()
 
@@ -404,10 +404,25 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         spec["_completer"] = peeled.completer
         return spec
 
-    choices = _coerce.all_choices(element)
+    try:
+        choices = _coerce.all_choices(element)
+        accepts = _coerce.enum_accepts(element) if choices is not None else []
+    except _coerce.EnumContractError as exc:
+        # Declaration-time refusal, loudly, through the taught door: the
+        # enum spells an ambiguous or unprojectable surface, and refusing
+        # here — where the contract is first read — is what keeps every
+        # later door free of precedence rules.
+        raise ManifestError(f"parameter {param.name!r}: {exc}") from exc
     tags = _coerce.element_tags(element)
     if choices is not None:
         spec["choices"] = choices
+        # The accepted synonym set beyond the choices — an enum's aliases
+        # and value faces. Baked, so every frontend's eager gate accepts
+        # the same inputs by contract: authored and enumerated, never
+        # leniency. Completion and help read `choices` alone; a synonym is
+        # accepted, not taught.
+        if accepts:
+            spec["accepts"] = accepts
     # Emit `types` only when the element is eagerly checkable — a union with a
     # custom member (`UUID | int`) can't be accept/rejected up front, so leave
     # it to binding rather than eagerly rejecting valid values.
@@ -680,14 +695,27 @@ def _returned_of(ann: Any, seen: tuple[Any, ...]) -> dict[str, Any]:
         return literal
     if isinstance(ann, type) and issubclass(ann, enum.Enum):
         if not len(ann):
-            raise _Undescribable  # an empty Enum has no values to claim
-        choices: list[Any] = []
-        for member in ann:
-            ok, encoded = _describe.jsonable(member)  # Enum → .value
+            raise _Undescribable  # an empty Enum has no members to claim
+        # The returns side moves in lockstep with choices: `values` speaks
+        # tokens (what documents carry, what the JSON Schema projection
+        # lists natively), and `members` carries the pairs first-class —
+        # token beside declared value, aliases as input synonyms — so a
+        # foreign frontend binds the same faces by contract.
+        pairs: list[dict[str, Any]] = []
+        for face in _coerce.enum_faces(ann):
+            ok, encoded = _describe.jsonable(face.member.value)
             if not ok:
                 raise _Undescribable
-            choices.append(encoded)
-        return {"kind": "enum", "name": ann.__name__, "values": choices}
+            entry: dict[str, Any] = {"token": face.token, "value": encoded}
+            if face.aliases:
+                entry["aliases"] = list(face.aliases)
+            pairs.append(entry)
+        return {
+            "kind": "enum",
+            "name": ann.__name__,
+            "values": [m["token"] for m in pairs],
+            "members": pairs,
+        }
     if ann is bool:
         return {"kind": "bool"}
     if ann is int:

@@ -19,6 +19,27 @@ versions may include breaking changes.
 
 ### Changed
 
+- **An enum speaks its token — the member name, projected — on every
+  developer-visible surface.** `Level.LOW = 1` used to render as
+  `--level={1|2}`: the values are payload, the names carry the meaning,
+  and completion offering `1|2` might as well have offered nothing.
+  Choices, help, completion, documents out, and work identity now all
+  speak the member's **token** (`LOW` → `low`, `LOW_PRIORITY` →
+  `low-priority` — the same projection parameter names use). Input stays
+  wider than output, identically at every door: the token, any alias
+  (Python's duplicate-value bindings, accepted but taught nowhere — a
+  compat rename keeps old spellings working), and the value face (`2` on
+  the command line; a JSON-typed `2` in a piped document, so foreign
+  documents keep binding). A raw member NAME (`LOW`) was never a taught
+  spelling and is no longer accepted — its one spelling is the token.
+  **Breaking**: documents now carry tokens where they carried values
+  (`"level": "high"`, not `2` — `IntEnum` included, moved off
+  `json.dumps`' fast path by the same pre-walk that guards `Secret`);
+  the manifest schema bumps to 7 with first-class
+  `members` (token/value/aliases) beside `choices`; and an enum whose
+  members spell ambiguously on any door (`A = 1; B = "1"` both spell
+  `"1"` on argv) or project outside the token grammar is refused at
+  declaration rather than adjudicated at runtime.
 - **The fetch cache is a manifest naming an immutable data file.** Each URL
   keeps one small `<key>.json` that names a content-addressed
   `<key>-<digest>.bin` and carries its validators beside it. A fresh

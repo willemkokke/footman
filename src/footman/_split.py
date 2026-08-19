@@ -659,6 +659,7 @@ def _check(
     value: str,
     *,
     choices: list[str] | None = None,
+    accepts: list[str] | None = None,
     types: list[str] | None = None,
     dynamic: dict[str, Any] | None = None,
     path: str | None = None,
@@ -670,6 +671,11 @@ def _check(
             return
         if value in choices:
             return  # an exact choice needs no further type/bounds checks
+        if accepts is not None and value in accepts:
+            # The manifest's declared synonym set — an enum's aliases and
+            # value faces. Accepted here, taught nowhere: the refusal below
+            # and completion both speak `choices` alone.
+            return
         # A union like `Literal['fast','slow'] | int` carries both choices and
         # types: accept a value that matches either, and only teach both when
         # neither fits.
@@ -794,6 +800,7 @@ def _validate(
         label,
         value,
         choices=live_choices(where, p, choices_for),
+        accepts=p.get("accepts"),
         types=p.get("types"),
         dynamic=p.get("dynamic"),
         path=p.get("path"),

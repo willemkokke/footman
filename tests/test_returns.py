@@ -137,7 +137,14 @@ def test_containers_and_choices():
     assert returned_spec(Colour) == {
         "kind": "enum",
         "name": "Colour",
+        # `values` speaks tokens (what documents carry; what the JSON
+        # Schema projection lists natively) and `members` carries the
+        # declared pairs first-class for foreign frontends.
         "values": ["red", "blue"],
+        "members": [
+            {"token": "red", "value": "red"},
+            {"token": "blue", "value": "blue"},
+        ],
     }
 
 
