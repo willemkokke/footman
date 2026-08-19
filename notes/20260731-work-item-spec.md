@@ -1,11 +1,18 @@
 # The work-item spec (move 1: core and derivation ledger)
 
-**Status: DRAFT — the normative core distilled from
+**Status: CALLED, and BUILT — the model shipped in 0.28.0 (2026-08-01).**
+The normative core distilled from
 [the thinking record](20260731-work-item-model.md), which holds the
 evidence, the register, and the history. This note is the other
 direction: definitions and invariants first, and every feature either
-derives or gets cut. Ledger rows marked ⚠ are where incoherence is
-currently hiding — they are the work.**
+derives or gets cut. The build that implemented it is
+[20260731-work-item-build.md](20260731-work-item-build.md).
+
+The ⚠ marks below read as *"incoherence hiding here"* in the draft; every
+one was worked through in this same note before the build started — the
+walks resolve them in place ("then the ⚠ rows fall — two at once, to one
+principle"), and the five moves closed on 2026-07-31. Read them as the
+map of where the thinking was hardest, not as remaining work.
 
 ## Definitions
 

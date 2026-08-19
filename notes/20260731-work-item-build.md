@@ -1,15 +1,33 @@
 # The work-item build (order of battle)
 
-**Status: OPEN — the implementation of the fully-called work-item spec
-([20260731-work-item-spec.md](20260731-work-item-spec.md); the public
-contract is docs/design.md, audited against by a context-free reviewer
-when this file's stages are done). Target release: 0.28.0, one
-coherent wave — hse pins until it ships, migrates once.**
+**Status: BUILT — shipped in 0.28.0 (2026-08-01), the target release,
+as one coherent wave.** The spec it implements is
+[20260731-work-item-spec.md](20260731-work-item-spec.md); the public
+contract is docs/design.md.
 
-The design page's fragment markers double as the audit ratchet: every
-`<!-- example: fragment -->` on docs/design.md marks surface this
-build has not shipped yet. A stage is not done until its examples run
-— un-marking a fragment is the definition of done.
+Reconciled against the code 2026-08-19, stage by stage: `recorded=` is
+on `run()` and `step=` is gone (A); `@pre_record` attaches a reviewer
+whose `ResultView` carries `title`/`code`/`ok`/`set_returned` (B);
+`pre_task`/`post_task`/`pre_bind` are on the handles (C); `step()` is
+public (D); `parallel()` returns Results and `--json` emits the flat
+`items` list under schema 1 (E, F); `lane()` ships with `cwd_lane` and
+`console_lane` dogfooding it (G). The design page's three examples were
+run as real code: the reviewer sets a verdict, `run(…, recorded=False)`
+stays off the record, and `parallel()` refuses a bare callable with the
+taught message while accepting `step(fn, title=…)`.
+
+**Correction to this note's own ratchet.** It claimed every
+`<!-- example: fragment -->` on docs/design.md "marks surface this build
+has not shipped yet", making un-marking the definition of done. That
+conflated two meanings. The marker belongs to the docs-examples harness
+and means "this block is an illustration, do not execute it as part of
+the page's session" — a stub excerpt, a snippet that needs a git repo, a
+block whose whole point is that it raises. There are 46 of them across
+17 pages; design.md's 3 are ordinary. They are HTML comments, invisible
+on the published page, and removing them would make the harness try to
+execute a snippet containing `shutil.rmtree`. Stage H's "the design
+page's fragments all unmarked" was therefore never achievable, and its
+absence is not outstanding work.
 
 Stages in dependency order; each lands through its own PR(s) with the
 gate green, breaking changes in the CHANGELOG as they land:
