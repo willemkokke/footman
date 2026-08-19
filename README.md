@@ -4,8 +4,8 @@ A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and
 the UX of [typer](https://typer.tiangolo.com/): typed function signatures
 become real flags and positionals, modules become nested command groups,
 independent tasks run in parallel by default, and shell completion answers
-from a cached manifest in ~30 ms — **without importing your code**. Building
-that cache does import it, once, in a detached subprocess: the first
+from a cached manifest — **without importing your code**. Building that
+cache does import it, once, in a detached subprocess: the first
 <kbd>Tab</kbd> in a fresh directory pays for it, and no keystroke after that.
 
 Ships two console scripts, `footman` and the two-letter `fm` — one program,
@@ -26,10 +26,10 @@ stdlib TOML reading — that floor is what buys the zero).
 `duty` gets a lot right — the `run()` capture model, the decorator
 ergonomics — and footman keeps those ideas. It tries to improve on the parts
 you meet every day: completion served from a cache instead of re-importing your
-project on every <kbd>Tab</kbd> (~13× faster, measured), eager type and choice
+project on every <kbd>Tab</kbd>, eager type and choice
 validation with errors that teach, a DAG scheduler that runs independent
-tasks concurrently (the same four-step `check` lands ~3.5× sooner than duty
-or invoke, measured) with true fail-fast that kills in-flight work on the
+tasks concurrently — four steps that each wait on something finish in the
+time of the longest, not the sum — with true fail-fast that kills in-flight work on the
 first failure, runnable command groups and parameter forwarding that make
 composite commands like `fm lint` and `check` real commands, a monorepo task
 cascade that merges a `tasks.py` per directory, and a first-party story for
@@ -85,7 +85,7 @@ $ fm docs.serve --port=8001             # options go right after their task
 $ fm test -- -k grammar -x              # everything after -- goes to pytest
 $ fm deploy produ
 fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you mean 'prod'?
-$ fm --install-completion               # detects your shell; TAB answers in ~30 ms
+$ fm --install-completion               # detects your shell; TAB answers from the cache
 ```
 
 > That `from toolroom import …` is optional.

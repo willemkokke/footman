@@ -21,7 +21,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 BIN = Path(sys.executable).parent
 HERE = Path(__file__).resolve().parent
-RUNS = 15
+# Medians over 40 timed runs after 3 discarded warmups. The first samples
+# pay one-off costs (filesystem cache, __pycache__ writes on a fresh
+# checkout) that belong to the machine, not the runner, and a mean is
+# hostage to one slow fork on a machine doing anything else — which is how
+# the previously published table failed to reproduce itself.
+RUNS = 40
+WARMUP = 3
 
 TOOLS = {
     "footman": {
@@ -78,11 +84,36 @@ def run_once(cmd, cwd, cost):
 
 
 def mean_ms(cmd, cwd, cost):
-    return statistics.mean(run_once(cmd, cwd, cost)[0] for _ in range(RUNS))
+    """The cell value: a median with its spread, as `(median, p10, p90)`.
+
+    Kept under its historical name so the call sites read unchanged; the
+    median is what the table prints, and the percentiles say whether the
+    machine was quiet enough for the number to mean anything.
+    """
+    for _ in range(WARMUP):
+        run_once(cmd, cwd, cost)
+    samples = sorted(run_once(cmd, cwd, cost)[0] for _ in range(RUNS))
+    return (
+        statistics.median(samples),
+        samples[len(samples) // 10],
+        samples[-1 - len(samples) // 10],
+    )
+
+
+def cell(stat) -> str:
+    """`median ±spread` — the spread is (p90 - p10) / 2, printed so a noisy
+    machine's table carries its own health warning."""
+    median, p10, p90 = stat
+    return f"{median:.0f}±{(p90 - p10) / 2:.0f}ms"
 
 
 def main() -> None:
-    print(f"interpreter: {sys.executable}\nruns per cell: {RUNS} (fresh process)\n")
+    print(
+        f"interpreter: {sys.executable}\n"
+        f"runs per cell: {RUNS} after {WARMUP} warmups (fresh process); "
+        f"cells are median ±(p90-p10)/2 — a spread rivalling its median "
+        f"means the machine was busy and the table should be rerun\n"
+    )
 
     if prime := TOOLS["footman"].get("prime"):
         run_once(prime, TOOLS["footman"]["cwd"], 0.25)  # build footman's cache first
@@ -110,8 +141,8 @@ def main() -> None:
         c_cold = mean_ms(spec["complete"], spec["cwd"], 0.0)
         lst = mean_ms(spec["list"], spec["cwd"], 0.25)
         print(
-            f"{name:<9} {c_hot:>13.0f}ms {c_cold:>11.0f}ms "
-            f"{c_hot - c_cold:>8.0f}ms {lst:>10.0f}ms"
+            f"{name:<9} {cell(c_hot):>15} {cell(c_cold):>13} "
+            f"{c_hot[0] - c_cold[0]:>8.0f}ms {cell(lst):>12}"
         )
 
     print(
@@ -130,7 +161,7 @@ def main() -> None:
     for name, spec in TOOLS.items():
         e_cold = mean_ms(spec["exec"], spec["cwd"], 0.0)
         e_hot = mean_ms(spec["exec"], spec["cwd"], 0.25)
-        print(f"{name:<9} {e_cold:>20.0f}ms {e_hot:>15.0f}ms")
+        print(f"{name:<9} {cell(e_cold):>22} {cell(e_hot):>17}")
     print(
         "\nexec@0 is the runner's own overhead on top of your task's real work.\n"
         "exec@0.25 shows footman/duty/invoke re-importing the project per run; "
