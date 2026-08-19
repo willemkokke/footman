@@ -6,8 +6,12 @@
 uv add --dev footman        # or: pip install footman
 ```
 
-Footman requires Python 3.11+ and has zero runtime dependencies. It ships two
-console scripts, `footman` and the two-letter `fm`. Added to a project, they
+Footman requires Python 3.11+ — the first Python that reads TOML from the
+standard library (`tomllib`), which is what lets a tool built on
+`pyproject.toml` configuration have zero runtime dependencies. It ships two
+console scripts, `footman` and the two-letter `fm` — the same program under
+both names, so if some other `fm` already lives on your `PATH`, the long
+spelling works everywhere the short one does. Added to a project, they
 live in that project's environment, so reach them with `uv run fm …` (or
 activate the virtualenv and type `fm` directly).
 

@@ -8,8 +8,10 @@ from a cached manifest in ~30 ms — **without importing your code**. Building
 that cache does import it, once, in a detached subprocess: the first
 <kbd>Tab</kbd> in a fresh directory pays for it, and no keystroke after that.
 
-Ships two console scripts, `footman` and the two-letter `fm`. Zero runtime
-dependencies. Python 3.11+.
+Ships two console scripts, `footman` and the two-letter `fm` — one program,
+both names, so a `PATH` that already has an `fm` still gets the long
+spelling. Zero runtime dependencies. Python 3.11+ (the first Python with
+stdlib TOML reading — that floor is what buys the zero).
 
 > **Beta.** footman is pre-1.0: the surface is settling, but minor versions
 > may still include breaking changes — always called out in the

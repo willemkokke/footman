@@ -37,6 +37,7 @@ executing anything, so a typo never half-runs a chain.
 | `--where expects a value, attached: --where=TASK` | a value-bearing option given bare | `--where=TASK` — a value is always `=`-attached |
 | `--target takes its value attached — did you mean --target=prod?` | a value across a space | attach it: `--target=prod` |
 | `unknown global option --bogus (global options go before the first task)` | not one of fm's globals | `fm --help` lists them all |
+| `fm` runs some other program, or prints another tool's help | a different `fm` sits earlier on your `PATH` | `footman` is the same program under its long name; `uv run fm` always reaches the project's own copy |
 
 One asymmetry worth knowing: constraints on **env-supplied** values
 (`env("VAR")` fallbacks) are enforced at binding time rather than parse
