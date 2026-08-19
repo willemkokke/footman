@@ -1418,3 +1418,149 @@ def test_hook_reattaches_the_head_of_an_attached_path_value(shell):
     name — so an attached path value completed to silence there."""
     body = _shellcomp.script_for(shell, "fm")
     assert "$head" in body
+
+
+# --- a broken tasks file: every shell says why, or at least stays honest ------
+
+
+@pytest.fixture
+def broken_project_dir(home, tmp_path, monkeypatch):
+    """A project whose tasks file does not import — the exit-103 lane."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text("import footman\n\nthis is a syntax error\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    return tmp_path
+
+
+@_posix_shell
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
+def test_zsh_broken_tree_reads_the_reason(home, broken_project_dir):
+    """The hook's 103 idiom: the reason is capturable exactly as the hook
+    captures it (`2>&1` with stdout empty), ready for `_message`."""
+    script = home / "completion.zsh"
+    script.write_text(_shellcomp.script_for("zsh", "fm"), encoding="utf-8")
+    body = (
+        f"path=('{VENV_BIN}' $path)\n"
+        f'source "{script}" || exit 9\n'
+        'words=(fm ""); CURRENT=2\n'
+        'raw="$(fm --complete -- "${(@)words[2,CURRENT]}" 2>/dev/null)"\n'
+        "ret=$?\n"
+        'print -r -- "ret=$ret out=<$raw>"\n'
+        'why="$(fm --complete -- "${(@)words[2,CURRENT]}" 2>&1)"\n'
+        'print -r -- "why=$why"\n'
+    )
+    out = subprocess.run(
+        ["zsh", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=broken_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "ret=103 out=<>" in out.stdout  # empty stdout: old hooks stay silent
+    assert "failed to import" in out.stdout
+    assert "_message" in _shellcomp.script_for("zsh", "fm")
+
+
+@_posix_shell
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not installed")
+def test_bash_broken_tree_stays_silent_not_files(home, broken_project_dir):
+    script = home / "completion.bash"
+    script.write_text(_shellcomp.script_for("bash", "fm"), encoding="utf-8")
+    body = (
+        f'PATH="{VENV_BIN}:$PATH"\n'
+        f'source "{script}"\n'
+        "COMP_WORDS=(fm ta); COMP_CWORD=1\n"
+        "_fm_complete\n"
+        'printf "reply=<%s>\\n" "${COMPREPLY[@]}"\n'
+    )
+    out = subprocess.run(
+        ["bash", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=broken_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    # No candidates at all — in particular not tasks.py offered as a task.
+    assert "tasks.py" not in out.stdout
+    assert out.stdout.strip() in ("", "reply=<>")
+
+
+@_posix_shell
+@pytest.mark.skipif(shutil.which("fish") is None, reason="fish not installed")
+def test_fish_broken_tree_reoffers_the_word_with_the_reason(home, broken_project_dir):
+    script = home / "completion.fish"
+    script.write_text(_shellcomp.script_for("fish", "fm"), encoding="utf-8")
+    body = f'set -gx PATH {VENV_BIN} $PATH\nsource "{script}"\ncomplete -C "fm ta"\n'
+    out = subprocess.run(
+        ["fish", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=broken_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    lines = [ln for ln in out.stdout.splitlines() if ln.strip()]
+    # One row: the typed word back (a no-op insert), the reason beside it —
+    # and no tasks.py offered as if it were a task.
+    assert len(lines) == 1, out.stdout
+    word, _, why = lines[0].partition("\t")
+    assert word == "ta"
+    assert "failed to import" in why
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
+def test_pwsh_broken_tree_reoffers_the_word_with_the_reason(home, broken_project_dir):
+    script = home / "completion.ps1"
+    script.write_text(_shellcomp.script_for("pwsh", "fm"), encoding="utf-8")
+    ps = (
+        f'$env:PATH = "{VENV_BIN}" + [IO.Path]::PathSeparator + $env:PATH; '
+        f". '{script}'; "
+        "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
+        '"fm ta", 5, $null); '
+        "$r.CompletionMatches | ForEach-Object { "
+        'Write-Output "$($_.CompletionText)|$($_.ToolTip)" }'
+    )
+    out = subprocess.run(
+        ["pwsh", "-NoProfile", "-Command", ps],
+        capture_output=True,
+        text=True,
+        timeout=90,
+        cwd=broken_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    lines = [ln for ln in out.stdout.splitlines() if ln.strip()]
+    assert len(lines) == 1, out.stdout
+    word, _, why = lines[0].partition("|")
+    assert word == "ta"
+    assert "failed to import" in why
+
+
+@pytest.mark.skipif(shutil.which("nu") is None, reason="nushell not installed")
+def test_nushell_broken_tree_reoffers_the_word_with_the_reason(
+    home, broken_project_dir
+):
+    script = home / "completion.nu"
+    script.write_text(_shellcomp.script_for("nushell", "fm"), encoding="utf-8")
+    venv_bin = Path(sys.executable).parent.as_posix()
+    nu_script = (
+        f"$env.PATH = ($env.PATH | prepend '{venv_bin}')\n"
+        f"source '{script.as_posix()}'\n"
+        "print (do $env.config.completions.external.completer [fm ta]"
+        " | each {|r| $'($r.value)=($r.description? | default NONE)'} | to text)\n"
+    )
+    out = subprocess.run(
+        ["nu", "-c", nu_script],
+        capture_output=True,
+        text=True,
+        timeout=90,
+        cwd=broken_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    lines = [ln for ln in out.stdout.splitlines() if ln.strip()]
+    assert len(lines) == 1, out.stdout
+    word, _, why = lines[0].partition("=")
+    assert word == "ta"
+    assert "failed to import" in why

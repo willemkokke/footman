@@ -9,6 +9,16 @@ versions may include breaking changes.
 
 ### Added
 
+- **A broken tasks file answers <kbd>Tab</kbd> with why.** A tasks file
+  that failed to import used to make completion silently answer nothing —
+  and pay the full cold-build wait doing it, on every keystroke. The
+  rebuild now leaves the import error behind as a marker, the press
+  answers instantly (exit 103, one line on stderr), and each shell shows
+  it as loudly as it can: zsh a message line, fish/nushell/PowerShell the
+  typed word re-offered with the error beside it, bash silent but no
+  longer offering filenames in the gap. The marker ages out in seconds
+  once the file imports again, and a hook from an older install shows
+  exactly the silence it always did.
 - **Stack dumps for a run that has stopped moving.** `Ctrl-\` (`SIGQUIT`)
   writes every thread's stack to stderr and lets the run carry on, so
   pressing it twice and watching whether the frames moved is how you tell a

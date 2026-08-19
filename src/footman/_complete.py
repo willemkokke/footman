@@ -72,6 +72,14 @@ _EXIT_FILES_CSV = 101  # "complete files after the last comma" exit code
 # question, and zsh takes an unwanted comma back off anyway.
 _MORE = "\x00more"
 _EXIT_MORE = 102  # "insert glued: more items may follow" exit code
+# The tree could not be built at all — the tasks file fails to import. One
+# line on *stderr* says what the import said; stdout stays empty, so a hook
+# from before this code existed shows exactly the silence it always did
+# (every hook reads candidates from stdout with stderr discarded). A hook
+# that knows 103 makes one more call capturing stderr and shows the line the
+# way its shell can: zsh a `_message`, fish/nushell/pwsh a re-offer of the
+# typed word carrying the line as its description, bash stays silent.
+_EXIT_BROKEN = 103
 
 
 _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fresh
@@ -695,8 +703,25 @@ def _load_manifest(path: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def _broken_line(data: Any) -> str | None:
+    """The broken-tree marker's message, or None for anything else.
+
+    The refresh child writes the marker into the manifest slot when the
+    tasks file fails to import — same schema, a `broken` line instead of a
+    `tree` — so the hot path can answer instantly with *why* instead of
+    paying the cold bound into silence on every keystroke."""
+    if isinstance(data, dict) and data.get("schema") == _SCHEMA:
+        line = data.get("broken")
+        if isinstance(line, str) and line:
+            return line
+    return None
+
+
 def _maybe_refresh(
-    path: str, data: dict[str, Any], spawn_in: str | None = None
+    path: str,
+    data: dict[str, Any],
+    spawn_in: str | None = None,
+    override: str | None = None,
 ) -> None:
     """Stale-while-revalidate: if the manifest is older than its baked
     `completion_max_age`, bump its mtime and spawn a detached rebuild for *next*
@@ -715,7 +740,7 @@ def _maybe_refresh(
         os.utime(path)
     except OSError:
         return
-    _spawn_refresh(spawn_in=spawn_in)
+    _spawn_refresh(override, spawn_in)
 
 
 def _spawn_refresh(override: str | None = None, spawn_in: str | None = None) -> None:
@@ -815,10 +840,16 @@ def _cold_build(
         # The schema check matters here too: on the post-upgrade TAB the
         # *stale* file is still on disk, and without it the poll would win
         # the race against the rebuild and hand the old tree back.
+        # A broken-tree marker is a landed answer too: the child failed
+        # fast and said why, and waiting the full bound for a tree that is
+        # not coming would only slow the telling.
         if (
             isinstance(data, dict)
-            and isinstance(data.get("tree"), dict)
             and data.get("schema") == _SCHEMA
+            and (
+                isinstance(data.get("tree"), dict)
+                or isinstance(data.get("broken"), str)
+            )
         ):
             return data
     return None
@@ -994,6 +1025,15 @@ def complete_cli(args: list[str]) -> int:
                     manifest = str(_paths.global_manifest_path())
 
     data = _load_manifest(manifest)
+    if (line := _broken_line(data)) is not None:
+        # The marker ages fast and stale-while-revalidate owns recovery: a
+        # fixed file rebuilds behind an aged press and the next one is warm.
+        # The override rides along so a broken `-f` file's spawn rebuilds
+        # the (cwd, file) manifest it marks, not the cwd cascade's.
+        assert data is not None
+        _maybe_refresh(manifest, data, spawn_in, override=override)
+        sys.stderr.write(line + "\n")
+        return _EXIT_BROKEN
     if (
         data is None
         or not isinstance(data.get("tree"), dict)
@@ -1005,6 +1045,12 @@ def complete_cli(args: list[str]) -> int:
         # or right after an upgrade — is accurate. Covers the cwd cascade and
         # a finished `-f <file>` alike.
         data = _cold_build(manifest, override, spawn_in) if derived else None
+        if (line := _broken_line(data)) is not None:
+            # The very first TAB against a broken file already says why —
+            # the child failed fast and left the marker where the tree
+            # would have been.
+            sys.stderr.write(line + "\n")
+            return _EXIT_BROKEN
         if (
             not isinstance(data, dict)
             or not isinstance(data.get("tree"), dict)
