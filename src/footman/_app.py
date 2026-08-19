@@ -524,24 +524,53 @@ def _last_of_each_branch(rows: Sequence[tuple[Any, ...]]) -> list[bool]:
     return flags
 
 
+def _print_option_rows(rows: list[tuple[str, str, str]], heading: str) -> None:
+    """One aligned option listing, wrapped to the terminal: labels bold on
+    the left, details in a hanging-indent column on the right — the
+    author's words bright, the mechanics dimmed, and the mechanics moving
+    to their own wrapped lines when the pair cannot share one. The globals
+    table and every parameter listing draw through here, so no help
+    surface leaves the terminal to hard-wrap a column apart.
+    """
+    if not rows:
+        return
+    import shutil
+    import textwrap
+
+    on = _color_out
+    width = max(_describe.display_width(label) for label, _, _ in rows)
+    desc_col = width + 4  # two leading spaces + two separating
+    avail = max(24, shutil.get_terminal_size().columns - desc_col)
+    print(f"\n{_describe.bold(f'{heading}:', on)}")
+    for label, doc, mech in rows:
+        joined = "; ".join(bit for bit in (doc, mech) if bit)
+        if _describe.display_width(joined) <= avail:
+            dimmed = _describe.dim(mech, on) if mech else ""
+            pieces = ["; ".join(bit for bit in (doc, dimmed) if bit)]
+        else:
+            pieces = textwrap.wrap(doc, avail) if doc else []
+            pieces += [
+                _describe.dim(cont, on)
+                for cont in (textwrap.wrap(mech, avail) if mech else [])
+            ]
+            pieces = pieces or [""]
+        pad = " " * (width - _describe.display_width(label))
+        print(f"  {_describe.bold(label, on)}{pad}  {pieces[0]}".rstrip())
+        for cont in pieces[1:]:
+            print(f"{' ' * desc_col}{cont}".rstrip())
+
+
 def _print_param_rows(params: list[dict[str, Any]], heading: str) -> None:
     """One two-band parameter listing — task help and group help draw the
     same rows (author's words bright, mechanics dimmed beneath), and used
     to carry the loop twice."""
     if not params:
         return
-    on = _color_out
     rows = []
     for p in params:
         doc, mech = _describe.param_detail_parts(p)
-        mech = _describe.dim(mech, on) if mech else ""
-        detail = "; ".join(bit for bit in (doc, mech) if bit)
-        rows.append((_describe.param_label(p), detail))
-    width = max(_describe.display_width(label) for label, _ in rows)
-    print(f"\n{_describe.bold(f'{heading}:', on)}")
-    for label, detail in rows:
-        pad = " " * (width - _describe.display_width(label))
-        print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
+        rows.append((_describe.param_label(p), doc, mech))
+    _print_option_rows(rows, heading)
 
 
 def _choices_resolver(reg: registry.Group) -> _split.ChoicesFor:
@@ -703,7 +732,6 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
         ("opt", "[<task> ...]"),
     ]
     print(f"usage: {_describe.paint_cli(parts, _color_out)}")
-    print(f"\n{_describe.bold('globals (before the first task):', _color_out)}")
     rows = []
     for name, alias, _kind, hint, _default, help_text in _split.GLOBALS:
         label = f"{alias}, {name}" if alias else f"    {name}"
@@ -717,32 +745,20 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
         # machine's width rather than a number from the author's. One
         # composition with the docs table (`_describe.global_default_suffix`).
         detail += _describe.global_default_suffix(name)
-        rows.append((label, detail))
-    width = max(_describe.display_width(label) for label, _ in rows)
-    for label, help_text in rows:
-        pad = " " * (width - _describe.display_width(label))
-        print(f"  {_describe.bold(label, _color_out)}{pad}  {help_text}")
+        rows.append((label, detail, ""))
+    _print_option_rows(rows, "globals (before the first task)")
     # Mounted plugin globals ride the same pre-task position, so a help page
     # claiming to list the globals must list these too — with provenance,
     # since "where did --profile come from" is the first question a reader
     # who didn't mount the plugin asks.
-    plugin = list(tree.get("globals") or ())
-    if plugin:
-        heading = "plugin globals (before the first task):"
-        print(f"\n{_describe.bold(heading, _color_out)}")
-        prows = []
-        for p in plugin:
-            doc, mech = _describe.param_detail_parts(p)
-            doc = doc or p.get("help", "")  # a global's words ride as `help`
-            if owner := p.get("owner"):
-                mech = f"{mech}; from {owner}" if mech else f"from {owner}"
-            mech = _describe.dim(mech, _color_out) if mech else ""
-            detail = "; ".join(bit for bit in (doc, mech) if bit)
-            prows.append((_describe.param_label(p), detail))
-        pwidth = max(_describe.display_width(label) for label, _ in prows)
-        for label, detail in prows:
-            pad = " " * (pwidth - _describe.display_width(label))
-            print(f"  {_describe.bold(label, _color_out)}{pad}  {detail}".rstrip())
+    prows = []
+    for p in tree.get("globals") or ():
+        doc, mech = _describe.param_detail_parts(p)
+        doc = doc or p.get("help", "")  # a global's words ride as `help`
+        if owner := p.get("owner"):
+            mech = f"{mech}; from {owner}" if mech else f"from {owner}"
+        prows.append((_describe.param_label(p), doc, mech))
+    _print_option_rows(prows, "plugin globals (before the first task)")
     print()
     _print_list(tree, show_hidden)
     _print_footer()

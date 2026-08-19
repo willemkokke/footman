@@ -751,15 +751,30 @@ def test_global_help_marks_a_computed_default(project, capsys, monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
     assert _app.run(["--help"]) == 0
-    lines = capsys.readouterr().out.splitlines()
-    jobs = next(line for line in lines if "--jobs=N" in line)
-    colour = next(line for line in lines if "--color=WHEN" in line)
+    out = capsys.readouterr().out
     # A bare number reads as an arbitrary constant; it is this machine's cores
     # minus one, and a reader who copies it should know that. Colour's default
     # is computed too — it reads NO_COLOR/FORCE_COLOR — so with a clean
-    # environment it answers auto, and says it worked for the answer.
+    # environment it answers auto, and says it worked for the answer. Search
+    # the whole page, not one line: a narrow terminal wraps the suffix onto
+    # the row's continuation line.
+    jobs = out[out.index("--jobs=N") : out.index("--yes")]
     assert "(computed)" in jobs
-    assert "default: auto (computed)" in colour
+    assert "default: auto (computed)" in out
+
+
+def test_global_help_fits_the_terminal(project, capsys, monkeypatch):
+    # Seven lines used to overflow 80 columns and hard-wrap in the terminal,
+    # shearing the option column apart. Every row now wraps to the reported
+    # width with a hanging indent.
+    monkeypatch.setenv("COLUMNS", "80")
+    monkeypatch.setenv("LINES", "24")
+    assert _app.run(["--help"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    from footman import _describe
+
+    wide = [ln for ln in lines if _describe.display_width(ln) > 80]
+    assert wide == []
 
 
 def test_a_global_that_must_be_given_a_value_shows_no_default(project, capsys):

@@ -56,6 +56,12 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Help fits the terminal.** Seven lines of `fm --help` overflowed an
+  80-column terminal and hard-wrapped mid-column, shearing the option
+  table apart. The globals table and every parameter listing now wrap
+  their details to the terminal's width with a hanging indent — the same
+  two-band layout the task listings always drew — with the dimmed
+  mechanics moving to their own lines when a row cannot share one.
 - **Windows paints only where the console can.** Colour and the live
   status line gated on tty-ness alone, and a legacy Windows console shows
   raw `←[1m` escapes rather than bold. Every ANSI surface now asks the
