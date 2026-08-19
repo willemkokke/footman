@@ -368,6 +368,15 @@ def test_sigquit_dumps_every_thread_and_the_run_carries_on(tmp_path):
     assert done.exists()  # it kept running after the dump, and finished
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 13),
+    reason="CPython <=3.12: the faulthandler watchdog can be lost to a "
+    "tstate teardown race (reproduced bare: a dump lands on '<tstate is "
+    "freed>', truncates mid-line, and the repeat loop wedges — after which "
+    "cancel_dump_traceback_later deadlocks its caller). Fixed in 3.13. "
+    "The test cannot tell that interpreter race from a product regression, "
+    "and it fired exactly that way on a loaded macOS 3.11 runner.",
+)
 def test_the_timer_dumps_where_there_is_no_key_to_press(tmp_path):
     # Nobody is at a keyboard when CI hangs, and Windows has no SIGQUIT, so
     # the same dump is reachable without a signal at all.
