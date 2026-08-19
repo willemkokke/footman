@@ -56,6 +56,30 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Completion follows `-C`.** `fm -C=<dir> <TAB>` offered the invoking
+  directory's tasks: the manifest key, the cascade walk, and the spawned
+  builders all stood where the shell stood rather than where the run
+  would. All of them now stand in the target directory — a `-f` value
+  anchors there too — and a mistyped target answers nothing rather than
+  someone else's tasks.
+- **`-f=~/tasks.py` completion warms.** The hot path keyed the literal
+  `~` (`resolve()` does not expand it) while the refresh child keyed the
+  expansion, so the manifest the child wrote was never the one TAB read
+  and every keystroke paid the full cold bound for silence. The key
+  function expands now, so every keyer agrees.
+- **Stock `fm`'s completion keys the real version.** The `--complete`
+  dispatch configured the built-ins but not the brand version, so global
+  mode kept two manifests — one keyed `""` for TAB, one keyed the real
+  version for runs. One triple everywhere now.
+- **A docstring may open with `Args:`.** A docstring whose first line is
+  a section header made `Args:` the task's help text and silently dropped
+  every parameter doc — the summary is empty now and the section parses
+  whole, for Google, NumPy, Sphinx and `Returns:` openers alike.
+- **`Note:` under a parameter is prose, not a parameter.** A Google-style
+  continuation line reading `Note: rewrites in place` became a phantom
+  parameter — its text vanished from the entry it documented and a raw
+  warning fired on every invocation. A line indented deeper than its
+  entry now continues it, whatever it says before a colon.
 - **A single-dash misspelling refuses instead of acting.** `-version=1`
   printed the version and exited 0, and `-install-completion=zsh` would
   have edited a shell rc — the lenient pre-discovery walk carried the

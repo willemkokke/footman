@@ -504,6 +504,90 @@ def test_f_partial_value_defers_to_file_completion(tmp_path, monkeypatch, capsys
     assert capsys.readouterr().out == ""
 
 
+def test_source_manifest_path_expands_a_tilde():
+    # `~/tasks.py` and its expansion are one file, so they must be one key —
+    # the refresh child expands before keying, and a hot path that keyed the
+    # literal `~` would read a manifest the child never writes.
+    from pathlib import Path
+
+    from footman import _paths
+
+    cwd = Path("/proj/a")
+    assert _paths.source_manifest_path(
+        cwd, Path("~/tasks.py")
+    ) == _paths.source_manifest_path(cwd, Path.home() / "tasks.py")
+
+
+def test_directory_global_completes_the_target_directory(tmp_path, monkeypatch, capsys):
+    from footman import _paths
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    here = tmp_path / "here"
+    there = tmp_path / "there"
+    here.mkdir()
+    there.mkdir()
+    monkeypatch.chdir(here)
+
+    local = registry.Group("root")
+
+    @local.task
+    def stayhome(): ...
+
+    target = registry.Group("root")
+
+    @target.task
+    def alpha(): ...
+
+    @target.task
+    def beta(): ...
+
+    # Warm both directories' manifests, exactly as runs in each would.
+    _manifest.sync_manifest(local, here, completion_max_age=0)
+    _manifest.sync_manifest(
+        target, there, completion_max_age=0, path=_paths.manifest_path(there)
+    )
+    # `-C <dir>` moves the run's whole world there; completion must follow.
+    complete_cli(["--", f"-C={there}", ""])
+    out = capsys.readouterr().out.split()
+    assert "alpha" in out and "beta" in out
+    assert "stayhome" not in out
+
+
+def test_directory_global_missing_target_stays_silent(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+
+    g = registry.Group("root")
+
+    @g.task
+    def alpha(): ...
+
+    _manifest.sync_manifest(g, Path.cwd(), completion_max_age=0)
+    # A mistyped -C target must not fall back to the invoking directory's
+    # tasks — those are answers to a different question.
+    assert complete_cli(["--", "-C=/nope/nowhere", ""]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_stock_complete_dispatch_keys_the_brand_version(tmp_path, monkeypatch):
+    import footman
+    from footman import _paths
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "tasks.py").write_text("import footman\n\n@footman.task\ndef hi(): ...\n")
+    monkeypatch.chdir(proj)
+    monkeypatch.setattr(sys, "argv", ["fm", "--complete", "--", ""])
+    with pytest.raises(SystemExit):
+        footman.main()
+    # The dispatch must configure the same (prog, version, builtins) triple
+    # the execution path does, or global mode keeps two different manifests.
+    assert _paths._brand_version == footman.__version__
+
+
 # --- file-path completion for Path values ------------------------------------
 
 
@@ -916,8 +1000,10 @@ def test_a_task_less_directory_serves_the_builtins(tmp_path, monkeypatch, capsys
 def test_cold_build_times_out_to_none(tmp_path, monkeypatch):
     from footman import _complete
 
-    # accept the override arg; still no build ever lands
-    monkeypatch.setattr(_complete, "_spawn_refresh", lambda override=None: None)
+    # accept the override/spawn_in args; still no build ever lands
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda override=None, spawn_in=None: None
+    )
     monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 0.1)
     assert _complete._cold_build(str(tmp_path / "never.json"), None) is None
 

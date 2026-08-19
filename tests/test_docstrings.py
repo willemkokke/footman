@@ -132,6 +132,57 @@ def test_google_double_star_kwargs():
     assert d.params == {"flags": "extra flags"}
 
 
+def test_docstring_opening_with_args_has_no_summary_and_keeps_params():
+    d = parse("Args:\n    fix: apply safe fixes\n    target: where to deploy\n")
+    assert d.summary == ""
+    assert d.long == ""
+    assert d.params == {"fix": "apply safe fixes", "target": "where to deploy"}
+
+
+def test_docstring_opening_with_sphinx_field_has_no_summary():
+    d = parse(":param fix: apply safe fixes\n:returns: a report\n")
+    assert d.summary == ""
+    assert d.params == {"fix": "apply safe fixes"}
+    assert d.returns == "a report"
+
+
+def test_docstring_opening_with_numpy_header_has_no_summary():
+    d = parse("Parameters\n----------\nfix : bool\n    apply safe fixes\n")
+    assert d.summary == ""
+    assert d.params == {"fix": "apply safe fixes"}
+
+
+def test_docstring_opening_with_returns_header_has_no_summary():
+    d = parse("Returns:\n    A report.\n")
+    assert d.summary == ""
+    assert d.returns == "A report."
+
+
+def test_google_note_continuation_is_not_a_parameter():
+    d = parse(
+        """S.
+
+        Args:
+            fix: apply safe fixes.
+                Note: this rewrites files in place.
+            target: where to deploy
+                Example: fm deploy --target=prod
+        """
+    )
+    assert d.params == {
+        "fix": "apply safe fixes. Note: this rewrites files in place.",
+        "target": "where to deploy Example: fm deploy --target=prod",
+    }
+
+
+def test_google_note_after_wrapped_continuation_still_joins():
+    d = parse(
+        "S.\n\nArgs:\n    a: first\n        wrapped\n        Note: caveat\n"
+        "    b: second\n"
+    )
+    assert d.params == {"a": "first wrapped Note: caveat", "b": "second"}
+
+
 # --- NumPy --------------------------------------------------------------------
 
 

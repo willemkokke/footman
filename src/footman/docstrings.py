@@ -80,7 +80,10 @@ def parse(text: str | None) -> Docstring:
     lines = inspect.cleandoc(text).splitlines()
     if not lines:
         return Docstring()
-    summary, body = lines[0].strip(), lines[1:]
+    if _opens_with_section(lines):
+        summary, body = "", _reindented(lines)
+    else:
+        summary, body = lines[0].strip(), lines[1:]
     returns = _numpy_returns(body) or _google_returns(body) or _sphinx_returns(body)
 
     found: list[tuple[int, str]] = []
@@ -101,6 +104,40 @@ def parse(text: str | None) -> Docstring:
         "sphinx": _sphinx_params,
     }[kind](body, start)
     return Docstring(summary, _prose(body[: _long_end(body, start)]), params, returns)
+
+
+def _opens_with_section(lines: list[str]) -> bool:
+    """Is the first line a section opener rather than a summary?
+
+    A docstring can start straight at `Args:` (or `:param x:`, or a NumPy
+    underlined header); a lone `Word:` header line is never a one-liner
+    anyone meant as help text, so the summary is empty and the whole text
+    is body."""
+    first = lines[0].strip()
+    if (
+        _ANY_SECTION.match(first)
+        or _GOOGLE_HEADER.match(first)
+        or _SPHINX_FIELD.match(first)
+    ):
+        return True
+    nxt = lines[1].strip() if len(lines) > 1 else ""
+    return bool(_NUMPY_HEADER.match(first) and _UNDERLINE.match(nxt))
+
+
+def _reindented(lines: list[str]) -> list[str]:
+    """Restore the indent `inspect.cleandoc` trims off an opening section.
+
+    As line one, the header is exempt from margin trimming and pins the
+    margin, so the section's body lands flat at the header's own column and
+    the dedent rules would end the section before its first entry. One
+    indent level back gives the walkers the shape the author wrote."""
+    first = lines[0].strip()
+    if not (_GOOGLE_HEADER.match(first) or _RETURNS_HEADER.match(first)):
+        return lines  # NumPy and Sphinx openers parse fine flat
+    after = next((ln for ln in lines[1:] if ln.strip()), "")
+    if not after or _indent(after) > 0:
+        return lines
+    return [lines[0], *(("    " + ln) if ln.strip() else ln for ln in lines[1:])]
 
 
 def _long_end(body: list[str], stop: int) -> int:
@@ -184,17 +221,30 @@ def _google_params(lines: list[str], start: int) -> dict[str, str]:
     params: dict[str, str] = {}
     name = ""
     fragments: list[str] = []
+    entry_indent: int | None = None
+    prev_indent = header_indent
     for line in lines[start + 1 :]:
         if not line.strip():
             continue  # blank lines inside the section are allowed
-        if _indent(line) <= header_indent:
+        indent = _indent(line)
+        if indent <= header_indent:
             break  # dedent to (or past) the header: the section is over
         entry = _GOOGLE_ENTRY.match(line.strip())
-        if entry:
+        # A line indented deeper than its entry, not dedenting from the
+        # line above, is a continuation even when it happens to read
+        # `Word: text` — `Note: rewrites in place` under an entry documents
+        # that entry, it is not a parameter. (The dedent guard keeps a new
+        # entry at a slightly drifted indent from being swallowed.)
+        deeper = (
+            entry_indent is not None and indent > entry_indent and indent >= prev_indent
+        )
+        if entry and not deeper:
             _store(params, name, fragments)
             name, fragments = _clean_name(entry[1]), [entry[2]]
+            entry_indent = indent
         else:
             fragments.append(line)  # a wrapped continuation of the entry
+        prev_indent = indent
     _store(params, name, fragments)
     return params
 

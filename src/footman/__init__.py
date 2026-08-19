@@ -248,7 +248,11 @@ def main(tasks_file: str | None = None) -> None:
         from footman import _paths
         from footman._complete import complete_cli
 
-        _paths.configure(builtin=BUILTIN)
+        # `brand_version` too, not just the built-ins: the global-mode
+        # manifest is keyed by (prog, version, builtins), and the execution
+        # path configures the real version — leaving the default "" here
+        # would give completion and execution two different global caches.
+        _paths.configure(builtin=BUILTIN, brand_version=__version__)
         raise SystemExit(complete_cli(argv[1:]))
     # Past the hot path, so the TAB press above pays nothing for it (and
     # `_complete` writes bytes anyway): everything from here on prints text,

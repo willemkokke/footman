@@ -386,8 +386,13 @@ def source_manifest_path(cwd: Path, tasks_file: Path) -> Path:
     so the task set depends on the pair — the same file opened from two projects
     is two caches. A separate key from `manifest_path`, so a `-f` run never
     poisons the plain-cwd completion cache.
+
+    `expanduser` here, in the one key function, so every keyer agrees:
+    `resolve()` alone leaves `~` literal, and a `-f=~/tasks.py` TAB would key
+    `<cwd>/~/tasks.py` while the refresh child (which expands before loading)
+    keys the home-anchored truth — a manifest that then never warms.
     """
-    joined = f"{cwd.resolve()}\0{tasks_file.resolve()}"
+    joined = f"{cwd.resolve()}\0{tasks_file.expanduser().resolve()}"
     key = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
     return footman_cache_dir() / f"{key}.json"
 

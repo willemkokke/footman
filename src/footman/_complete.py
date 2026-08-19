@@ -692,7 +692,9 @@ def _load_manifest(path: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _maybe_refresh(path: str, data: dict[str, Any]) -> None:
+def _maybe_refresh(
+    path: str, data: dict[str, Any], spawn_in: str | None = None
+) -> None:
     """Stale-while-revalidate: if the manifest is older than its baked
     `completion_max_age`, bump its mtime and spawn a detached rebuild for *next*
     time, then return. Never blocks the TAB (the rebuild imports the package and
@@ -710,10 +712,10 @@ def _maybe_refresh(path: str, data: dict[str, Any]) -> None:
         os.utime(path)
     except OSError:
         return
-    _spawn_refresh()
+    _spawn_refresh(spawn_in=spawn_in)
 
 
-def _spawn_refresh(override: str | None = None) -> None:
+def _spawn_refresh(override: str | None = None, spawn_in: str | None = None) -> None:
     # override set → rebuild that one -f file's (cwd, file) manifest; else the
     # cwd cascade. The path rides as an argv word (not baked into the -c script),
     # so a path with spaces or quotes needs no escaping.
@@ -740,10 +742,13 @@ def _spawn_refresh(override: str | None = None) -> None:
             "_refresh.refresh_cwd(*sys.argv[1:])"
         )
         cmd = [sys.executable, "-P", "-c", script, *where]
-    detach(cmd)
+    # The child keys its build by its own cwd, so a `-C <dir>` completion
+    # stands it in that directory — the manifest it writes is the one the
+    # hot path just tried to read.
+    detach(cmd, cwd=spawn_in)
 
 
-def detach(cmd: list[str]) -> None:
+def detach(cmd: list[str], cwd: str | None = None) -> None:
     """Spawn *cmd* fully detached, swallowing failure — the one copy of the
     background-child dance, shared with the collector's spawn in `_app` (a
     background child must never break the foreground that spawned it).
@@ -764,17 +769,24 @@ def detach(cmd: list[str]) -> None:
                 subprocess, "CREATE_NEW_PROCESS_GROUP", 0
             )
             subprocess.Popen(
-                cmd, stdin=null, stdout=null, stderr=null, creationflags=flags
+                cmd, stdin=null, stdout=null, stderr=null, creationflags=flags, cwd=cwd
             )
         else:
             subprocess.Popen(
-                cmd, stdin=null, stdout=null, stderr=null, start_new_session=True
+                cmd,
+                stdin=null,
+                stdout=null,
+                stderr=null,
+                start_new_session=True,
+                cwd=cwd,
             )
     except OSError:
         return  # a detached child must never break what spawned it
 
 
-def _cold_build(manifest: str, override: str | None) -> dict[str, Any] | None:
+def _cold_build(
+    manifest: str, override: str | None, spawn_in: str | None = None
+) -> dict[str, Any] | None:
     """Build a cold-cache manifest once, then load it.
 
     The first <kbd>Tab</kbd> in a fresh directory has nothing cached. Rather than
@@ -788,9 +800,11 @@ def _cold_build(manifest: str, override: str | None) -> dict[str, Any] | None:
     if override is not None:
         from pathlib import Path
 
-        if not Path(override).expanduser().is_file():
+        # A relative -f anchors where the run will stand (`-C` moved it).
+        base = Path(spawn_in) if spawn_in else Path.cwd()
+        if not (base / Path(override).expanduser()).is_file():
             return None  # a still-being-typed or missing -f value: nothing to build
-    _spawn_refresh(override)
+    _spawn_refresh(override, spawn_in)
     deadline = time.monotonic() + _COLD_TIMEOUT
     while time.monotonic() < deadline:
         time.sleep(0.03)
@@ -918,6 +932,7 @@ def complete_cli(args: list[str]) -> int:
 
     derived = manifest is None
     override: str | None = None
+    spawn_in: str | None = None
     if manifest is None:
         # Only the derive branch needs the package; keep the standalone
         # --manifest path free of any `footman` import. The cache is keyed by
@@ -932,11 +947,28 @@ def complete_cli(args: list[str]) -> int:
         # prior words only, leaving `-f`'s own value to native file completion
         # (the resolver signals it below). A finished `-f file <TAB>` still keys
         # by the pair.
+        # A finished `-C <dir>` moves the whole question: the run will chdir
+        # there before discovery, so the manifest key, the cascade walk, and
+        # every spawned builder must stand in that directory too — otherwise
+        # `fm -C=<dir> <TAB>` offers the invoking directory's tasks.
+        cdir = _leading_global_value(args[:-1], ("-C", "--directory"))
+        if cdir:
+            stand = Path(cdir).expanduser()
+            if not stand.is_dir():
+                return 0  # a mistyped or half-typed target: nothing to offer
+        else:
+            stand = Path.cwd()
+        spawn_in = str(stand) if cdir else None
         override = _tasks_file_from(args[:-1])
         if override:
-            manifest = str(_paths.source_manifest_path(Path.cwd(), Path(override)))
+            # Anchor a relative -f at the stand-in directory, as the run's
+            # chdir would; joining an absolute (or ~-expanded) value is a
+            # no-op, so plain invocations key exactly as before.
+            manifest = str(
+                _paths.source_manifest_path(stand, stand / Path(override).expanduser())
+            )
         else:
-            manifest = str(_paths.cwd_manifest_path())
+            manifest = str(_paths.manifest_path(stand))
             if not Path(manifest).is_file():
                 # No warm cwd manifest: one walk decides what this directory
                 # even is. A project's first TAB builds its own cascade
@@ -948,9 +980,8 @@ def complete_cli(args: list[str]) -> int:
                 # beats spawning a build that can only come back empty after
                 # the full cold bound. Only on the miss path: a warm
                 # directory never pays the walk.
-                cwd = Path.cwd()
                 name = _paths.tasks_file_name()
-                files = _paths.task_files(cwd, _paths.find_repo_root(cwd), name)
+                files = _paths.task_files(stand, _paths.find_repo_root(stand), name)
                 if not files:
                     if (
                         not _paths.builtin()
@@ -970,7 +1001,7 @@ def complete_cli(args: list[str]) -> int:
         # once (bounded) and serve it, so the first TAB in a fresh directory —
         # or right after an upgrade — is accurate. Covers the cwd cascade and
         # a finished `-f <file>` alike.
-        data = _cold_build(manifest, override) if derived else None
+        data = _cold_build(manifest, override, spawn_in) if derived else None
         if (
             not isinstance(data, dict)
             or not isinstance(data.get("tree"), dict)
@@ -997,7 +1028,7 @@ def complete_cli(args: list[str]) -> int:
         csv = tag == _FILES_CSV
         if glob:
             sys.stdout.write(glob + "\n")
-        _maybe_refresh(manifest, data)
+        _maybe_refresh(manifest, data, spawn_in)
         return _EXIT_FILES_CSV if csv else _EXIT_FILES
     if out and out[0] == _DYNAMIC:
         # A dynamic completer: recompute it fresh in a subprocess rather than
@@ -1009,10 +1040,12 @@ def complete_cli(args: list[str]) -> int:
         fresh = _fresh_dynamic(param, seg_path, args)
         if fresh is not None:
             _emit([prefix + c for c in fresh if c.startswith(partial)])
-        _maybe_refresh(manifest, data)
+        _maybe_refresh(manifest, data, spawn_in)
         return _EXIT_MORE if more else 0
     _emit(out)
-    _maybe_refresh(manifest, data)  # SWR: refresh the baked fallback + structural set
+    _maybe_refresh(
+        manifest, data, spawn_in
+    )  # SWR: refresh the baked fallback + structural set
     return _EXIT_MORE if more else 0
 
 
