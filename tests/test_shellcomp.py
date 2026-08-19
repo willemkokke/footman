@@ -1063,12 +1063,30 @@ def test_cast_completes_in_every_posix_shell(shell: str, home, tmp_path, monkeyp
     # could pick still lands on the completed line. A 2.5 s guess failed
     # exactly once in fifteen jobs — pwsh on a busy macOS box — and a
     # recording whose keystroke raced the shell is what `<SETTLE>` exists for.
-    line += ["--width=70", "--height=12", "--", "fm li", "<TAB>", "<SETTLE>"]
+    #
+    # `--steady=3` because `<SETTLE>` does not cover the *frame* timing, which
+    # is what actually failed here. After each key the recorder waits for the
+    # screen to change and then hold still for `_SNAP_GAP` — 0.18 s at
+    # steady=1. A Tab is exempt from the bound only while it draws *nothing*;
+    # the moment anything redraws (a previous keystroke's echo landing late
+    # under load) that 0.18 s starts, and the hook's `fm --complete`
+    # subprocess loses the race. The frame is then taken with `fm li` typed
+    # and nothing completed on it — the exact artifact of the one failure
+    # seen. `steady` widens the quiet windows without touching the hard caps,
+    # and is the knob built for this: the repo's own `_record_cast` already
+    # retries at 3.
+    line += ["--steady=3", "--width=70", "--height=12"]
+    line += ["--", "fm li", "<TAB>", "<SETTLE>"]
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
     text = _re.sub(r"&#160;", "", _re.sub(r"<[^>]+>", "", svg))
     assert svg.count("cast-frame") >= 2  # it animates
-    assert "lint" in text  # TAB completed the prefix from the cached manifest
+    # On failure, say what the recording actually caught: a prompt with the
+    # prefix and no completion is the race above, and reads quite differently
+    # from an empty or malformed capture.
+    assert "lint" in text, (  # TAB completed the prefix from the cached manifest
+        f"{shell}: no completion in the recording — captured text was {text[-160:]!r}"
+    )
 
 
 @pytest.mark.skipif(

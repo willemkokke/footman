@@ -426,22 +426,53 @@ def test_a_wrapper_task_calls_its_tool_over_the_whole_repo(
 ):
     """`SRC` is the whole repo, as CI lints it. Anything narrower lets a
     tracked file outside src/tests pass the gate and fail the build — which
-    tracking `notes/` proved within minutes."""
+    tracking `notes/` proved within minutes.
+
+    Every checker is recorded, not only the one under assertion. `typecheck`
+    is a real `parallel()` over six steps, so patching one tool leaves the
+    other five reaching for the actual binaries — and if a sibling raises,
+    fail-fast cancels in-flight work and the tool under test is never
+    called, which reads as a bare `assert [] == [...]` with nothing to say
+    why. Recording all of them keeps the run hermetic *and* leaves a
+    transcript: this test failed once under a saturated box (2026-08-19)
+    and the assertion detail was lost, so the next occurrence explains
+    itself."""
     seen: list[tuple[object, ...]] = []
+    transcript: list[str] = []
 
     class Recorder:
-        def __init__(self, verb=None):
-            self._verb = verb
+        def __init__(self, name, verb=None, log=None):
+            self._name, self._verb, self._log = name, verb, log
 
         def __getattr__(self, name):
-            return Recorder(name)
+            return Recorder(self._name, name, self._log)
 
         def __call__(self, *args, **kwargs):
-            seen.append(((self._verb, args), kwargs))
+            transcript.append(f"{self._name}.{self._verb or '__call__'}{args}{kwargs}")
+            if self._log is not None:
+                self._log.append(((self._verb, args), kwargs))
 
-    monkeypatch.setattr(tasks, attr, Recorder())
-    call()
-    assert seen == [expected]
+    # The tool under assertion logs into `seen`; its siblings are stubbed so
+    # nothing spawns, and every call lands in the shared transcript.
+    for name in ("ruff", "ruff_format", "basedpyright", "mypy", "ty", "pyrefly"):
+        if hasattr(tasks, name):
+            monkeypatch.setattr(
+                tasks, name, Recorder(name, log=seen if name == attr else None)
+            )
+
+    raised: BaseException | None = None
+    try:
+        call()
+    except BaseException as exc:  # re-reported below, with the transcript
+        raised = exc
+
+    assert raised is None, (
+        f"{attr}: the task raised {type(raised).__name__}: {raised}\n"
+        f"calls recorded: {transcript}"
+    )
+    assert seen == [expected], (
+        f"{attr}: recorded {seen!r}\ncalls across every checker: {transcript}"
+    )
 
 
 def test_the_test_task_forwards_its_arguments_verbatim(monkeypatch):
