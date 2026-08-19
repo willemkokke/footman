@@ -78,6 +78,12 @@ build, so this table can neither invent a key nor miss one:
 | `FOOTMAN_CONFIG_DIR` | Moves footman's config corner whole (the config file and the user-level tasks file travel together). |
 | `FOOTMAN_CACHE_DIR` | Moves every footman cache (completion manifests, timing history). |
 | `FOOTMAN_DATA_DIR`  | Moves footman's data directory (provisioned tools and their stubs). |
+
+Values for a *task's* environment are a different lane: `.env` files load
+through the first-party `footman.env_files` plugin (`--env-file=.env`) —
+see [the built-in on the hooks page](hooks.md#the-built-in-footmanenv_files)
+— and a per-parameter `env("VAR")` marker reads a single variable as a
+default.
 | `FOOTMAN_NO_UV`     | Disables both uv handoffs (project and script environment), regardless of any config. |
 | `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
 | `FOOTMAN_CASCADE`   | Overrides the `cascade` key for one invocation (`none` / `repo` / `filesystem`). |

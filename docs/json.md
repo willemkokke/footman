@@ -199,7 +199,10 @@ An annotation *outside* the set (a wider union, an exotic generic, a
 broken name) declares nothing: the task runs and serialises exactly as it
 always did. "Describable" is a subset of "returnable",
 never a new gate. Bare `int` stays the exit-code channel, so it declares
-nothing either; `Stdout[T]` describes `T`, one declaration for two doors.
+nothing either. `Stdout[T]` describes `T`, one declaration for two doors —
+with the one exception the exit-code channel forces: a bare `int` return
+means "exit code", so `Stdout[int]`'s number is the *document* and the
+annotation declares nothing about it.
 
 Declaring buys **drift protection** on both sides of a repo boundary:
 

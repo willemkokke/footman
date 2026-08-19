@@ -71,7 +71,7 @@ include of a file the docs build regenerates:
 `--flavor=plain` (the default) is pure CommonMark and pipe tables, safe for
 pandoc and any renderer. `--flavor=material` opts into what a
 zensical/mkdocs-material site already understands: heading anchors for
-stable deep links and an `!!! example` admonition for the synthesized
+stable deep links and an `!!! example` admonition for the synthesised
 invocation.
 
 ## A linked site: `fm docs.site`

@@ -536,6 +536,15 @@ uv reads the block natively, everything it understands works: a
 `requires-python`, a `[tool.uv.sources]` pointing a dependency at a git
 ref or a local path.
 
+The full rules, in order. **A project that pins footman wins outright** —
+inside one, the script block is ignored (worth seeing under `-v`, never a
+warning), because the lockfile already declared what `fm` means there. The
+handoff only fires where the cascade found exactly one file, and only when
+that file's block declares dependencies. **The opt-outs**: `FOOTMAN_NO_UV=1`
+disables both uv handoffs for a shell, and `uv = false` under
+`[tool.footman]` does the same per project; with either set, or with no uv
+on the PATH, the file simply runs as-is in the current environment.
+
 List footman itself among the dependencies: the file imports it, so the
 script environment has to contain it. That is also the one thing footman
 refuses, because the environment provably could not run the file.

@@ -18,7 +18,7 @@ nearest wins:
 1. `.opts(cwd=…, rel=…)` — this one use of the task
 2. `@task(cwd=…, rel=…)` — the task's own declaration
 3. `[tool.footman] cwd = "…"` — the run-wide default
-4. `taskfile` — the built-in default: today's behaviour, now named
+4. `taskfile` — the built-in default, named so it can be said
 
 `cwd` takes a policy token or an absolute path:
 
@@ -90,6 +90,11 @@ the directory a call needs decides how that call runs:
 - A toolroom call that would run in-process but needs a *different*
   directory runs as its subprocess twin instead: same command, right
   directory, still parallel; the startup saving is the only loss.
+- Other in-process work, a step, has no `cwd=` at all: build paths from
+  `footman.cwd()`, or run the command as a subprocess (which gets `cwd=`
+  for free). The real working directory is one per process, and footman
+  will not gamble it under a parallel run.
+
 !!! note "Threads you spawn yourself"
 
     The ambient context follows footman's own concurrency, and `parallel()`
@@ -100,11 +105,6 @@ the directory a call needs decides how that call runs:
     `parallel()`, wrap your target with
     `contextvars.copy_context().run(...)`, or declare `ctx` and pass it
     in explicitly.
-
-- Other in-process work, a step, has no `cwd=` at all: build paths from
-  `footman.cwd()`, or run the command as a subprocess (which gets `cwd=`
-  for free). The real working directory is one per process, and footman
-  will not gamble it under a parallel run.
 
 `os.chdir` in a parallel task is an error for the same reason, and
 `os.getcwd` earns a one-time note pointing at `footman.cwd()`, since in a
