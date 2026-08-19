@@ -49,7 +49,18 @@ jobs:
           NU_VERSION: "0.114.1"
           NU_SHA256_LINUX: "8802b26edcdf1a64477567b5ce909fbae3d72d731c8f0847892ea16c6fa73c53"
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q zsh fish
+          # Bounded and retried whole: the mirror hang survives socket timeouts
+          # (it wedged twice AFTER a completed InRelease fetch), so `timeout`
+          # caps any mode — fetch, verify, dpkg — and the loop retries.
+          for attempt in 1 2 3; do
+            if sudo timeout 240 apt-get -o Acquire::Retries=3 update -q &&
+               sudo timeout 240 apt-get -o Acquire::Retries=3 install -y -q zsh fish; then
+              break
+            fi
+            echo "apt attempt ${attempt} failed; retrying"
+            sleep 5
+          done
+          command -v zsh && command -v fish
           # Verified before it runs: this job holds pages/id-token grants,
           # and an unverified binary in here would hold them too.
           curl -fsSL -o nu.tar.gz "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"

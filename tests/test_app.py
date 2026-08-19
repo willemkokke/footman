@@ -2171,3 +2171,90 @@ def test_tree_aligns_the_description_column(project, capsys):
             if help_text in line:
                 columns.add(line.index(help_text))
     assert len(columns) == 1
+
+
+def test_a_single_dash_misspelling_refuses_instead_of_acting(tmp_path):
+    # `-version=1` drove --version and exited 0; `-install-completion=zsh`
+    # would have edited a shell rc — the lenient pre-discovery walk carried
+    # the unknown token through and the dash-stripping normalisation made
+    # it ACT before the authoritative parse could refuse it (audit L7).
+    import textwrap
+
+    from footman.testing import Runner
+
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task
+
+            @task
+            def hi():
+                print("hi")
+            """
+        )
+    )
+    refused = Runner().invoke("-version=1", cwd=tmp_path)
+    assert refused.exit_code == EX_USAGE
+    assert "did you mean --version?" in refused.stderr  # taught, not acted on
+    assert "footman" not in refused.stdout  # the version never printed
+    # Both legitimate spellings still answer.
+    assert Runner().invoke("--version", cwd=tmp_path).exit_code == 0
+    assert Runner().invoke("-V", cwd=tmp_path).exit_code == 0
+    # And a long name missing one dash hints the long spelling — not the
+    # comic fused-short reading ("did you mean -j=obs?").
+    hinted = Runner().invoke("-jobs=2 hi", cwd=tmp_path)
+    assert hinted.exit_code == EX_USAGE
+    assert "did you mean --jobs?" in hinted.stderr
+
+
+def test_a_mistyped_tasks_config_key_refuses_loudly(tmp_path):
+    # `tasks = 123` silently behaved as if unset while every option-backed
+    # key refused its wrong TOML type by name (audit L5).
+    from footman.testing import Runner
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n\n@task\ndef hi():\n    print('hi')\n"
+    )
+    (tmp_path / "footman.toml").write_text("tasks = 123\n")
+    r = Runner().invoke("--list", cwd=tmp_path)
+    assert r.exit_code == EX_USAGE
+    assert "config key 'tasks' expects a filename string" in r.stderr
+
+
+def test_a_deleted_working_directory_is_one_taught_line(tmp_path):
+    # A shell sitting in a directory another process removed: every step
+    # needs a cwd, and each used to crash as its own raw FileNotFoundError
+    # traceback (audit L6). One taught line, at the door.
+    if sys.platform == "win32":
+        pytest.skip("directory-in-use semantics differ on Windows")
+    import os
+    import subprocess
+    import textwrap
+
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    helper = textwrap.dedent(
+        """
+        import os, subprocess, sys
+        os.chdir(sys.argv[1])
+        os.rmdir(sys.argv[1])
+        r = subprocess.run(
+            [sys.executable, "-m", "footman", "--list"],
+            capture_output=True, text=True,
+        )
+        print(r.returncode)
+        print(r.stderr.strip())
+        """
+    )
+    env = {**os.environ, "FOOTMAN_NO_UV": "1"}
+    env.pop("VIRTUAL_ENV", None)
+    done = subprocess.run(
+        [sys.executable, "-c", helper, str(gone)],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    lines = done.stdout.strip().splitlines()
+    assert lines[0] == "1"
+    assert "the working directory no longer exists" in done.stdout
+    assert "Traceback" not in done.stdout

@@ -125,6 +125,15 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     result: dict[str, object] = {}
     for tok in tokens:
         name = tok.split("=", 1)[0]
+        if not name.startswith("--") and name not in _split._GLOBAL_KIND:
+            # A lenient pre-discovery walk carries unknown dash tokens
+            # through for the authoritative parse to teach — but stripping
+            # the dashes here quietly made the misspelling ACT first:
+            # `-version=1` drove `--version` and exited 0, and
+            # `-install-completion=zsh` would have edited a shell rc, all
+            # before the parse that refuses `-version` ever ran. An unknown
+            # spelling populates nothing; the refusal stays the answer.
+            continue
         key = name.lstrip("-").replace("-", "_")
         if "=" in tok:  # a value attached by the splitter (--name=value)
             result[key] = tok.split("=", 1)[1]
@@ -232,6 +241,14 @@ def resolve_task_files(
         files = [one] if one.is_file() else []
         return Discovery(files, cfg, str(files[0].parent) if files else "", None)
     filename = cfg.get("tasks")
+    if filename is not None and not isinstance(filename, str):
+        # The option-backed keys refuse a wrong TOML type loudly; this
+        # config-only key silently fell back to the default instead —
+        # `tasks = 123` behaved as if unset, which reads as footman
+        # ignoring the setting rather than refusing it.
+        raise _config.ConfigError(
+            f"config key 'tasks' expects a filename string (got {filename!r})"
+        )
     name = filename if isinstance(filename, str) else _brand.tasks_file
     files = _paths.task_files(cwd, ceiling, name)
     root = str(files[0].parent) if files else ""

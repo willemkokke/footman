@@ -113,6 +113,11 @@ def _unknown_global(
     not combine them, rather than being read as a name nobody wrote.
     """
     if len(name) > 2 and name[0] == "-" and name[1] != "-":
+        if f"-{name}" in known:
+            # `-jobs` is a long name missing a dash, and reading it as the
+            # short `-j` fused with `obs` produced the comic hint
+            # "did you mean -j=obs?" — name the spelling the hand meant.
+            return f"{name} is missing a dash — did you mean -{name}?"
         head, tail = name[:2], name[2:]
         kind = known.get(head)
         if kind == "option":

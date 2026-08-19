@@ -33,6 +33,7 @@ tracks, under a `pytest` process beside `fm`'s own.
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import shutil
@@ -81,9 +82,20 @@ def arm(inv: footman.Invocation) -> None:
     if "profile" not in inv.cli:
         return
     _child_dir = tempfile.mkdtemp(prefix="fm-profile-")
+    # The embed pass consumes this directory — but a run that mentions
+    # --profile and never reaches it (a refusal after this hook, an
+    # interrupt) leaked it forever, one directory per mention. The atexit
+    # sweep is the backstop: the consume path clears `_child_dir` first,
+    # so a healthy run's handler finds nothing to do.
+    atexit.register(_sweep_orphan, _child_dir)
     # The single-threaded moment: what lands in the environment here is in
     # every task's copy, and so in every child any task spawns.
     os.environ["FM_PROFILE_DIR"] = _child_dir
+
+
+def _sweep_orphan(path: str) -> None:
+    if _child_dir == path:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def _nests(

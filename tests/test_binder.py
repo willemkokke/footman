@@ -110,6 +110,11 @@ class Switch:
     flag: Flagged
 
 
+@dataclass
+class Wider:
+    x: int | str | None = None
+
+
 def build_tree(build):
     reg = Group("root")
     build(reg)
@@ -228,6 +233,25 @@ def test_a_bad_literal_choice_names_the_path(piped):
     assert results[0].code == EX_USAGE
     assert "items[0].kind" in str(results[0].error)
     assert "unit|functional" in str(results[0].error)
+
+
+def test_a_wider_optional_union_still_admits_null(piped):
+    # `int | str | None` refused a JSON null: the optional walk recognised
+    # exactly-two-member `T | None` and a third member cost the union its
+    # nullability (audit L1). Any union carrying None admits null; the
+    # remainder keeps union shape and binds through the same walk.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def hook(payload: Annotated[Wider, stdin]):
+            seen["p"] = payload
+
+    for raw, expect in (("null", None), ("3", 3), ('"hi"', "hi")):
+        piped(f'{{"x": {raw}}}')
+        results = run(tasks, "hook")
+        assert results[0].code == 0, results[0].error
+        assert seen["p"].x == expect
 
 
 def test_an_enum_document_round_trips_speaking_tokens(piped):
