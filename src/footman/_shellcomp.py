@@ -383,14 +383,15 @@ $env.config.completions.external.completer = {{|spans|
             # beats a filtered one that reaches only this directory's.
             null
         }} else if $r.exit_code == 103 {{
-            # A broken tasks file: `complete` already captured the reason
-            # from stderr (stdout stays empty so older hooks show plain
-            # silence; `default ""` because some hosts hand back a null
-            # stderr, which `lines` refuses). Re-offer the typed word — a
-            # no-op insert — with the reason in the description column; a
+            # A broken tasks file (stdout stays empty so older hooks show
+            # plain silence). One more call with `--why` fetches the reason
+            # on stdout — the record's stderr is not reliably a string on
+            # every host, and stdout capture is. Re-offer the typed word —
+            # a no-op insert — with the reason in the description column; a
             # bare Tab stays silent.
             let tok = ($spans | last)
-            let why = ($r.stderr | default "" | lines | get 0? | default "")
+            let why = ((^{prog} --complete --why -- ...($spans | skip 1)
+                | complete).stdout | into string | lines | get 0? | default "")
             if $tok != "" and $why != "" {{
                 [{{value: $tok, description: $why}}]
             }} else {{
