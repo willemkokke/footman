@@ -74,6 +74,11 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A mistyped `completion.max_age` refuses on a run.** The one config
+  key that parsed quietly to its default now teaches by name like every
+  other key — on the execution path only: the refresh child keeps the
+  quiet fallback, because a background rebuild must never crash and a
+  keystroke is nobody's moment to learn about a config typo.
 - **PowerShell no longer offers files as tasks.** When the resolver had
   no candidates, the pwsh hook yielded nothing and PowerShell's default
   completion stepped in — filesystem entries offered at the task-name
