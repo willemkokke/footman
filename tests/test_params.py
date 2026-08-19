@@ -86,6 +86,11 @@ class Colour(enum.Enum):
     BLUE = "blue"
 
 
+class Urgent(enum.Enum):
+    LOW = 1
+    HIGH = 2
+
+
 def run(build, line):
     reg, tree = build_tree(build)
     # The resolver the app builds, so a dynamic parameter validates here
@@ -1129,14 +1134,12 @@ def test_an_untyped_constructor_is_not_a_grouped_shape():
     assert seen["amount"] == Decimal("1.50")
 
 
-def test_an_enum_options_two_spellings_pinned_as_they_are():
-    # Audit M104, pinned as measured. The channels genuinely disagree about
-    # a member's NAME: the payload channel binds "BLUE" (test_binder), and
-    # `coerce_one` would too — but the eager splitter refuses it at the
-    # gate, choices being baked as *values*. Whether the CLI should accept
-    # names is an open grammar ruling; until it is made, this test keeps
-    # the current line exactly where it is, so the seam cannot MOVE
-    # silently in either direction.
+def test_an_enum_option_speaks_tokens_and_accepts_every_face():
+    # The ruled seam (formerly pinned as a disagreement): choices speak
+    # tokens, and the eager gate accepts the enumerated face set — token
+    # and value face — identically to every other door. A raw member NAME
+    # is not a face: its one spelling is the token, and the refusal lists
+    # tokens, never payload values.
     seen: dict[str, object] = {}
 
     def tasks(reg):
@@ -1144,10 +1147,22 @@ def test_an_enum_options_two_spellings_pinned_as_they_are():
         def grade(level: Colour = Colour.RED):
             seen["level"] = level
 
-    run(tasks, "grade --level=blue")  # the member's VALUE: the CLI spelling
+    run(tasks, "grade --level=blue")  # the token (== the value, here)
     assert seen["level"] is Colour.BLUE
     with pytest.raises(ChainError, match=r"must be one of red\|blue.*'BLUE'"):
-        run(tasks, "grade --level=BLUE")  # the NAME: refused at the gate
+        run(tasks, "grade --level=BLUE")  # a raw NAME is not a face
+
+    def numeric(reg):
+        @reg.task
+        def rate(urgency: Urgent = Urgent.LOW):
+            seen["urgency"] = urgency
+
+    run(numeric, "rate --urgency=high")  # the token — the taught spelling
+    assert seen["urgency"] is Urgent.HIGH
+    run(numeric, "rate --urgency=2")  # the value face — accepted, not taught
+    assert seen["urgency"] is Urgent.HIGH
+    with pytest.raises(ChainError, match=r"must be one of low\|high"):
+        run(numeric, "rate --urgency=HIGH")  # the refusal lists tokens
 
 
 def test_a_one_field_record_reads_its_fields_declared_type():

@@ -565,16 +565,143 @@ def type_phrase(tags: list[str]) -> str:
     return " or ".join(_TYPE_PHRASE.get(t, t) for t in tags)
 
 
+class EnumContractError(ValueError):
+    """An enum declares a command surface the contract refuses.
+
+    Raised wherever the enum is first read — the manifest bake wraps it as
+    the taught `ManifestError`; an execution path reaching a broken enum
+    without a manifest reports it as the parameter's failure. Refusal over
+    precedence, always: every message names the members involved."""
+
+
+@dataclass(frozen=True)
+class EnumFace:
+    """One canonical member's contract faces.
+
+    `token` is the one output spelling — the member *name* projected at
+    declaration time to the neutral identifier grammar (lowercase ASCII,
+    digits, `-`), the same projection parameter names already use. `aliases`
+    are Python's duplicate-value bindings, projected the same way: accepted
+    as input everywhere, taught nowhere. `value_text` is the value face in
+    the argv door's encoding (a string transport stringifies); the document
+    door spells the value face in JSON's own types instead."""
+
+    token: str
+    value_text: str
+    aliases: tuple[str, ...]
+    member: enum.Enum
+
+
+def enum_token(name: str) -> str:
+    """The declaration-time projection: `LOW_PRIORITY` → `low-priority`.
+
+    Folding happens here and only here — no runtime folding algorithm,
+    table, or Unicode dependency exists in any binder or on any wire. A
+    name that projects outside the grammar is refused at declaration, so
+    the Turkish-İ class of divergence is excluded by construction."""
+    token = name.lower().replace("_", "-")
+    if not token or not all(c.isascii() and (c.isalnum() or c == "-") for c in token):
+        raise EnumContractError(
+            f"enum member {name!r} projects to {token!r}, outside the "
+            f"contract's token grammar (lowercase ASCII letters, digits, "
+            f"'-') — rename the member"
+        )
+    return token
+
+
+def enum_faces(element: type[enum.Enum]) -> list[EnumFace]:
+    """Every canonical member's faces, with the declaration-time refusals.
+
+    Python's alias collapse is adopted verbatim: iteration yields canonical
+    members (first binding wins), `__members__` carries the synonyms. Two
+    refusals guard the contract: two canonical members projecting to one
+    token (`LOW` and `Low`), and any cross-member intersection of face
+    spellings on any door. The argv set — token, aliases, stringified
+    value — is checked pairwise; the document door's string faces are a
+    subset of it (duplicate values already collapsed to aliases, and its
+    value face is JSON-typed), so the argv check covers every door."""
+    alias_names: dict[enum.Enum, list[str]] = {}
+    for name, member in element.__members__.items():
+        if name != member.name:  # a duplicate-value binding: a synonym
+            alias_names.setdefault(member, []).append(name)
+    faces: list[EnumFace] = []
+    seen_tokens: dict[str, str] = {}
+    for member in element:
+        token = enum_token(member.name)
+        if token in seen_tokens:
+            raise EnumContractError(
+                f"enum members {seen_tokens[token]!r} and {member.name!r} "
+                f"both project to token {token!r} — rename one"
+            )
+        seen_tokens[token] = member.name
+        faces.append(
+            EnumFace(
+                token=token,
+                value_text=str(member.value),
+                aliases=tuple(enum_token(a) for a in alias_names.get(member, ())),
+                member=member,
+            )
+        )
+    spellings = [(f, {f.token, *f.aliases, f.value_text}) for f in faces]
+    for i, (a, a_set) in enumerate(spellings):
+        for b, b_set in spellings[i + 1 :]:
+            clash = a_set & b_set
+            if clash:
+                raise EnumContractError(
+                    f"enum members {a.member.name!r} and {b.member.name!r} "
+                    f"spell {sorted(clash)!r} ambiguously on the command "
+                    f"line — the contract refuses rather than picking"
+                )
+    return faces
+
+
+def token_of(member: enum.Enum) -> str:
+    """The member's one output spelling. An alias-accessed member has no
+    independent identity (`Level.MINIMAL is Level.LOW`), so `.name` is
+    always the canonical binding and the projection lands on its token."""
+    return enum_token(member.name)
+
+
+def enum_member_for(element: type[enum.Enum], text: str) -> enum.Enum | None:
+    """The member *text* names on a string door: token, alias, or value
+    face — the enumerated input set, identical at every door. A raw member
+    name (`LOW`) is deliberately not a fourth spelling."""
+    for face in enum_faces(element):
+        if text == face.token or text in face.aliases or text == face.value_text:
+            return face.member
+    return None
+
+
 def element_choices(
     element: Any,
 ) -> tuple[list[str] | None, type[enum.Enum] | None, tuple[Any, ...] | None]:
-    """(choices as strings, Enum class, Literal values) for a choice element."""
+    """(choices as strings, Enum class, Literal values) for a choice element.
+
+    Choices speak tokens: a `Literal`'s tokens are its values (the author
+    chose the values as the meaning), an `Enum`'s tokens are its projected
+    names (the author named the values). `Level.LOW = 1` therefore shows
+    `low|high`, never the `1|2` that read as payload."""
     if typing.get_origin(element) is typing.Literal:
         values = typing.get_args(element)
         return [str(v) for v in values], None, values
     if isinstance(element, type) and issubclass(element, enum.Enum):
-        return [str(m.value) for m in element], element, None
+        return [f.token for f in enum_faces(element)], element, None
     return None, None, None
+
+
+def enum_accepts(element: Any) -> list[str]:
+    """The accepted input spellings *beyond* the choices, across a union:
+    aliases and value faces. Baked into the manifest so every frontend's
+    eager gate accepts the same set by contract — authored and enumerated,
+    not leniency."""
+    extra: list[str] = []
+    for member in union_members(element):
+        if isinstance(member, type) and issubclass(member, enum.Enum):
+            for face in enum_faces(member):
+                for spelling in (*face.aliases, face.value_text):
+                    if spelling != face.token and spelling not in extra:
+                        extra.append(spelling)
+    return extra
 
 
 def all_choices(element: Any) -> list[str] | None:
@@ -630,9 +757,12 @@ def coerce_one(value: str, element: Any) -> Any:
     """Coerce a single token to its annotated element type (best effort)."""
     _, enum_cls, literal = element_choices(element)
     if enum_cls is not None:
-        for member in enum_cls:
-            if str(member.value) == value or member.name == value:
-                return member
+        # The three-face input set — token, alias, value face — identical
+        # at every door. A raw member NAME (`LOW`) is deliberately not a
+        # fourth spelling: the name's one legal form is its token.
+        member = enum_member_for(enum_cls, value)
+        if member is not None:
+            return member
         return enum_cls(value)
     if literal is not None:
         for lit in literal:

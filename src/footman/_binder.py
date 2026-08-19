@@ -175,7 +175,11 @@ def _leaf(value: Any, target: Any, path: str) -> Any:
             raise ValueError(f"{path}: {exc}") from exc
         choices = _coerce.all_choices(target)
         if choices is not None:
-            shown = str(out.value) if hasattr(out, "value") else str(out)
+            # Choices speak tokens, so the coerced result is compared in
+            # the same face: a member's token, or the raw text for a
+            # Literal. Comparing `.value` here would refuse every member
+            # of a value-carrying enum against its own token list.
+            shown = _coerce.token_of(out) if isinstance(out, enum.Enum) else str(out)
             if shown not in choices:
                 raise ValueError(
                     f"{path}: must be one of {'|'.join(choices)} (got {value!r})"

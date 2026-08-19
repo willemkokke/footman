@@ -31,6 +31,7 @@ acquisition stays at the task boundary, so a body call to a `serial=`/
 
 from __future__ import annotations
 
+import enum
 import io
 import itertools
 import threading
@@ -38,7 +39,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
-from footman import registry
+from footman import _coerce, registry
 from footman._split import ChainError
 
 if TYPE_CHECKING:
@@ -182,6 +183,15 @@ def _freeze(value: Any) -> Any:
     frozen form is not forced into one: it reads as unkeyable, and its call
     runs.
     """
+    if isinstance(value, enum.Enum):
+        # Before the scalar line on purpose: IntEnum and str-valued enums
+        # would otherwise freeze as their value face. The normal form
+        # canonicalises an enum argument as its token — the member is the
+        # meaning, the value is representation — so renumbering a member
+        # does not churn work identity, and every spelling that reached
+        # binding froze to the same key anyway (they resolve to one member
+        # before anything downstream looks).
+        return ("enum", type(value).__name__, _coerce.token_of(value))
     if isinstance(value, (str, bytes, int, float, bool, type(None))):
         return value
     if isinstance(value, (list, tuple)):
