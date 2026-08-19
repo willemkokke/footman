@@ -528,18 +528,40 @@ def _write_llms_txt() -> None:
     walk(nav)
 
     def first_sentence(text: str) -> str:
-        """The first sentence of the page's first prose paragraph."""
+        """The first sentence of the page's first *prose* paragraph.
+
+        Prose, strictly: list items and table rows are structure, not
+        description — a quiz admonition's `1. What four conditions…` and a
+        generated page's `| Task | Description |` both used to be served
+        as the page's one-line summary, which read as junk in every agent
+        index built on this file.
+        """
         if text.startswith("---\n"):  # strip front-matter
             _, _, text = text.partition("\n---\n")
-        skip = ("#", "---", "[![", "!!!", ">", "<", "--8<--")
+        skip = ("#", "---", "[![", "!!!", ">", "<", "--8<--", "|", "- ", "* ")
         fenced = False
+        admonition = False
         paragraph: list[str] = []
-        for line in text.splitlines():
-            line = line.strip()
+        for raw in text.splitlines():
+            line = raw.strip()
+            if admonition:
+                # An admonition's whole indented body is chrome — the quiz
+                # block's numbered questions AND its "skip ahead" prose
+                # both read as junk when served as a page description.
+                if not line or raw.startswith((" ", "\t")):
+                    continue
+                admonition = False
+            if line.startswith("!!!"):
+                admonition = True
+                continue
             if line.startswith("```"):
                 fenced = not fenced
                 continue
-            if fenced or line.startswith(skip):
+            digits = line.split(".", 1)[0]
+            numbered = digits.isdigit() and line.startswith(f"{digits}.")
+            if fenced or line.startswith(skip) or numbered:
+                if paragraph:
+                    break  # structure ends the paragraph it follows
                 continue
             if not line:
                 if paragraph:
@@ -547,6 +569,17 @@ def _write_llms_txt() -> None:
                 continue
             paragraph.append(line)
         prose = " ".join(paragraph)
+
+        # A relative .md link 404s the moment an agent resolves it against
+        # the site root; rewrite to the published URL, index pages included.
+        def absolute(match: re.Match[str]) -> str:
+            target = match.group(1)
+            if target == "index.md" or target.endswith("/index.md"):
+                stem = target.removesuffix("index.md").rstrip("/")
+                return f"]({site}{stem + '/' if stem else ''})"
+            return f"]({site}{target.removesuffix('.md')}/)"
+
+        prose = re.sub(r"\]\((?!https?://)([^)#]+\.md)\)", absolute, prose)
         end = prose.find(". ")
         return prose[: end + 1] if end != -1 else prose
 
@@ -564,16 +597,51 @@ def _write_llms_txt() -> None:
         "",
     ]
     full = ["# footman — full documentation", ""]
+
+    def resolve_snippets(text: str) -> str:
+        """Inline `--8<-- "path"` includes, the way the site build does.
+
+        llms-full.txt promises the whole site's text in one file; a raw
+        directive where a section belongs is six missing sections and a
+        syntax no reader resolves. Paths are repo-relative, matching the
+        pymdownx configuration; a missing file keeps the directive so the
+        gap is visible rather than silent.
+        """
+
+        def inline(match: re.Match[str]) -> str:
+            path = Path(match.group(1))
+            if not path.is_file():
+                return match.group(0)
+            return resolve_snippets(path.read_text(encoding="utf-8").rstrip())
+
+        return re.sub(r'^--8<-- "([^"]+)"$', inline, text, flags=re.MULTILINE)
+
     for title, name in pages:
         if name == "coverage.md":
             continue  # an embedded HTML report; nothing for a reader here
         text = (Path("docs") / name).read_text(encoding="utf-8")
-        if name == "changelog.md":  # the page is a snippet include; inline it
-            text = Path("CHANGELOG.md").read_text(encoding="utf-8")
-        url = site if name == "index.md" else f"{site}{name.removesuffix('.md')}/"
-        desc = first_sentence(text)
+        if name.endswith("index.md"):
+            # A directory's index publishes at the directory, not at
+            # …/index/ — the generated Task reference 404'd on the wrong
+            # form for as long as nothing read this file critically.
+            stem = name.removesuffix("index.md").rstrip("/")
+            url = f"{site}{stem + '/' if stem else ''}"
+        else:
+            url = f"{site}{name.removesuffix('.md')}/"
+        # Snippets resolve before anything reads the page: the description
+        # of a page that IS an include (changelog.md) lives in the included
+        # text, and llms-full.txt carries the sections, not the directives.
+        resolved = resolve_snippets(text.rstrip())
+        desc = first_sentence(resolved)
         index.append(f"- [{title}]({url}): {desc}" if desc else f"- [{title}]({url})")
-        full += ["", "---", "", f"<!-- {title} — {url} -->", "", text.rstrip()]
+        full += [
+            "",
+            "---",
+            "",
+            f"<!-- {title} — {url} -->",
+            "",
+            resolved,
+        ]
     (Path("docs") / "llms.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
     joined = "\n".join(full) + "\n"
     (Path("docs") / "llms-full.txt").write_text(joined, encoding="utf-8")
