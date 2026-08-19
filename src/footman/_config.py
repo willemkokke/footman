@@ -295,37 +295,53 @@ def _dir_config(
 DEFAULT_COMPLETION_MAX_AGE_S = 600  # 10 minutes
 
 
-def _parse_duration(value: object) -> int | None:
+def _parse_duration(value: object, *, strict: bool = False) -> int | None:
     """Seconds from a duration (`"10m"`, `"30s"`, `"1h"`, or a plain int); `None`
-    to disable (`off`/`0`/negative). An unparseable value falls back to the
-    default rather than crashing the completion build."""
+    to disable (`off`/`0`/negative).
+
+    An unparseable value falls back to the default — or, under *strict*,
+    refuses by name like every other config key. Both readings exist on
+    purpose: the refresh child answers a keystroke and must never crash on
+    a typo, while a real run is exactly where the typo should be taught.
+    """
     if value is None:
         return DEFAULT_COMPLETION_MAX_AGE_S
     if isinstance(value, bool):  # bool is an int subclass — treat as on/off
         return DEFAULT_COMPLETION_MAX_AGE_S if value else None
     if isinstance(value, int):
         return value if value > 0 else None
-    if not isinstance(value, str):
-        return DEFAULT_COMPLETION_MAX_AGE_S
-    text = value.strip().lower()
-    if text in ("off", "none", ""):
-        return None
-    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-    unit = units.get(text[-1:])
-    try:
-        n = int(text[:-1]) if unit else int(text)
-    except ValueError:
-        return DEFAULT_COMPLETION_MAX_AGE_S
-    seconds = n * (unit or 1)
-    return seconds if seconds > 0 else None
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("off", "none", ""):
+            return None
+        units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+        unit = units.get(text[-1:])
+        try:
+            n = int(text[:-1]) if unit else int(text)
+        except ValueError:
+            pass
+        else:
+            seconds = n * (unit or 1)
+            return seconds if seconds > 0 else None
+    if strict:
+        raise ConfigError(
+            f"`completion.max_age` expects a duration — seconds, or a number "
+            f'with a unit ("30s", "10m", "1h", "1d"), or "off" (got {value!r})'
+        )
+    return DEFAULT_COMPLETION_MAX_AGE_S
 
 
-def completion_max_age(cfg: dict[str, Any]) -> int | None:
+def completion_max_age(cfg: dict[str, Any], *, strict: bool = False) -> int | None:
     """Seconds before the completion cache is considered stale, or `None` if
-    disabled. Reads `[tool.footman] completion.max_age`; default 10 minutes."""
+    disabled. Reads `[tool.footman] completion.max_age`; default 10 minutes.
+
+    *strict* is the execution path's reading: a run refuses a mistyped
+    value by name, the way `sort` and the other keys do. The refresh child
+    keeps the quiet default — a background rebuild must never crash, and a
+    keystroke is nobody's moment to learn about a config typo."""
     completion = cfg.get("completion")
     raw = completion.get("max_age") if isinstance(completion, dict) else None
-    return _parse_duration(raw)
+    return _parse_duration(raw, strict=strict)
 
 
 def sort_listing(cfg: dict[str, Any]) -> bool:

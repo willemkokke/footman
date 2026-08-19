@@ -2112,7 +2112,7 @@ def _execute(
             tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
-                completion_max_age=_config.completion_max_age(cfg),
+                completion_max_age=_config.completion_max_age(cfg, strict=True),
                 tasks_file=cfg_tasks
                 if isinstance(cfg_tasks, str)
                 else _brand.tasks_file,
@@ -2128,12 +2128,14 @@ def _execute(
             tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
-                completion_max_age=_config.completion_max_age(cfg),
+                completion_max_age=_config.completion_max_age(cfg, strict=True),
                 tasks_file=cfg_tasks
                 if isinstance(cfg_tasks, str)
                 else _brand.tasks_file,
             )["tree"]
     except _manifest.ManifestError as exc:  # broken completer, bad markers, …
+        return _refuse(json_mode, str(exc))
+    except _config.ConfigError as exc:  # a mistyped completion.max_age
         return _refuse(json_mode, str(exc))
 
     # The `root` policy token's target: the project cascade's top, never the
