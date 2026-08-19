@@ -290,6 +290,19 @@ Register-ArgumentCompleter -Native -CommandName {prog} -ScriptBlock {{
                     $_.ResultType, $_.ToolTip)
             }}
     }}
+    if ($out.Count -eq 0 -or -not $out[0]) {{
+        # No candidates. Yielding nothing hands the position to PowerShell's
+        # default completion — filesystem entries offered as if they were
+        # tasks — so re-offer the typed word itself: a visual no-op that
+        # keeps the line exactly as it is. An empty word has nothing to
+        # re-offer (CompletionResult refuses ''), so the bare-Tab shape
+        # keeps PowerShell's default behaviour.
+        if ($wordToComplete) {{
+            return ,[System.Management.Automation.CompletionResult]::new(
+                $wordToComplete, $wordToComplete, 'ParameterValue', ' ')
+        }}
+        return
+    }}
     $out | ForEach-Object {{
         # `value` or `value<tab>description`: the tail becomes the tooltip.
         $parts = $_ -split "`t", 2

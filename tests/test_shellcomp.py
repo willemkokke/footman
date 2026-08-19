@@ -912,6 +912,15 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
         # The `=` pair, through PowerShell's own completion engine.
         "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
         '"fm lint --p", 11, $null); '
+        "$r.CompletionMatches | ForEach-Object CompletionText; "
+        # A partial matching no task must NOT fall back to filesystem
+        # entries offered as if they were tasks; the hook re-offers the
+        # word itself, a visual no-op. The partial deliberately prefixes a
+        # real file (tasks.py) — the fallback filters by the word, so only
+        # a colliding name exposes it.
+        'Write-Output "--nomatch--"; '
+        "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
+        '"fm task", 7, $null); '
         "$r.CompletionMatches | ForEach-Object CompletionText"
     )
     out = subprocess.run(
@@ -931,6 +940,11 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     assert any(line.endswith("pyproject.toml") for line in out.stdout.splitlines()), (
         out.stdout
     )
+    # After the marker: the no-match probe. The word itself (or nothing) is
+    # the only acceptable answer — a filesystem entry there means pwsh fell
+    # back to completing files at the task-name position.
+    tail = out.stdout.split("--nomatch--", 1)[1].split()
+    assert tail in ([], ["task"]), tail
 
 
 # --- CI guard: prove no functional shell test is silently skipping ---------------
