@@ -722,6 +722,27 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
     for label, help_text in rows:
         pad = " " * (width - _describe.display_width(label))
         print(f"  {_describe.bold(label, _color_out)}{pad}  {help_text}")
+    # Mounted plugin globals ride the same pre-task position, so a help page
+    # claiming to list the globals must list these too — with provenance,
+    # since "where did --profile come from" is the first question a reader
+    # who didn't mount the plugin asks.
+    plugin = list(tree.get("globals") or ())
+    if plugin:
+        heading = "plugin globals (before the first task):"
+        print(f"\n{_describe.bold(heading, _color_out)}")
+        prows = []
+        for p in plugin:
+            doc, mech = _describe.param_detail_parts(p)
+            doc = doc or p.get("help", "")  # a global's words ride as `help`
+            if owner := p.get("owner"):
+                mech = f"{mech}; from {owner}" if mech else f"from {owner}"
+            mech = _describe.dim(mech, _color_out) if mech else ""
+            detail = "; ".join(bit for bit in (doc, mech) if bit)
+            prows.append((_describe.param_label(p), detail))
+        pwidth = max(_describe.display_width(label) for label, _ in prows)
+        for label, detail in prows:
+            pad = " " * (pwidth - _describe.display_width(label))
+            print(f"  {_describe.bold(label, _color_out)}{pad}  {detail}".rstrip())
     print()
     _print_list(tree, show_hidden)
     _print_footer()

@@ -56,6 +56,11 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **`--help` lists mounted plugin globals.** `--profile` and `--env-file`
+  rode the same pre-task position as every global yet appeared on no help
+  surface, while the troubleshooting page said `fm --help` lists them all.
+  A `plugin globals` section now follows the built-in table, each row with
+  its words, its mechanics, and where it came from.
 - **Completion follows `-C`.** `fm -C=<dir> <TAB>` offered the invoking
   directory's tasks: the manifest key, the cascade walk, and the spawned
   builders all stood where the shell stood rather than where the run
