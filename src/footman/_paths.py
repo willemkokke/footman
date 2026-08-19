@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import hashlib
 import os
-from pathlib import Path
+
+# No module-level pathlib: importing it costs ~5 ms (it drags glob and re
+# along), which is real money against the TAB press's ~30 ms budget. The
+# warm completion path runs on the `_*_str` string core below (os.path
+# only); every Path-returning function imports pathlib at call time, which
+# the cold paths — a build already costing 100 ms+ — never notice.
+# `test_a_warm_tab_pays_for_no_heavyweight_stdlib` pins the diet.
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Ancestor markers that identify the project root. The manifest cache is keyed
 # by cwd, but these still bound a lone-file lookup when there is no repo root.
@@ -61,6 +70,8 @@ def _entries(directory: Path) -> set[str]:
 
 def find_project_root(start: Path | None = None) -> Path:
     """Nearest ancestor of *start* (default: cwd) containing a project marker."""
+    from pathlib import Path
+
     start = (start or Path.cwd()).resolve()
     markers = project_markers()
     for directory in (start, *start.parents):
@@ -82,6 +93,8 @@ def find_repo_root(start: Path | None = None) -> Path:
     why no VCS marker belongs in `PROJECT_MARKERS`: by the time it runs,
     every ancestor has already been searched for every one of them.
     """
+    from pathlib import Path
+
     start = (start or Path.cwd()).resolve()
     for directory in (start, *start.parents):
         names = _entries(directory)
@@ -203,6 +216,8 @@ def configure_child(
     builtin_csv: str = "",
 ) -> None:
     """The other side of `child_args` — empty strings mean stock defaults."""
+    from pathlib import Path
+
     configure(
         prefix=prefix or "FOOTMAN",
         cache_dir=Path(cache_dir) if cache_dir else None,
@@ -242,6 +257,8 @@ def data_home() -> Path:
     the durable sibling of `cache_home`, for things that must survive a
     cache sweep.
     """
+    from pathlib import Path
+
     xdg = os.environ.get("XDG_DATA_HOME")
     return Path(xdg) if xdg else Path.home() / ".local" / "share"
 
@@ -256,10 +273,17 @@ def config_table() -> str:
     return _config_name
 
 
+def _cache_home_str() -> str:
+    """`cache_home`, as a string — the warm path's spelling."""
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    return xdg if xdg else os.path.join(os.path.expanduser("~"), ".cache")
+
+
 def cache_home() -> Path:
     """Base cache directory, honouring `XDG_CACHE_HOME`."""
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    return Path(xdg) if xdg else Path.home() / ".cache"
+    from pathlib import Path
+
+    return Path(_cache_home_str())
 
 
 def config_home() -> Path:
@@ -269,6 +293,8 @@ def config_home() -> Path:
     git's own XDG support) follow on macOS and Windows too, and the
     symmetric sibling of `cache_home`.
     """
+    from pathlib import Path
+
     xdg = os.environ.get("XDG_CONFIG_HOME")
     return Path(xdg) if xdg else Path.home() / ".config"
 
@@ -288,6 +314,8 @@ def footman_config_dir() -> Path:
     installation under a different identity — without dragging the rest of
     the machine along.
     """
+    from pathlib import Path
+
     override = os.environ.get(env_var("CONFIG_DIR"))
     if override:
         return Path(override).expanduser()
@@ -301,6 +329,8 @@ def footman_config_file() -> Path:
 
     The bottom rung of the precedence ladder: project config cascades over
     it, `--config` replaces it."""
+    from pathlib import Path
+
     override = os.environ.get(env_var("CONFIG"))
     if override:
         return Path(override).expanduser()
@@ -319,12 +349,25 @@ def footman_cache_dir() -> Path:
     Resolution only: this is on the hot path, so it never creates anything.
     The public `footman.cache_dir()` is what makes the directory.
     """
+    from pathlib import Path
+
+    return Path(_footman_cache_dir_str())
+
+
+def _footman_cache_dir_str() -> str:
+    """`footman_cache_dir`, as a string — the warm path's spelling."""
     override = os.environ.get(env_var("CACHE_DIR"))
     if override:
-        return Path(override)
+        return override
     if _cache_dir is not None:
-        return _cache_dir
-    return cache_home() / _config_name
+        return os.fspath(_cache_dir)
+    # `cache_home` is a seam — the suite re-points it at tmp homes in
+    # dozens of places — so a replacement must be honoured here too, or a
+    # "redirected" test quietly writes the real user cache. Only while the
+    # module's own def stands does the import-free spelling apply.
+    if cache_home.__module__ == __name__:
+        return os.path.join(_cache_home_str(), _config_name)
+    return os.path.join(os.fspath(cache_home()), _config_name)
 
 
 def footman_data_dir() -> Path:
@@ -336,6 +379,8 @@ def footman_data_dir() -> Path:
 
     Resolution only; the public `footman.data_dir()` creates it.
     """
+    from pathlib import Path
+
     override = os.environ.get(env_var("DATA_DIR"))
     if override:
         return Path(override)
@@ -384,8 +429,19 @@ def user_tasks_file(filename: str = DEFAULT_TASKS_FILE) -> Path:
     return footman_config_dir() / filename
 
 
-def _dir_key(key_dir: Path) -> str:
-    return hashlib.sha256(str(key_dir.resolve()).encode("utf-8")).hexdigest()[:16]
+# The cache keys hash *resolved* path strings. `os.path.realpath` is what
+# `Path.resolve()` calls underneath, so the string core and the Path
+# wrappers key byte-identically — a manifest written by a full run is the
+# manifest a TAB reads, whichever spelling computed the name.
+
+
+def _dir_key_str(key_dir: str) -> str:
+    return hashlib.sha256(os.path.realpath(key_dir).encode("utf-8")).hexdigest()[:16]
+
+
+def _manifest_file(key_dir: str) -> str:
+    """`manifest_path`, as a string — the warm path's spelling."""
+    return os.path.join(_footman_cache_dir_str(), f"{_dir_key_str(key_dir)}.json")
 
 
 def manifest_path(key_dir: Path) -> Path:
@@ -394,12 +450,34 @@ def manifest_path(key_dir: Path) -> Path:
     The effective task set depends on where you stand in a monorepo — the
     cascade from the repo root down to the cwd — so the cache is per directory.
     """
-    return footman_cache_dir() / f"{_dir_key(key_dir)}.json"
+    from pathlib import Path
+
+    return Path(_manifest_file(os.fspath(key_dir)))
 
 
 def times_path(key_dir: Path) -> Path:
     """Duration-history path for *key_dir* — beside its manifest, same key."""
-    return footman_cache_dir() / f"{_dir_key(key_dir)}.times.json"
+    from pathlib import Path
+
+    return Path(
+        os.path.join(
+            _footman_cache_dir_str(), f"{_dir_key_str(os.fspath(key_dir))}.times.json"
+        )
+    )
+
+
+def _source_file(cwd: str, tasks_file: str) -> str:
+    """`source_manifest_path`, as a string — the warm path's spelling.
+
+    `expanduser` here, in the one key core, so every keyer agrees:
+    resolving alone leaves `~` literal, and a `-f=~/tasks.py` TAB would key
+    `<cwd>/~/tasks.py` while the refresh child (which expands before
+    loading) keys the home-anchored truth — a manifest that never warms.
+    """
+    one = os.path.realpath(os.path.expanduser(tasks_file))
+    joined = f"{os.path.realpath(cwd)}\0{one}"
+    key = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+    return os.path.join(_footman_cache_dir_str(), f"{key}.json")
 
 
 def source_manifest_path(cwd: Path, tasks_file: Path) -> Path:
@@ -409,20 +487,30 @@ def source_manifest_path(cwd: Path, tasks_file: Path) -> Path:
     so the task set depends on the pair — the same file opened from two projects
     is two caches. A separate key from `manifest_path`, so a `-f` run never
     poisons the plain-cwd completion cache.
-
-    `expanduser` here, in the one key function, so every keyer agrees:
-    `resolve()` alone leaves `~` literal, and a `-f=~/tasks.py` TAB would key
-    `<cwd>/~/tasks.py` while the refresh child (which expands before loading)
-    keys the home-anchored truth — a manifest that then never warms.
     """
-    joined = f"{cwd.resolve()}\0{tasks_file.expanduser().resolve()}"
-    key = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
-    return footman_cache_dir() / f"{key}.json"
+    from pathlib import Path
+
+    return Path(_source_file(os.fspath(cwd), os.fspath(tasks_file)))
+
+
+def _cwd_manifest_file() -> str:
+    """`cwd_manifest_path`, as a string — the warm path's spelling."""
+    return _manifest_file(os.getcwd())
 
 
 def cwd_manifest_path() -> Path:
     """Manifest path for the current directory (both hot and cold paths agree)."""
-    return manifest_path(Path.cwd())
+    from pathlib import Path
+
+    return Path(_cwd_manifest_file())
+
+
+def _global_file() -> str:
+    """`global_manifest_path`, as a string — the warm path's spelling."""
+    key = hashlib.sha256(
+        "\0".join([_prog, _brand_version, *sorted(_builtin)]).encode("utf-8")
+    ).hexdigest()[:16]
+    return os.path.join(_footman_cache_dir_str(), f"global-{key}.json")
 
 
 def global_manifest_path() -> Path:
@@ -435,7 +523,6 @@ def global_manifest_path() -> Path:
     once per directory. The user tasks file needs no place in the key; it is
     machine-global too, and staleness handles its edits.
     """
-    key = hashlib.sha256(
-        "\0".join([_prog, _brand_version, *sorted(_builtin)]).encode("utf-8")
-    ).hexdigest()[:16]
-    return footman_cache_dir() / f"global-{key}.json"
+    from pathlib import Path
+
+    return Path(_global_file())

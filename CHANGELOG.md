@@ -29,6 +29,14 @@ versions may include breaking changes.
 
 ### Changed
 
+- **A warm <kbd>Tab</kbd> imports less than half of what it did.** The
+  completion hot path's own overhead drops from ~12.5 ms to ~5.3 ms above
+  interpreter startup: pathlib (which drags `glob` and `re` along),
+  `subprocess`, and `typing` no longer load on a warm press — the cache
+  keys are computed by an `os.path` string core that keys byte-identically
+  to the Path spellings the rest of the framework keeps using, and the
+  spawn paths import what they need when they run. What remains is the
+  JSON parse, which is the job. A new invariant test pins the diet.
 - **An enum speaks its token — the member name, projected — on every
   developer-visible surface.** `Level.LOW = 1` used to render as
   `--level={1|2}`: the values are payload, the names carry the meaning,

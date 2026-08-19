@@ -22,9 +22,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 import time
+
+# No module-level subprocess: it costs ~3 ms to import and only the spawn
+# paths use it — a detached rebuild, a dynamic completer rerun — never a
+# warm TAB. Those functions import it themselves.
 
 # The literal-False spelling both checkers honour without importing `typing`:
 # annotations here are strings (`from __future__ import annotations`), so the
@@ -784,6 +787,8 @@ def detach(cmd: list[str], cwd: str | None = None) -> None:
     Stdlib-only, like everything here, so both the hot path and the
     execution path may call it.
     """
+    import subprocess
+
     null = subprocess.DEVNULL
     try:
         if os.name == "nt":
@@ -826,11 +831,9 @@ def _cold_build(
     finishes for the next TAB, so no keystroke ever hangs on it.
     """
     if override is not None:
-        from pathlib import Path
-
         # A relative -f anchors where the run will stand (`-C` moved it).
-        base = Path(spawn_in) if spawn_in else Path.cwd()
-        if not (base / Path(override).expanduser()).is_file():
+        base = spawn_in if spawn_in else os.getcwd()
+        if not os.path.isfile(os.path.join(base, os.path.expanduser(override))):
             return None  # a still-being-typed or missing -f value: nothing to build
     _spawn_refresh(override, spawn_in)
     deadline = time.monotonic() + _COLD_TIMEOUT
@@ -935,6 +938,8 @@ def _fresh_dynamic(param: str, path: list[str], args: list[str]) -> list[str] | 
         cmd += ["--tasks-file", tf]
     if (cf := _leading_global_value(prior, ("--config",))) is not None:
         cmd += ["--config", cf]
+    import subprocess
+
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=_DYNAMIC_TIMEOUT
@@ -981,8 +986,11 @@ def complete_cli(args: list[str]) -> int:
         # --manifest path free of any `footman` import. The cache is keyed by
         # cwd — the effective task set is the cascade from the repo root down —
         # unless `-f <file>` names one file, which has its own (cwd, file) key.
-        from pathlib import Path
-
+        # Strings and `os.path` throughout, never pathlib: importing it costs
+        # ~5 ms of the TAB press's budget, and the warm path needs nothing
+        # pathlib does that `os.path` doesn't. `_paths`' `_*_str` core keys
+        # byte-identically to its Path wrappers, so both sides of the cache
+        # keep meeting.
         from footman import _paths
 
         # The last word is the partial being completed: `fm -f <TAB>` is a file
@@ -996,23 +1004,22 @@ def complete_cli(args: list[str]) -> int:
         # `fm -C=<dir> <TAB>` offers the invoking directory's tasks.
         cdir = _leading_global_value(args[:-1], ("-C", "--directory"))
         if cdir:
-            stand = Path(cdir).expanduser()
-            if not stand.is_dir():
+            stand = os.path.expanduser(cdir)
+            if not os.path.isdir(stand):
                 return 0  # a mistyped or half-typed target: nothing to offer
         else:
-            stand = Path.cwd()
-        spawn_in = str(stand) if cdir else None
+            stand = os.getcwd()
+        spawn_in = stand if cdir else None
         override = _tasks_file_from(args[:-1])
         if override:
             # Anchor a relative -f at the stand-in directory, as the run's
             # chdir would; joining an absolute (or ~-expanded) value is a
             # no-op, so plain invocations key exactly as before.
-            manifest = str(
-                _paths.source_manifest_path(stand, stand / Path(override).expanduser())
-            )
+            anchored = os.path.join(stand, os.path.expanduser(override))
+            manifest = _paths._source_file(stand, anchored)
         else:
-            manifest = str(_paths.manifest_path(stand))
-            if not Path(manifest).is_file():
+            manifest = _paths._manifest_file(stand)
+            if not os.path.isfile(manifest):
                 # No warm cwd manifest: one walk decides what this directory
                 # even is. A project's first TAB builds its own cascade
                 # below. A project-less one is global mode — whose manifest
@@ -1022,16 +1029,21 @@ def complete_cli(args: list[str]) -> int:
                 # there is nothing here to complete, and saying so instantly
                 # beats spawning a build that can only come back empty after
                 # the full cold bound. Only on the miss path: a warm
-                # directory never pays the walk.
+                # directory never pays the walk. (The miss path is about to
+                # spend 100 ms+ on a build, so ITS pathlib is noise.)
+                from pathlib import Path
+
                 name = _paths.tasks_file_name()
-                files = _paths.task_files(stand, _paths.find_repo_root(stand), name)
+                files = _paths.task_files(
+                    Path(stand), _paths.find_repo_root(Path(stand)), name
+                )
                 if not files:
                     if (
                         not _paths.builtin()
                         and not _paths.user_tasks_file(name).is_file()
                     ):
                         return 0
-                    manifest = str(_paths.global_manifest_path())
+                    manifest = _paths._global_file()
 
     data = _load_manifest(manifest)
     if (line := _broken_line(data)) is not None:

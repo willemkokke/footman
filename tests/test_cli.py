@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -119,7 +120,7 @@ def test_spawn_refresh_posix_is_detached(monkeypatch):
     captured: dict[str, Any] = {}
     monkeypatch.setattr(_complete.os, "name", "posix")
     monkeypatch.setattr(
-        _complete.subprocess, "Popen", lambda cmd, **kw: captured.update(cmd=cmd, kw=kw)
+        subprocess, "Popen", lambda cmd, **kw: captured.update(cmd=cmd, kw=kw)
     )
     _complete._spawn_refresh()
     assert "_refresh" in " ".join(captured["cmd"])
@@ -130,7 +131,7 @@ def test_spawn_refresh_windows_uses_creationflags(monkeypatch):
     captured: dict[str, Any] = {}
     monkeypatch.setattr(_complete.os, "name", "nt")
     monkeypatch.setattr(
-        _complete.subprocess, "Popen", lambda cmd, **kw: captured.update(cmd=cmd, kw=kw)
+        subprocess, "Popen", lambda cmd, **kw: captured.update(cmd=cmd, kw=kw)
     )
     _complete._spawn_refresh()
     assert "creationflags" in captured["kw"]
@@ -139,15 +140,15 @@ def test_spawn_refresh_windows_uses_creationflags(monkeypatch):
         # CREATE_NO_WINDOW, never DETACHED_PROCESS: a console-less child is
         # handed a visible terminal window by the Windows 11 default-terminal
         # handoff — one popped over the shell per TAB on a stale manifest.
-        assert flags & _complete.subprocess.CREATE_NO_WINDOW
-        assert not flags & _complete.subprocess.DETACHED_PROCESS
+        assert flags & subprocess.CREATE_NO_WINDOW
+        assert not flags & subprocess.DETACHED_PROCESS
 
 
 def test_spawn_refresh_swallows_oserror(monkeypatch):
     def boom(*a, **k):
         raise OSError("no fork today")
 
-    monkeypatch.setattr(_complete.subprocess, "Popen", boom)
+    monkeypatch.setattr(subprocess, "Popen", boom)
     _complete._spawn_refresh()  # must not raise
 
 
