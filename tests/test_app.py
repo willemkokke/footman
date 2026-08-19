@@ -1411,7 +1411,7 @@ def _tty_streams(monkeypatch):
     return out, err
 
 
-def test_ansi_capable_gates_on_tty_and_windows_console(monkeypatch):
+def test_ansi_capable_gates_on_tty_and_windows_console(monkeypatch, tmp_path):
     import os
 
     from footman import _describe
@@ -1420,11 +1420,24 @@ def test_ansi_capable_gates_on_tty_and_windows_console(monkeypatch):
     assert not _describe.ansi_capable(io.StringIO())
     # A POSIX tty is an ANSI surface as-is.
     assert _describe.ansi_capable(_Tty())
-    # A Windows tty is not yet one: the console must prove it interprets
-    # escapes (VT processing), or bold prints as `←[1m` noise. A fake tty
-    # with no console behind it must refuse rather than paint.
     monkeypatch.setattr(os, "name", "nt")
-    assert not _describe.ansi_capable(_Tty())
+    # A Windows tty without an OS handle keeps its own claim — that shape
+    # is a wrapper (or a test fake) answering for its own rendering.
+    assert _describe.ansi_capable(_Tty())
+
+    # A handle-backed Windows tty must prove its console interprets escapes
+    # (VT processing), or bold prints as `←[1m` noise. A handle with no
+    # console behind it must refuse rather than paint.
+    class _HandleTty(_Tty):
+        def __init__(self, fd: int) -> None:
+            super().__init__()
+            self._fd = fd
+
+        def fileno(self) -> int:
+            return self._fd
+
+    with open(tmp_path / "not-a-console", "w") as fh:
+        assert not _describe.ansi_capable(_HandleTty(fh.fileno()))
 
 
 def test_global_help_paints_on_a_tty(project, monkeypatch):

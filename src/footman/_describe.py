@@ -75,6 +75,14 @@ def ansi_capable(stream: Any) -> bool:
     if not tty or _os.name != "nt":
         return tty
     try:
+        fileno = stream.fileno()
+    except Exception:
+        # No OS handle to interrogate: a tty-claiming stream without one is
+        # a wrapper (or a test fake) that answers for its own rendering, so
+        # its claim stands. Every real console stream has a fileno, so the
+        # probe below still covers the console that cannot paint.
+        return True
+    try:
         import ctypes
         import msvcrt
 
@@ -84,7 +92,7 @@ def ansi_capable(stream: Any) -> bool:
         windll = getattr(ctypes, "windll", None)
         if get_handle is None or windll is None:
             return False
-        handle = get_handle(stream.fileno())
+        handle = get_handle(fileno)
         kernel32 = windll.kernel32
         mode = ctypes.c_uint32()
         if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
