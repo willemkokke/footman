@@ -9,7 +9,7 @@ directory; reproduce the numbers with
 one of these runners? The practical guides live on [Migrating](migrating.md).
 
 Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
-3.13, M-series Mac.
+3.14, M-series Mac.
 
 !!! note "Verified, not vibes"
 
@@ -17,6 +17,16 @@ Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
     on the same seven tasks. If any of it is wrong or has become unfair to a
     tool, [open an issue](https://github.com/willemkokke/footman/issues) and
     it will be fixed.
+
+!!! tip "Milliseconds are the least interesting thing here"
+
+    This is the one page on the site that carries numbers, deliberately.
+    Startup timings move with your interpreter, your machine and your
+    project, and a runner that wins one of these tables by 20 ms is not
+    why you would pick it. Two structural facts survive any re-measurement,
+    and they are the ones worth reading for: completion never imports your
+    project, and independent work runs in parallel by default. The rest of
+    the site talks about what footman *does*; the digits live here.
 
 ## First, some love for duty
 
@@ -37,27 +47,33 @@ footman's companion package, and detect the footman host on every call.
 
 ## Completion latency
 
-Cold-process wall time per `<TAB>`, mean of 15 fresh processes. The **Δ import**
-column is the one that matters: completion time with a 0.25 s project-import cost
-minus completion time without it. Re-import your tasks on every keystroke and
-you see the whole ~0.25 s; answer from a cache and you see roughly nothing.
+Cold-process wall time per `<TAB>`: median of 40 fresh processes after three
+discarded warmups, `±` half the p10–p90 spread. The **Δ import** column is the
+one that matters: completion time with a 0.25 s project-import cost minus
+completion time without it. Re-import your tasks on every keystroke and you see
+the whole ~0.25 s; answer from a cache and you see roughly nothing.
 
 | runner  | completion (per <kbd>Tab</kbd>) | Δ import | re-imports every <kbd>Tab</kbd>? |
 | ------- | -------------------: | -------: | ------------------------ |
-| footman |            **28 ms** |     2 ms | no — cached manifest     |
-| poe     |                61 ms |     5 ms | no — reads TOML          |
-| duty    |               363 ms |   276 ms | yes                      |
-| invoke  |               387 ms |   289 ms | yes                      |
+| footman |         **20±1 ms** |     0 ms | no — cached manifest     |
+| poe     |             45±1 ms |     0 ms | no — reads TOML          |
+| invoke  |            336±20 ms |   263 ms | yes                      |
+| duty    |             349±9 ms |   289 ms | yes                      |
 
 duty and invoke reload your whole project on every <kbd>Tab</kbd>, because their
-completion scripts call the tool, which imports your tasks before it can answer. Footman
-reads a cached JSON manifest instead, so the hot path imports nothing (a dynamic
-completer or the first build in a fresh directory spawns a bounded subprocess),
-and it lands about 13× faster. It pays the same import cost as everyone else,
-just on the execution path: `fm --list` is ~340 ms, right there with the pack.
-Completion is the one moment that has to feel instant, so that's the moment I
-optimised. poe is quick here too, for the simple reason that its tasks are TOML
-strings with no Python to load, which is also the rest of this page.
+completion scripts call the tool, which imports your tasks before it can answer.
+Footman reads a cached JSON manifest instead, so the hot path imports nothing (a
+dynamic completer or the first build in a fresh directory spawns a bounded
+subprocess). It pays the same import cost as everyone else, just on the
+execution path: `fm --list` is ~307 ms, right there with the pack. Completion is
+the one moment that has to feel instant, so that is the moment to spend on. poe
+is quick here too, for the simple reason that its tasks are TOML strings with no
+Python to load, which is also the rest of this page.
+
+The same table on CPython 3.11 — the oldest version footman supports — reads
+20 ms, 39 ms, 324 ms, 316 ms: within noise of the 3.14 run above. Which is the
+useful thing to know about all of these numbers. The interpreter you run is
+not what separates these tools; whether a keystroke imports your project is.
 
 ## The same `check`, composed five ways
 
@@ -71,14 +87,14 @@ so a tool that supports parallelism gets to use it. Reproduce with
 
 | runner  | composition                    | wall (mean) |
 | ------- | ------------------------------ | ----------: |
-| footman | parallel (pre-deps, *default*) |  **615 ms** |
-| poe     | parallel (`parallel` task)     |      642 ms |
-| typer   | sequential (no orchestration)  |     2083 ms |
-| duty    | sequential (pre-duties)        |     2138 ms |
-| invoke  | sequential (pre-tasks)         |     2138 ms |
+| footman | parallel (pre-deps, *default*) |  **592 ms** |
+| poe     | parallel (`parallel` task)     |      617 ms |
+| typer   | sequential (no orchestration)  |     2080 ms |
+| duty    | sequential (pre-duties)        |     2131 ms |
+| invoke  | sequential (pre-tasks)         |     2210 ms |
 
 The floors are 0.5 s parallel and 2.0 s sequential, so everyone's *overhead*
-is a rounding error: the ~3.5× gap is architecture, not dispatch speed. duty and
+is a rounding error: the gap is architecture, not dispatch speed. duty and
 invoke run prerequisites one at a time and have no parallel switch to flip; the
 same four steps simply cost the sum instead of the max. poe genuinely ticks
 this box (a dedicated `parallel` task type, credit where due); the
@@ -98,16 +114,23 @@ because typer has a reputation for being heavy:
 
 | import           | cost over a bare interpreter |
 | ---------------- | ---------------------------: |
-| `import footman` |                     **+4 ms** |
-| `import typer`   |                    **+24 ms** |
+| `import footman` |                  **+0.2 ms** |
+| `import typer`   |                   **+40 ms** |
 
-typer's import really is ~6× heavier: it ships its own parser plus `rich` and
+typer's import really is heavier: it ships its own parser plus `rich` and
 `shellingham`. (Reproduce with
-`uv run --group comparison python scripts/bench_import.py`.) On a single launch you'd never notice (footman ~38 ms, typer
-~40 ms; footman just spends its milliseconds on parsing instead of importing).
-The difference only shows up when a typer app does completion, because that
-re-runs the app, paying the typer import *and* your project import on every <kbd>Tab</kbd>,
-where footman is answering from cache. Not a knock on typer; just a different job.
+`uv run --group comparison python scripts/bench_import.py`.)
+
+That import cost is not the whole launch, though, and on launch **typer wins**:
+running a no-op task costs 41±2 ms through a typer app against footman's
+55±5 ms (37 ms against 53 ms on 3.11 — the gap travels). footman spends its
+milliseconds elsewhere — the cascade walk, the
+grammar, eager validation — and if bare launch speed is what you are shopping
+for, typer is the lighter tool. The difference reverses when a typer app does
+completion, because that re-runs the app and pays the typer import *and* your
+project import on every <kbd>Tab</kbd>, where footman answers from cache.
+Different jobs, and the honest summary is that footman's speed story is about
+what it *doesn't* do on a keystroke, not about dispatch.
 
 ## Feature matrix
 

@@ -14,14 +14,16 @@ one, because it's the exact command the installed completion hooks run:
 
 | variant                                    |   mean |
 | ------------------------------------------ | -----: |
-| interpreter startup (floor)                | 17 ms  |
-| standalone resolver (`python -S`)          | 22 ms  |
-| `python -m footman --complete`             | 28 ms  |
-| `fm --complete` (the installed hook path)  | 24 ms  |
+| interpreter startup (floor)                | 13 ms  |
+| standalone resolver (`python -S`)          | 18 ms  |
+| `python -m footman --complete`             | 20 ms  |
+| `fm --complete` (the installed hook path)  | 18 ms  |
 
-So the headline is **~30 ms per <kbd>Tab</kbd>** for a structural answer
-— task names, options, `Literal` choices — of which ~17 ms is Python starting up
-at all. A [dynamic completer](#dynamic-completions-are-recomputed-fresh) or the
+A structural answer — task names, options, `Literal` choices — costs a few
+milliseconds on top of Python starting up at all, which is the floor nothing
+in this design can go under (and which moves with your interpreter: these are
+CPython 3.14 on an M-series Mac). A
+[dynamic completer](#dynamic-completions-are-recomputed-fresh) or the
 [first build in a fresh directory](#keeping-the-cache-current) costs more, by
 design and bounded. Footman regenerates the manifest for free on any
 execution-path run (it is importing your code anyway) and rewrites it only when
@@ -32,8 +34,9 @@ the command surface actually changed. Reproduce with
 
 Footman's `main()` checks for `--complete` **before importing the framework or
 your tasks**, dispatching straight to the stdlib-only resolver. A bare
-`import footman` pays for nothing but the entry module. That is why completion is
-~13× faster than runners that re-import your project on every keystroke. When a
+`import footman` pays for nothing but the entry module — no pathlib, no
+subprocess, no typing, which an invariant test pins. That is why a keystroke
+costs what it does rather than what re-importing your project costs. When a
 live value is genuinely needed (a dynamic completer, or the first build in a
 fresh directory) footman *spawns* a subprocess for it rather than importing on
 the hot path, so even then the keystroke stays stdlib-only and can't hang on
@@ -98,7 +101,7 @@ install`, made visible.
 ``` mermaid
 graph LR
   tab["Tab press"] --> fresh{cache fresh?}
-  fresh -->|yes| answer["cached answer, ~30 ms"]
+  fresh -->|yes| answer["cached answer, no imports"]
   fresh -->|"no, stale"| serve["serve cached answer now"]
   serve --> rebuild["spawn detached rebuild"]
   rebuild --> nexttime["fresh for the next Tab"]

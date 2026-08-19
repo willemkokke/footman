@@ -56,7 +56,7 @@ machinery are all standard library, and the dividend is that
 `uv add --dev footman` cannot change what your project depends on.
 
 **The process answering a keystroke never imports your code.** Completion
-answers from a baked file (one read, one JSON parse, a tree walk, ~30 ms)
+answers from a baked file (one read, one JSON parse, a tree walk)
 and `main()` checks for `--complete` before importing even footman itself.
 Your tasks file, its imports, its heavy dependencies: none of it runs *in*
 the process that serves the <kbd>Tab</kbd>. Baking the file does import
