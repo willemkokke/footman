@@ -60,7 +60,11 @@ jobs:
             echo "apt attempt ${attempt} failed; retrying"
             sleep 5
           done
-          command -v zsh && command -v fish
+          # One simple command per check: a failing `A && B` is exempt
+          # from errexit (POSIX AND-OR rule), so the joined spelling
+          # let a run with no shells sail on and fail minutes later.
+          command -v zsh
+          command -v fish
           # Verified before it runs: this job holds pages/id-token grants,
           # and an unverified binary in here would hold them too.
           curl -fsSL -o nu.tar.gz "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
