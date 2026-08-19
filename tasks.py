@@ -614,7 +614,9 @@ def _write_llms_txt() -> None:
                 return match.group(0)
             return resolve_snippets(path.read_text(encoding="utf-8").rstrip())
 
-        return re.sub(r'^--8<-- "([^"]+)"$', inline, text, flags=re.MULTILINE)
+        return re.sub(
+            r"""^--8<-- ["']([^"']+)["']$""", inline, text, flags=re.MULTILINE
+        )
 
     for title, name in pages:
         if name == "coverage.md":

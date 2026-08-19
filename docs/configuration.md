@@ -75,7 +75,9 @@ build, so this table can neither invent a key nor miss one:
 | Variable            | Effect                                              |
 | ------------------- | --------------------------------------------------- |
 | `FOOTMAN_CONFIG`    | Path of the user-level config file.                 |
+| `FOOTMAN_CONFIG_DIR` | Moves footman's config corner whole (the config file and the user-level tasks file travel together). |
 | `FOOTMAN_CACHE_DIR` | Moves every footman cache (completion manifests, timing history). |
+| `FOOTMAN_DATA_DIR`  | Moves footman's data directory (provisioned tools and their stubs). |
 | `FOOTMAN_NO_UV`     | Disables both uv handoffs (project and script environment), regardless of any config. |
 | `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
 | `FOOTMAN_CASCADE`   | Overrides the `cascade` key for one invocation (`none` / `repo` / `filesystem`). |

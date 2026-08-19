@@ -422,7 +422,9 @@ did not mount.
 ## The caching contract, stated once
 
 Hiding, `include()`, `plugin()`, and `@pre_tasks` all resolve at
-import/manifest-build time, so what completion offers reflects the *last real
-run*, the same contract dynamic `suggest()` choices have always had.
-Availability (`@requires`) is the one thing never trusted from the cache: it
+import/manifest-build time, so the *structure* completion offers reflects the
+last real run. Dynamic `suggest()` choices are the opposite contract: never
+served from the cache — a TAB that lands on one recomputes it fresh, in a
+child, as [Completion](completion.md) and [Typing](typing.md) describe.
+Availability (`@requires`) is likewise never trusted from the cache: it
 re-checks live at the moment of execution.

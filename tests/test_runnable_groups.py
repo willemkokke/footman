@@ -150,6 +150,31 @@ def test_fan_out_threads_the_flag_only_to_surfaces_that_declare_it():
     assert seen == {"python": True, "markdown": True, "spelling": "ran"}
 
 
+def test_an_ellipsis_body_default_fans_out_like_pass():
+    # `...` is the stub idiom the docs themselves teach, and it used to
+    # count as a real body — a `@group.default` written `def all(): ...`
+    # silently ran nothing (audit M23). The three stub spellings —
+    # docstring, `pass`, `...` — read as empty alike now.
+    ran = []
+
+    def tasks(reg):
+        lint = reg.group("lint")
+
+        @lint.task
+        def python():
+            ran.append("python")
+
+        @lint.default
+        def lint_all(): ...
+
+    reg = Group("root")
+    tasks(reg)
+    tree = _manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint"])
+    run_chain(reg, segs)
+    assert ran == ["python"]  # fanned out — not a silent nothing
+
+
 def test_a_custom_body_default_does_not_auto_fan_out():
     ran = []
 

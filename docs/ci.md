@@ -113,7 +113,7 @@ from footman import requires_env, task
 def publish_coverage(): ...
 ```
 
-Locally it's listed as `(unavailable: CI only)` and refuses to run; on the
+Locally it's listed as `(unavailable: set CI)` and refuses to run; on the
 runner it just works. Remember the contract: a `pre`/`post` dependency on an
 unavailable task is a **hard failure**, because CI must never silently skip a step
 you declared.

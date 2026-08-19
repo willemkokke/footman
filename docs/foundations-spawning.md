@@ -25,8 +25,8 @@ POSIX also offers **fork**: duplicate the current process wholesale. It is
 how spawning is built underneath, but calling it directly from a program
 that runs threads is a trap — the child gets a copy of memory *as it was*,
 including any lock some other thread held mid-operation, with no thread
-alive in the child to ever release it. CPython itself now warns about
-fork-with-threads; the safe shape is always "spawn a fresh program".
+alive in the child to ever release it. CPython warns about
+fork-with-threads (from 3.12); the safe shape is always "spawn a fresh program".
 
 ## Why it matters to a task runner
 
@@ -51,9 +51,10 @@ the run ends without it. Beyond its own calls:
   `cwd=` nor `env=` gets both filled from the task's context — the child
   starts where the task lives, seeing what the task sees — with a one-time
   note naming the deliberate spellings. Explicit arguments always win.
-- **`os.fork` earns a warning** naming the trap above; `os.system` and
-  friends spawn at the C level where footman cannot fill anything in — the
-  note says to prefer `run()`.
+- **`os.fork` earns a note** naming the trap above. `os.system` and
+  friends spawn at the C level, beneath everything footman routes — no
+  context is filled in and no note fires, which is itself the reason to
+  prefer `run()`: what footman cannot see, it cannot manage.
 - **`multiprocessing` workers earn a note** too: they inherit the *real*
   environment, not the task's own — and a tool that parallelises
   itself loses little by taking the serial lane instead, since it
