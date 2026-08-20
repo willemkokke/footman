@@ -90,7 +90,7 @@ _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fr
 # A cache written by a different footman gets rebuilt, never walked: the first
 # TAB after an upgrade serves correct candidates instead of a traceback.
 # `test_completion_schema_mirrors_manifest` keeps the two from drifting.
-_SCHEMA = 7
+_SCHEMA = 8
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 # Seconds to wait for a first-time cwd manifest build. A cold build measures
 # ~100-150 ms — footman's own fat tasks.py included — so this is roughly

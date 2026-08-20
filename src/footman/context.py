@@ -639,6 +639,22 @@ class Context:
     """This task's resolved (per-subtree) failure policy, tagged onto the
     subprocesses it spawns so a fail-fast failure elsewhere reaps only the
     fail-fast trees in a mixed run, sparing a keep-going task's."""
+    deadline: float | None = None
+    """`@task(timeout=…)`, resolved to a `time.perf_counter()` instant when
+    the body starts — an instant rather than a duration because everything
+    downstream asks "how long is left?", and a duration would have to be
+    re-based at each hand-off.
+
+    It is the fail-fast event scoped to one task: past it, no new work
+    starts, in-flight subprocess trees are terminated, and generator steps
+    unwind at their next checkpoint. Inherited by the steps and `run()`
+    calls a body makes, so a subprocess is bounded by whatever the task has
+    left rather than by its own timeout alone."""
+    timeout_declared: float | None = None
+    """The seconds the author wrote in `@task(timeout=…)`, kept beside the
+    resolved `deadline` so a failure line can name the declared number
+    rather than the remainder that happened to be left when a call
+    started."""
     shared: bool = True
     """Whether an execution the run has already performed may satisfy this
     request. `False` means it gets its own run, and so does everything it asks
@@ -665,6 +681,22 @@ class Context:
     recorded while this task ran, on the run's clock. Rides the task's
     result row; a `parallel()` child's records fold into its requester's,
     the way `steps` do."""
+
+    def time_left(self) -> float | None:
+        """Seconds until this task's deadline, or `None` when it has none.
+
+        Clamped at zero rather than going negative: callers hand it to
+        `subprocess.communicate(timeout=…)` and to their own comparisons,
+        and a negative bound reads as "no bound" to some of them. Zero means
+        the deadline has passed and the caller should not start the work.
+        """
+        if self.deadline is None:
+            return None
+        return max(0.0, self.deadline - time.perf_counter())
+
+    def overdue(self) -> bool:
+        """Has this task's deadline passed? False when there is no deadline."""
+        return self.deadline is not None and time.perf_counter() > self.deadline
 
     def child(self, label: str, **overrides: Any) -> Context:
         """One birth for every child context — a body callee's, a
@@ -1262,6 +1294,72 @@ class Failed(Exception):
         self.reason = reason
         self.code = code
         super().__init__(reason)
+
+
+def effective_timeout(own: float | None, ctx: Context) -> float:
+    """The bound that actually applied to a call, for its error message.
+
+    A call may carry its own `timeout=`, or inherit whatever the enclosing
+    `@task(timeout=…)` had left. Reporting the call's own would print `0s`
+    for a task-imposed deadline, which reads as a broken timeout rather than
+    an enforced one. A derived bound is rounded: it is a remainder computed
+    to the microsecond, and `0.399666s` in a failure line is noise where
+    `0.4s` is the number the author wrote.
+    """
+    if own is not None:
+        return own
+    if ctx.timeout_declared is not None:
+        return ctx.timeout_declared
+    return 0.0
+
+
+class TimedOut(Failed):
+    """A task's `@task(timeout=…)` deadline expired.
+
+    A `Failed`, so `except footman.Failed:` keeps catching it and the reason
+    renders verbatim in the failure line and the `--json` error field.
+
+    Carries `.timeout` (the declared seconds) and `.after` — what became of
+    the work: `stopped` (footman issued a stop before the body returned) or
+    `completed` (no stop was issued and the body finished on its own, just
+    late). An open set: `TaskResult.after_deadline` explains which further
+    values are designed and why they are not shipped.
+
+    The message never pretends the work did not happen. Where the body
+    completed, it says so and says what the body's own verdict was, then
+    states that the deadline governs — the receipt tells the whole truth
+    while the task still fails on its contract
+    (notes/20260807-timeout-and-retry.md).
+    """
+
+    def __init__(
+        self,
+        task: str,
+        timeout: float,
+        *,
+        after: str = "stopped",
+        body: str = "",
+        at: float = 0.0,
+        not_retried: bool = False,
+    ) -> None:
+        self.timeout = timeout
+        self.after = after
+        self.not_retried = not_retried
+        said = f"{task} exceeded its {timeout:g}s deadline"
+        if after == "completed":
+            # Report the outcome being discarded rather than presenting this
+            # as work that never finished.
+            when = f" at {at:g}s" if at else ""
+            verdict = f" with {body}" if body else ""
+            said += f"; the body completed{when}{verdict} — the deadline governs"
+        else:
+            said += " and was stopped"
+        if not_retried:
+            # The diagnosis the author needs is "this body has no
+            # checkpoint", and it is only inferable if this reads
+            # differently from ordinary retry exhaustion.
+            said += " — not retried"
+        super().__init__(said, code=124)
 
 
 def coroutine_refusal(kind: str, fn: Any = None) -> Failed:
@@ -3085,6 +3183,10 @@ def run(
             out.flush()
 
     start = time.perf_counter()
+    # Bound before the branch: the in-process path never spawns, so it keeps
+    # this call's own (refused below if given), while the subprocess path
+    # narrows it to whatever the enclosing task has left.
+    spawn_timeout = timeout
     if callable(cmd):
         if timeout is not None:
             # A Python callable cannot be interrupted safely — there is no
@@ -3154,6 +3256,15 @@ def run(
         # task-level or per-call; a per-call cwd=/rel= override wins — see
         # `_target_cwd`.
         cwd_path = _target_cwd(ctx, cwd, rel)
+        # The enclosing task's deadline bounds this spawn too, whichever is
+        # tighter. A task that says `timeout=5` means the whole task, so a
+        # `run()` with no bound of its own inherits what is left, and one
+        # with a longer bound of its own cannot outlive the task. The
+        # subprocess sees only a duration — the task's instant is converted
+        # here, at the last moment, so time spent queueing is not charged
+        # twice.
+        if (left := ctx.time_left()) is not None:
+            spawn_timeout = left if timeout is None else min(timeout, left)
         code, out_s, err_s, timed_out = _run_subprocess(
             argv,
             run_env,
@@ -3161,7 +3272,7 @@ def run(
             capture,
             encoding,
             input=input,
-            timeout=timeout,
+            timeout=spawn_timeout,
             killable=not ctx.atomic,
             # An interactive task owns the real terminal: keep its child in
             # footman's group so it keeps its controlling tty (and its Ctrl-C).
@@ -3292,7 +3403,12 @@ def run(
 
     if code != 0 and not nofail:
         if result.timed_out:
-            raise RunTimeout(result, timeout or 0.0)  # only set when one was given
+            # The bound that actually applied: this call's own, or what the
+            # enclosing `@task(timeout=…)` had left when the spawn started.
+            # Reporting the call's own would print `0s` for a task-imposed
+            # deadline, which reads as a bug in the timeout rather than a
+            # deadline being enforced.
+            raise RunTimeout(result, effective_timeout(timeout, ctx))
         raise RunFailed(result)
     return result
 

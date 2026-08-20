@@ -356,6 +356,20 @@ def _pump(item: WorkItem[Any]) -> Any:
                 timed_out = True
                 gen.close()
                 return None
+            # The enclosing task's deadline, checked beside the step's own:
+            # `@task(timeout=…)` is the fail-fast event scoped to one task, so
+            # it stops a generator step at exactly the point a sibling's
+            # failure would. The step records `timed_out` either way — what
+            # ran out is a property of the record above it, not of this one.
+            # The enclosing task's deadline, checked beside the step's own:
+            # `@task(timeout=…)` is the fail-fast event scoped to one task, so
+            # it stops a generator step at exactly the point a sibling's
+            # failure would. The step records `timed_out` either way — what
+            # ran out is a property of the record above it, not of this one.
+            if ctx.overdue():
+                timed_out = True
+                gen.close()
+                return None
             if _context._aborting.is_set() and not ctx.keep_going:
                 gen.close()
                 return None
@@ -571,7 +585,7 @@ def _pump(item: WorkItem[Any]) -> Any:
 
     if result.code != 0:
         if timed_out:
-            raise RunTimeout(result, timeout or 0.0)
+            raise RunTimeout(result, _context.effective_timeout(timeout, ctx))
         if error is not None:
             raise error
         raise RunFailed(result)

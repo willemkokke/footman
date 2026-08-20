@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from footman.context import RunFailed as RunFailed
     from footman.context import Section as Section
     from footman.context import Stream as Stream
+    from footman.context import TimedOut as TimedOut
     from footman.context import cache_dir as cache_dir
     from footman.context import chdir as chdir
     from footman.context import confirm as confirm
@@ -155,6 +156,7 @@ __all__ = [
     "Stream",
     "TaskView",
     "Tasks",
+    "TimedOut",
     "__version__",
     "ask",
     "between",
@@ -409,6 +411,7 @@ def __getattr__(name: str) -> object:
         "track",
         "RunFailed",
         "Failed",
+        "TimedOut",
         "fail",
         "use_context",
         "section",

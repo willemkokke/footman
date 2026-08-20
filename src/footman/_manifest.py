@@ -41,7 +41,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 _warned: set[str] = set()
 
@@ -985,6 +985,16 @@ def _task_node(
         node["lane"] = lane  # additive: "serial" or "exclusive" scheduling
     if confirm:
         node["confirm"] = confirm  # additive: the yes/no gate before it runs
+    # Additive, and deliberately visible: a caller that can see a task already
+    # retries will not wrap it in a retry of its own, and every layer that
+    # cannot see it is one more that can stack — curl's `--retry` multiplying
+    # with `@task(retries=)` is the case the design note names. Baking the
+    # field in while the schema is being touched is free; adding it later is a
+    # version bump (notes/20260807-timeout-and-retry.md).
+    if retries := registry.task_retries(fn):
+        node["retries"] = retries
+    if timeout := registry.task_timeout(fn):
+        node["timeout"] = timeout
     if parsed.long:
         node["long"] = parsed.long
     # Additive availability annotation (`@requires`): the name stays listed and

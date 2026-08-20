@@ -7,6 +7,62 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`@task(timeout=…)` — a deadline for one task.** The fail-fast event,
+  scoped: past the deadline no new work starts, the task's in-flight
+  subprocess trees are terminated, and generator steps unwind at their
+  next checkpoint. A `run()` inside the task inherits whatever is left,
+  so a call with no bound of its own is still bounded, and one with a
+  longer bound cannot outlive the task. Answers 124, the shell's
+  convention, and raises `TimedOut` — a `Failed`, so `except
+  footman.Failed:` keeps catching it.
+
+  It means **cancelled at the first checkpoint or subprocess boundary
+  past the deadline**, not a hard stop: a body of straight-line Python
+  has neither and runs to its own end. That case is reported rather than
+  hidden, and the record says which happened: `after_deadline` is
+  `stopped` when footman issued a stop before the body returned, or
+  `completed` when no stop was issued and the body finished on its own,
+  late. "Timed out" never means "did not run". The field is an open set,
+  like `state` — tolerate values you don't know.
+
+  A late body still fails. Honouring a result that arrived after the
+  deadline would make the verdict depend on a race between the body and
+  the kill, and flaky is worse than strict for something used as a gate —
+  but the receipt tells the whole truth, naming what the body actually
+  decided and that the deadline governs.
+
+- **`@task(retries=N)` — attempt it again, and record every attempt.**
+  `retries=2` means up to three runs. Every attempt is a real row with
+  its own timing, output and audit; nothing is merged and nothing is
+  hidden, because each attempt *is* a record. The earlier ones carry the
+  new `retried` state — additive, and the `state` set was always
+  documented as open — and the terminal attempt carries the outcome.
+
+  A retriable failure is **not yet a failure**: it does not trigger
+  fail-fast, does not block a dependent, and never reaches the exit
+  code. Finality moves from "a task failed" to "a task failed with no
+  attempts left". A *different* task's terminal failure still wins —
+  fail-fast means no new work, and an unstarted attempt is new work.
+
+  Retry is your choice, with no theory about what deserves it: a
+  deliberate `fail()` retries exactly like a crash. The one exception is
+  not about failure kinds at all — only a `stopped` timeout is retried,
+  because a body that merely finished late has nothing transient to
+  retry: it outran the deadline once and will again, and another attempt
+  repeats work that already happened. `pre=` runs once,
+  and so does every gate that guards an attempt rather than performing
+  it — availability, `needs_project`, and the confirm prompt, which is
+  never re-asked. All attempts count as one unit on the progress bar.
+  Your task re-runs from the top, so idempotence is yours to arrange.
+
+  `retries` is visible in the manifest, deliberately: a caller that can
+  see a task already retries will not wrap it in a retry of its own. Note
+  that a task retry is **outer** to whatever a tool does internally —
+  with `[fetch] backend = "curl"` (which already passes `--retry 2`),
+  adding `@task(retries=2)` can mean as many as six attempts.
+
 ## [0.42.0] - 2026-08-19
 
 ### Added

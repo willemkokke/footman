@@ -1,8 +1,9 @@
 # Task timeout, and retry — the scheduler learns two new reasons to stop
 
-**Status: DESIGNED, not built.** Willem ruled the retry semantics on
-2026-08-07 (this note records those rulings); task timeout is assessed but
-unruled beyond "do it first, it's the cheap half". Nothing is implemented.
+**Status: BUILT 2026-08-20.** Both parts, in the order this note
+prescribes: timeout first, then retry. What the build learned that the
+design could not have known is recorded at the bottom under "What the
+build found"; the open questions below were answered there too.
 The roadmap entry these close is *Per-task timeout, and retry* in the
 after-1.0 backlog.
 
@@ -251,3 +252,128 @@ decide that a deliberate `fail()` is more final than a crash. It says nothing
 about **declared task properties**, so a future rule that keys retry
 behaviour on something the author wrote down is consistent with it rather
 than a reversal of it.
+
+## What the build found (2026-08-20)
+
+Three things surfaced only under a running scheduler, each worth keeping:
+
+- **The futures memo answered every attempt with the first attempt's
+  failure.** A retried task ran its body once and was reported N times —
+  the exact opposite of "each attempt IS a record". Cells are retired
+  between attempts now (`_futures.retire`), so an attempt runs fresh and
+  the terminal one is what later requests share. The narrow race the note
+  should have anticipated: a requester that *joined* during a failed
+  attempt was handed that attempt. Sharing binds to the terminal attempt
+  for everyone who asks from then on, not retroactively.
+- **The exit code counted retried rows**, so a run that recovered still
+  exited non-zero. `retried` had to join `skipped` and `cancelled` as a
+  state that is recorded but never the verdict — and the filter belongs at
+  the source, or the fallback path picks one up anyway.
+- **The failure line reported the wrong number.** A task-imposed bound
+  printed `0s` (the call's own, which was None) and then the microsecond
+  remainder (`0.399666s`). Both read as a broken timeout. One helper now
+  serves both raise sites with the declared seconds.
+
+The three open questions, answered by building:
+
+- **Attempt rows vs the audit.** Sibling rows, as designed. They sort
+  chronologically because attempts of one node share a request stamp and
+  the report's `(seq, started)` order then falls to start time.
+- **`retries=` on step makers.** Task-only for now. The record question
+  the note raised is real: a step's rows would need the same
+  retried/terminal split, and nothing yet asks for it.
+- **Backoff.** Not built — the honest minimum, as the note proposed. It
+  wants its own ruling because a delay changes what a deadline means.
+
+## How timeout and retries compose (ruled 2026-08-20)
+
+**Both are per call.** Each attempt gets a fresh deadline, so
+`@task(timeout=5, retries=2)` can take fifteen seconds. One budget shared
+across attempts would be worse — the last attempt gets the least time, so
+the deadline would mean something different each round. A cap on the whole
+task including retries is a different feature wanting a different name.
+
+**The post-deadline state is a token, not a boolean.** The first ruling here
+reasoned about "timed out and could not be killed"; the implementation's
+`stopped=False` actually meant "the body finished on its own, just late".
+Both cases are real, they are different states, and a boolean cannot carry
+the domain — `stopped` conflated *completed* with *escaped* (the harmless
+case with the dangerous one), and `finished` would have conflated *stopped*
+with *escaped*. So `after_deadline` is a token.
+
+**The discriminator is what footman can actually observe**: not how the body
+ended, but whether a stop was issued before it returned.
+
+| value | meaning | retry? | why |
+| --- | --- | --- | --- |
+| `stopped` | footman issued a stop — including a body that caught the interruption and returned normally; what is recorded is that footman *asked* | **retriable** | Cut off mid-flight, so possibly slow for a transient reason. Ruling 3 applies unchanged. |
+| `completed` | no stop was issued and the deadline had already passed — the body finished on its own, late | **terminal** | Nothing transient to retry: it outran the deadline once and will again, and another attempt repeats work that already happened. |
+
+That `completed` is terminal is not footman forming a theory about which
+failures deserve another chance (ruling 3); it is a structural fact about
+whether another attempt can coherently start, the same category as fail-fast
+beating a pending retry.
+
+### Two values ship. `escaped` and `unknown` do not, and that is the point
+
+**`escaped` is a missing observer, not a missing value.** The executor judges
+the deadline *after the body returns*. If the body never returns, that
+judgment point is never reached — there is no receipt, no state, nothing, and
+the run hangs (Part 1's documented limit, and the same shape the services
+measurements found: `_python_exit` joining a worker that never returns).
+Detecting escape needs an observer running **concurrently with** the body: a
+watchdog, a supervisor thread, or teardown noticing an unjoined worker. None
+exists, so nothing can truthfully say `escaped`.
+
+Shipping it as reserved vocabulary anyway would be worse than omitting it. A
+value nothing can emit is a claim the system can never make: consumers who
+branch on it write dead code forever, and may believe footman detects the
+case when it does not. That is the `infinite=True` lesson in enum form — a
+declaration that can disagree with reality is worse than a narrower one that
+cannot.
+
+So the field is an **open set** (the `state` convention, "tolerate values you
+don't know") and each value arrives with the mechanism that can observe it:
+
+| value | ships when |
+| --- | --- |
+| `completed` | now |
+| `stopped` | now |
+| `escaped` | a concurrent observer exists — watchdog, supervisor, or the services work on unstoppable bodies |
+| `unknown` | calls cross a process or machine boundary |
+
+**For whoever picks this up:** adding the value is not the job. Building the
+observer is the job; the value is the last line of it.
+
+**Determinism is why `completed` fails rather than passes.** A body finishing
+at 30.001s against `timeout=30` exceeded its declared contract. Honouring the
+late result would make the outcome depend on a race between the body and the
+kill — the same task passing or failing by scheduler timing. Flaky is worse
+than strict, especially for something used as a gate.
+
+**No fiction.** Where the state is `completed`, the record says what the body
+actually did — *"the body completed at 30.2s with success — the deadline
+governs"*, and a body that failed keeps its own reason — rather than
+presenting it as work that never finished. `escaped` reads *"could not be
+stopped — not retried"*, because the diagnosis the author needs is *this body
+has no checkpoint*, and that is only inferable if it reads differently from
+ordinary retry exhaustion.
+
+**Not configurable.** No flag to force retries on `completed` or `escaped`:
+both are unsafe or futile by construction, and it is purely additive if a
+real need appears.
+
+### Where `escaped` is not yet emitted
+
+Worth knowing for whoever meets this next. The executor judges the deadline
+*after the body returns*, so from that vantage the state is only ever
+`completed` or `stopped` — a body footman genuinely failed to terminate never
+reaches the judging line at all. `escaped` is defined, carried, and honoured
+by the retry rule, but nothing emits it today. It belongs to the surface that
+*sees* the failure to stop (an unkillable child left behind, an `atomic=True`
+subprocess that opts out of the kill), and to the remote case that brings
+`unknown` with it.
+
+That is a gap in coverage, not in design: the token exists so those surfaces
+have somewhere honest to report, and adding an emitter later changes no
+consumer.

@@ -70,6 +70,39 @@ class TaskResult:
     output: str = ""
     steps: list[Result] = field(default_factory=list)
     cancelled: bool = False  # failed only because fail-fast killed it mid-run
+    timed_out: bool = False
+    """`@task(timeout=…)` expired before this task concluded. A verdict about
+    the *deadline*, never about how much work happened — read `stopped` for
+    that."""
+    after_deadline: str = ""
+    """What became of the work once the deadline fired. Empty when no
+    deadline fired.
+
+    The discriminator is not *how the body ended* but **whether footman
+    issued a stop before the body returned** — which is fully observable
+    from here, where "did it really stop?" is not:
+
+    - `stopped` — footman issued a stop. Includes a body that caught the
+      interruption and returned normally: what is recorded is that footman
+      asked.
+    - `completed` — no stop was issued and the deadline had already passed.
+      The body finished on its own, just late. There IS an outcome; the
+      deadline governs anyway.
+
+    **An open set** — the `state` convention, "tolerate values you don't
+    know". Two more values are designed and deliberately NOT shipped,
+    because each needs a mechanism that does not exist yet and a value
+    nothing can emit is a claim the system can never make:
+
+    - `escaped` (footman could not stop it; it may still be running) needs
+      an observer running *concurrently with* the body — a watchdog, a
+      supervisor, or teardown noticing an unjoined worker. This judgment
+      happens after the body returns, so a body that never returns never
+      reaches it: there is no receipt at all, and the run hangs.
+    - `unknown` arrives with calls that cross a process or machine
+      boundary, where a deadline expiring says nothing about the far side.
+
+    (notes/20260807-timeout-and-retry.md)"""
     started: float | None = None
     """When this task began, on the run's monotonic clock — the ordering key of
     the report. `None` for something that never began (an unavailable task, a
@@ -2166,6 +2199,7 @@ def run_task(
     ctx: Context,
     forwarded: dict[str, Any] | None = None,
     forwarded_given: frozenset[str] = frozenset(),
+    attempt: int = 0,
 ) -> TaskResult:
     """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
@@ -2209,7 +2243,7 @@ def run_task(
                 # (a bind-time span needs closing), with the refusal result.
                 _exit_task_hooks(life, handle, result)
             return result
-        return run_bound(fn, seg, ctx, args, kwargs, handle=handle)
+        return run_bound(fn, seg, ctx, args, kwargs, handle=handle, attempt=attempt)
     finally:
         _current.reset(token)
 
@@ -2223,6 +2257,7 @@ def run_bound(
     *,
     as_call: bool = False,
     handle: TaskHandle | None = None,
+    attempt: int = 0,
 ) -> TaskResult:
     """Run *fn* with arguments already resolved — everything after binding.
 
@@ -2249,6 +2284,12 @@ def run_bound(
         if ctx.shared and not as_call
         else None
     )
+    if attempt and work is not None:
+        # A retry: the previous attempt resolved this cell with its failure,
+        # and the memo would hand it straight back — the body would run once
+        # and be reported N times. Retire it so this attempt runs fresh and
+        # the terminal one is what later requests share.
+        _futures.retire(work)
     claimed, cell = _futures.claim(work, seg.task)
     if not claimed:
         # The pair is per request — only the body is shared. The pre fires
@@ -2287,6 +2328,15 @@ def run_bound(
     ctx.fn = fn  # what inherited() reads to find the shadowed task
     ctx.interactive = registry.is_interactive(fn)  # arms the prompt guard
     ctx.atomic = registry.is_atomic(fn)  # its subprocesses opt out of the kill
+    # The deadline starts here — at the body, not at the request. Everything
+    # before this point (binding, availability, the confirm gate, the
+    # prerequisites) is work the caller asked for around this task rather
+    # than the task itself, and a human staring at a confirm prompt must not
+    # spend the deadline. `.opts(timeout=…)` has already been folded into the
+    # task's markers by the time this reads them.
+    if (limit := registry.task_timeout(fn)) is not None:
+        ctx.deadline = time.perf_counter() + limit
+        ctx.timeout_declared = limit
     if ctx.cwd is None:  # a preset ctx.cwd (tests / use_context) wins
         try:
             ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
@@ -2476,6 +2526,49 @@ def run_bound(
     # failure and hid every one after it, which is the opposite of the flag.
     if not result.ok and context.abort_reaches(ctx.keep_going):
         result.cancelled = True
+    # The deadline is judged after the body, because that is the first moment
+    # its breach is knowable for every body shape: a step or a subprocess was
+    # cut off at a checkpoint (and said so), or a straight-line body simply
+    # ran past it and returned. Both are timeouts; only the first is a stop,
+    # which is exactly the distinction `stopped` carries.
+    if ctx.overdue():
+        result.timed_out = True
+        # Did footman issue a stop before the body returned? A step that
+        # timed out is that stop — a killed subprocess tree, or a generator
+        # closed at its checkpoint. Nothing here can observe a body that
+        # never returned, so `escaped` is not among the values this site can
+        # produce; see the field's docstring for why it is not shipped.
+        result.after_deadline = (
+            "stopped" if any(step.timed_out for step in result.steps) else "completed"
+        )
+        # The deadline governs, even when the body finished with a verdict.
+        # Honouring a late success would make the outcome depend on a race
+        # between the body and the kill — the same task passing or failing by
+        # scheduler timing. Flaky is worse than strict for something used as
+        # a gate. The receipt still tells the whole truth: what the body
+        # actually did goes into the message rather than being discarded.
+        if result.ok:
+            result.ok = False
+            result.code = 124
+            if result.error is None:
+                result.error = context.TimedOut(
+                    seg.task,
+                    registry.task_timeout(fn) or 0.0,
+                    after=result.after_deadline,
+                    body="success",
+                    at=result.duration,
+                )
+        elif result.after_deadline == "completed":
+            # A body that failed *and* overran: the deadline is the verdict,
+            # but the body's own reason is what the author needs to read.
+            result.error = context.TimedOut(
+                seg.task,
+                registry.task_timeout(fn) or 0.0,
+                after="completed",
+                body=str(result.error) if result.error else "failure",
+                at=result.duration,
+            )
+            result.code = 124
     return result
 
 

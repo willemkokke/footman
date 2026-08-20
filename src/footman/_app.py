@@ -2483,7 +2483,12 @@ def _run_tree(
     if post_error is not None:
         # A reporter that crashed must not pass silently: named, non-zero.
         print(f"{_brand.prog}: {post_error}", file=sys.stderr)
-    failed = [r for r in results if not r.ok]
+    # `retried` is recorded but is never the run's verdict — an attempt with
+    # attempts left has not failed yet, so there is nothing for the exit code
+    # to report. The terminal attempt carries the outcome, whichever way it
+    # went. Filtered here, at the source, so the fallback below cannot pick a
+    # retried row up either.
+    failed = [r for r in results if not r.ok and r.state != "retried"]
     genuine = next(
         (r.code or 1 for r in failed if not r.cancelled and r.state != "skipped"),
         None,

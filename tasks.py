@@ -741,7 +741,7 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
             "inherited",
         ],
     ),
-    ("Failing on purpose", "", ["fail", "Failed"]),
+    ("Failing on purpose", "", ["fail", "Failed", "TimedOut"]),
     ("Progress", "", ["progress", "track"]),
     (
         "Profiling from inside a task",
