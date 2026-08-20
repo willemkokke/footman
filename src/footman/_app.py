@@ -1015,6 +1015,18 @@ def _plugins_report(reg: registry.Group) -> int:
             if desc:
                 line += f"  {_describe.dim(f'— {desc}', on)}"
             print(line.rstrip())
+    unmounted = [name for name, state, _ in every if state == "(not mounted)"]
+    if unmounted:
+        # Installed is not asked-for: mounts are authored in the tasks file,
+        # and a listing that stops at "(not mounted)" leaves the reader with
+        # a state and no verb. One line names the move.
+        print(
+            _describe.dim(
+                f"not mounted = installed but not asked for — mount one from "
+                f'your tasks file: plugin("{unmounted[0]}")',
+                on,
+            )
+        )
     return 0
 
 
@@ -2101,6 +2113,22 @@ def _execute(
                 completion_max_age=0,
                 tasks_file=override,
                 path=_paths.source_manifest_path(Path.cwd(), Path(override)),
+            )["tree"]
+        elif config_path := _config_arg(g):
+            # An explicit --config reshapes the tree (its own tasks name, its
+            # own keys), so its manifest rides a (cwd, config) key — separate
+            # from the plain cwd's, which must keep answering plain TAB.
+            # max_age=0, like -f: no background refresh, rebuilt on the next
+            # such run.
+            cfg_tasks = cfg.get("tasks")
+            tree = _manifest.sync_manifest(
+                reg,
+                Path.cwd(),
+                completion_max_age=0,
+                tasks_file=cfg_tasks
+                if isinstance(cfg_tasks, str)
+                else _brand.tasks_file,
+                path=_paths.source_manifest_path(Path.cwd(), Path(config_path)),
             )["tree"]
         elif not found.root:
             # Global mode: one manifest for every project-less directory,

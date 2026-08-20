@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 
 import pytest
 
-from footman import _app, _config, _discover, _executor, _paths, registry
+from footman import _app, _config, _discover, _executor, _paths, _refresh, registry
 from footman._split import Segment
 from footman.context import Context
 
@@ -238,6 +240,74 @@ def test_failed_cascade_import_resets_registry(tmp_path):
     with pytest.raises(_discover.TasksImportError):
         _discover.load_tree([bad])
     assert "ghost" not in registry.root.tasks
+
+
+def test_sys_exit_at_import_time_is_a_taught_error(tmp_path):
+    # A tasks file calling sys.exit() while being imported used to kill the
+    # whole invocation with its raw exit code and not a single word.
+    bad = _write(tmp_path / "tasks.py", "import sys\nsys.exit(3)\n")
+    with pytest.raises(
+        _discover.TasksImportError, match=r"sys\.exit\(3\) at import time"
+    ):
+        _discover.load_tree([bad])
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="no mkfifo on Windows")
+def test_a_non_regular_config_file_is_refused_not_read(tmp_path):
+    # A FIFO would block the read without bound; config is a regular file or
+    # it is nothing. Required (an explicit --config) refuses loudly, the
+    # cascade skips it silently — the same split every unreadable file gets.
+    fifo = tmp_path / "cfg.toml"
+    if sys.platform == "win32":
+        return  # the skipif above already keeps Windows out; narrows for mypy
+    os.mkfifo(fifo)
+    with pytest.raises(_config.ConfigError, match="not a regular file"):
+        _config._read_toml(fifo, required=True)
+    assert _config._read_toml(fifo) is None
+
+
+def test_explicit_config_keys_its_own_completion_manifest(tmp_path, monkeypatch):
+    # A --config run reshapes the tree, and its manifest used to land on the
+    # plain cwd key — after which plain TAB offered tasks the plain run
+    # refuses. It rides a (cwd, config) key now, exactly as -f does.
+    _write(
+        tmp_path / "tasks.py",
+        "from footman import task\n@task\ndef plainly(): ...\n",
+    )
+    _write(
+        tmp_path / "alt_tasks.py",
+        "from footman import task\n@task\ndef otherly(): ...\n",
+    )
+    (tmp_path / "alt.toml").write_text('tasks = "alt_tasks.py"\n')
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    monkeypatch.chdir(tmp_path)
+    assert _app.run(["-l"]) == 0
+    assert _app.run(["--config=alt.toml", "-l"]) == 0
+    plain = _paths.manifest_path(tmp_path).read_text(encoding="utf-8")
+    assert "plainly" in plain and "otherly" not in plain
+    keyed = _paths.source_manifest_path(tmp_path, Path("alt.toml"))
+    assert "otherly" in keyed.read_text(encoding="utf-8")
+
+
+def test_background_refresh_honours_the_cascade_setting(tmp_path, monkeypatch):
+    # The detached rebuild used to walk to the repo root regardless of the
+    # cascade setting, so with cascade="none" TAB offered tasks the runner
+    # then refuses by name.
+    _write(tmp_path / "tasks.py", "from footman import task\n@task\ndef above(): ...\n")
+    _write(
+        tmp_path / "svc" / "tasks.py",
+        "from footman import task\n@task\ndef below(): ...\n",
+    )
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    monkeypatch.setattr(
+        _paths, "user_tasks_file", lambda name: tmp_path / "no-user-tasks.py"
+    )
+    monkeypatch.setenv("FOOTMAN_CASCADE", "none")
+    monkeypatch.chdir(tmp_path / "svc")
+    _refresh._rebuild()
+    built = _paths.manifest_path(tmp_path / "svc").read_text(encoding="utf-8")
+    assert "below" in built and "above" not in built
 
 
 def test_cascade_tags_defining_dir(tmp_path):

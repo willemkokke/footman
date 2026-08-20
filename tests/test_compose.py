@@ -1339,6 +1339,7 @@ def test_unmounted_plugin_shows_state_and_the_dist_header_describes(provider, tm
     assert result.ok
     assert "shared" in result.stdout
     assert "(not mounted)" in result.stdout
+    assert 'plugin("' in result.stdout  # the listing ends with the move to make
     summary = "A task runner with typed commands"
     assert result.stdout.count(summary) == 1  # once, on footman's header
 

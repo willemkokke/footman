@@ -233,6 +233,12 @@ def _read_toml(path: Path, required: bool = False) -> dict[str, Any] | None:
     must not be silently read as "no settings". When *required* (an explicit
     `--config`), an unreadable file is loud too, not silently skipped.
     """
+    if path.exists() and not path.is_file():
+        # A FIFO or a device would block `read_bytes` without bound; TOML
+        # config is a regular file or it is nothing to read.
+        if required:
+            raise ConfigError(f"{path}: not a regular file — config is read from one")
+        return None
     try:
         text = _decode(path, path.read_bytes())
     except OSError as exc:

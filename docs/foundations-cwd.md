@@ -51,9 +51,11 @@ For code inside the task body:
   `footman.cwd() / "dist"` is this task's `dist`, whatever the process cwd
   happens to be.
 - **`os.chdir` in a parallel task is a taught error**, because the cwd belongs to
-  nobody there. The error names the exits: mark the task `serial=True`
-  (one owner at a time, overlapping the pool, where a *real* chdir via
-  `footman.chdir()` is legal again), or build paths from `footman.cwd()`.
+  nobody there. The error names the exits: build paths from `footman.cwd()`
+  (no chdir at all); claim `lanes=(cwd_lane,)` when the real directory only
+  needs to *be* the task's cwd for the duration; or mark the task
+  `serial=True` (one owner at a time, overlapping the pool, where a *real*
+  chdir via `footman.chdir()` is legal again).
 - **`os.getcwd` earns a one-time note** pointing at `footman.cwd()`, since in a
   parallel run the process cwd can be anyone's, so reading it is usually a
   question answered wrong.

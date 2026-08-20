@@ -10,7 +10,8 @@ path is stdlib-only: it reads one file, parses JSON, and walks the tree, and it
 ## The latency story
 
 Measured cold-process on an M-series Mac. The row that matters is the last
-one, because it's the exact command the installed completion hooks run:
+one, because it measures the installed hook's command path end to end (the
+benchmark pins a fixture manifest so runs stay comparable):
 
 | variant                                    |   mean |
 | ------------------------------------------ | -----: |
@@ -48,7 +49,9 @@ A [dynamic completer](typing.md#dynamic-completion) (`suggest(fn)`) queries live
 state: git branches, release candidates, deploy targets. When <kbd>Tab</kbd>
 lands on one, footman runs that completer **fresh** in a short-lived subprocess:
 answering a build-critical question from a stale snapshot is a bug, not a
-speed-up, so the manifest holds no snapshot to serve. The recompute is bounded
+speed-up, so the manifest holds no snapshot to serve. Expect such a press to
+cost what the cold build costs — around 100 ms for a fresh interpreter plus
+your completer, against ~20 ms structural. The recompute is bounded
 (a couple of seconds) and isolated, so a slow or failing completer degrades to
 *no* candidates, never a hung keystroke, and never the old values.
 

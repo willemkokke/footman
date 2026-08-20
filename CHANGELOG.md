@@ -7,6 +7,40 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An explicit `--config` no longer overwrites the plain completion
+  cache.** A `--config=<file>` run reshapes the task tree, and its
+  manifest used to land on the cwd's own completion cache — after which a
+  plain TAB offered tasks the plain run refuses. Such a run now keys its
+  manifest by `(cwd, config file)`, exactly as `-f` does, and completion
+  resolves a typed `--config=` to that same key.
+- **The background completion refresh honours the `cascade` setting.**
+  The detached rebuild always walked to the repo root, so with
+  `cascade = "none"` (or `"filesystem"`) TAB could offer tasks the runner
+  then refuses. The child now bounds its walk exactly as the run does.
+- **`sys.exit()` at import time is a taught error.** A tasks file that
+  exits while being imported used to kill the whole invocation with its
+  raw exit code and no words; it now gets the standard broken-file
+  refusal, naming the file and the fix.
+- **A non-regular `--config` file is refused instead of read.** Pointing
+  `--config` at a FIFO or a device used to block forever on the read;
+  config is a regular file or it is nothing.
+- **Choice-typed options no longer print their value list twice** in
+  `--help`: the set already lives in the option's own spelling
+  (`--mode={dev|prod}`), so the description now carries only what the
+  spelling can't — the default, a doc line, or `(dynamic)`.
+
+### Changed
+
+- **`fm --plugins` says what to do with an unmounted plugin.** The
+  listing used to stop at `(not mounted)`; it now ends with the move:
+  mount one from your tasks file with `plugin("<name>")`.
+- **The errors reference page got readable headings.** Sections are
+  titled by each module's own one-line summary instead of its private
+  filename.
+- Two dead functions no longer ship in the wheel.
+
 ## [0.43.0] - 2026-08-20
 
 ### Added
@@ -811,9 +845,9 @@ versions may include breaking changes.
   completes branches from a `branches.txt` tab, and editing the tab
   changes the next Tab's answer. File handoffs still answer nothing: the
   page has no filename completion to hand off to.
-- **The playground gallery covers every category.** Ten groups in the
+- **The playground gallery covers every category.** Eleven groups in the
   dropdown — Basics, Typing, Validation, Variadic, Scheduling, Tools,
-  Results, Config, Composition, Completion — each example with command
+  Results, Config, Composition, Input, Completion — each example with command
   chips whose exit codes and output are asserted in CI. The sandbox grew
   three abilities to make them honest: a tab named `stdin` is the run's
   **pipe** (its text feeds stdin-bound parameters and is never written to

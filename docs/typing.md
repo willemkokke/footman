@@ -504,7 +504,7 @@ def publish(target: str, legacy: Annotated[str, hidden] = ""):
 ```
 
 `fm --help publish` shows `<target>` and stops there: no `--legacy`, and the
-synthesised example does not use it. Everything else about it is unchanged:
+synthesized example does not use it. Everything else about it is unchanged:
 it still binds, it still completes when you type `--l<TAB>`, and
 `fm --describe` carries it marked `"hidden": true` rather than dropping it.
 `fm --all --help publish` lists it.

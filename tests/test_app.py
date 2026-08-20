@@ -1526,6 +1526,25 @@ def test_color_rejects_an_unknown_value(project, capsys):
     assert "--color must be one of always|never|auto" in capsys.readouterr().err
 
 
+def test_static_choice_options_name_their_set_once():
+    # The set already lives in the option's own spelling (`--mode={dev|prod}`),
+    # so the description carries it only where the spelling can't: a
+    # positional's row, or a dynamic set worth marking as live.
+    from footman import _describe
+
+    option = {"kind": "option", "name": "mode", "choices": ["dev", "prod"]}
+    assert "one of" not in _describe._mechanics(option)
+    positional = {"kind": "positional", "name": "mode", "choices": ["dev", "prod"]}
+    assert "one of dev|prod" in _describe._mechanics(positional)
+    dynamic = {
+        "kind": "option",
+        "name": "branch",
+        "choices": ["main"],
+        "dynamic": True,
+    }
+    assert "one of main (dynamic)" in _describe._mechanics(dynamic)
+
+
 def test_force_color_env_paints_when_piped(project, monkeypatch, capsys):
     # FORCE_COLOR is the environment rung of `always`; NO_COLOR (higher, and the
     # never rung) still wins over it.

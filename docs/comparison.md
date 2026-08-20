@@ -18,6 +18,16 @@ Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
     tool, [open an issue](https://github.com/willemkokke/footman/issues) and
     it will be fixed.
 
+## Why not make, just, or task?
+
+Different species: those are recipe runners — you write shell in a file and
+they run it, and they are very good at it. footman runs typed Python
+functions, which is what buys checked arguments, `--help` written from
+signatures, and completion without wrappers. If your tasks are shell
+one-liners, keep the recipe runner; the moment one grows arguments, logic,
+or parallelism, it turns into a Python function that wants a runner.
+[Migrating](migrating.md) has the tool-by-tool guides.
+
 !!! tip "Milliseconds are the least interesting thing here"
 
     This is the one page on the site that carries numbers, deliberately.

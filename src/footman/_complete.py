@@ -1011,11 +1011,18 @@ def complete_cli(args: list[str]) -> int:
             stand = os.getcwd()
         spawn_in = stand if cdir else None
         override = _tasks_file_from(args[:-1])
+        config = _leading_global_value(args[:-1], ("--config",))
         if override:
             # Anchor a relative -f at the stand-in directory, as the run's
             # chdir would; joining an absolute (or ~-expanded) value is a
             # no-op, so plain invocations key exactly as before.
             anchored = os.path.join(stand, os.path.expanduser(override))
+            manifest = _paths._source_file(stand, anchored)
+        elif config:
+            # An explicit --config keys its own manifest, exactly as -f
+            # does — so a `--config` run's tree never answers plain TAB,
+            # and a plain run's never answers this line's.
+            anchored = os.path.join(stand, os.path.expanduser(config))
             manifest = _paths._source_file(stand, anchored)
         else:
             manifest = _paths._manifest_file(stand)
