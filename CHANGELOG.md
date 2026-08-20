@@ -18,6 +18,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Markers inside a container element work.** A marker on a collection's
+  element type — `list[Annotated[int, between(1, 5)]]` — was silently
+  dropped: the annotated element reached the manifest unpeeled, read as
+  "not a usable type", and the values passed through as text. The element
+  now peels exactly as a dict's value type always did: its bounds, checks,
+  path requirements, completer and `nosplit` apply per element, and an
+  outer marker on the whole collection wins when both are present.
 - **A grouped positional checks each value against its own slot.** A
   NamedTuple/tuple shape taken positionally validated every token against
   the first field's type — `tag 3 hot` against `(copies: int, text: str)`

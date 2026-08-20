@@ -153,6 +153,49 @@ def test_between_teaches_out_of_range():
         split_chain(tree, ["test", "--jobs=99"])
 
 
+def test_a_marker_inside_a_container_element_applies_per_element(capsys):
+    """`list[Annotated[int, between(1, 5)]]` used to reach the manifest
+    unpeeled, warn "is not a usable type", and pass the values through as
+    text. The element's markers now peel exactly as a dict value's do."""
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def take(nums: list[Annotated[int, between(1, 5)]] = ()):  # type: ignore[assignment]
+            seen["nums"] = nums
+
+    _, tree = build_tree(tasks)
+    assert "usable type" not in capsys.readouterr().err
+    with pytest.raises(ChainError, match="between 1 and 5"):
+        split_chain(tree, ["take", "--nums=2,9"])
+    run(tasks, "take --nums=2,3")
+    assert seen["nums"] == [2, 3]
+
+
+def test_an_outer_marker_wins_over_the_element_marker():
+    # The same rule the dict branch keeps: a marker on the whole collection
+    # beats one on the element when both are present.
+    def tasks(reg):
+        @reg.task
+        def take(
+            nums: Annotated[list[Annotated[int, between(1, 5)]], between(0, 3)] = (),  # type: ignore[assignment]
+        ): ...
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match="between 0 and 3"):
+        split_chain(tree, ["take", "--nums=4"])
+    split_chain(tree, ["take", "--nums=0"])  # legal under the outer bounds
+
+
+def test_a_completer_on_the_element_serves_the_collection():
+    from footman import _coerce
+    from footman.params import suggest
+
+    peeled = _coerce.peel(list[Annotated[str, suggest(_next_tag)]])
+    assert peeled.element is str
+    assert peeled.completer is not None and peeled.completer.fn is _next_tag
+
+
 def test_nan_is_rejected_by_bounds():
     def tasks(reg):
         @reg.task

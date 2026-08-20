@@ -289,6 +289,25 @@ def peel(ann: Any) -> Peeled:
 
     if (kind := collection_of(ann)) is not None:  # list/set/frozenset/tuple[T, ...]
         element = (typing.get_args(ann) or (str,))[0]
+        if typing.get_origin(element) is Annotated:
+            # A marker on the element type — list[Annotated[int, between(1, 5)]]
+            # — applies to each element, exactly as the dict branch reads the
+            # markers on its value type; an outer marker on the whole
+            # collection wins when both are present. The annotated element
+            # used to reach the manifest unpeeled, where it read as "not a
+            # usable type" and the values passed through as text.
+            inner = peel(element)
+            if not inner.multiple and not inner.mapping:
+                element = inner.element
+                completer = completer or inner.completer
+                is_nosplit = is_nosplit or inner.nosplit
+                if markers["path_req"] is None:
+                    markers["path_req"] = inner.path_req
+                if markers["glob"] is None:
+                    markers["glob"] = inner.glob
+                if markers["bounds"] is None:
+                    markers["bounds"] = inner.bounds
+                markers["checks"] = (*markers["checks"], *inner.checks)
         return Peeled(True, element, completer, is_nosplit, container=kind, **markers)
 
     if _is_union(ann):
