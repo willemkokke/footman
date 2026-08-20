@@ -146,7 +146,7 @@ construction, so the real content is in the other columns.
 | Union / one-or-many / `dict[K,V]` params    |   ✅    | partial | ❌            | ❌            | ❌       |
 | Native nested groups                        |   ✅    | ✅      | ❌            | manual        | ❌       |
 | Zero-boilerplate discovery (module = group) |   ✅    |   ❌    | ❌            | ❌            | ❌       |
-| Separator-free chaining                     |   ✅    |   ❌    | reserved-word | reserved-word | seq task |
+| Separator-free chaining                     |   ✅    |   ❌    | ✅            | ✅            | seq task |
 | Parallel-by-default DAG (`pre`/`post`)      |   ✅    |   ❌    | sequential    | sequential    | ✅       |
 | `run()` capture / replay-on-failure         |   ✅    |   ❌    | ✅            | partial       | ❌       |
 | Typed `tools` standard library              |   ✅    |   ❌    | ✅            | ❌            | ❌       |

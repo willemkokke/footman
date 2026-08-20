@@ -81,7 +81,7 @@ def lint(fix: bool = False):
     run("ruff check ." + (" --fix" if fix else ""))
 ```
 
-You keep parallelism (poe's `[[parallel]]` → footman is parallel by default) and
+You keep parallelism (poe's `parallel = [...]` task type → footman is parallel by default) and
 pay the project import only on execution, never on completion.
 
 ## From make / just

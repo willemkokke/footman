@@ -39,27 +39,29 @@ tables are included for honesty — a page that showed only its best number
 would deserve the suspicion — and because the orchestration gap *does* grow
 teeth once the steps are real (four two-second checks, not four sleeps).
 
-Cold-process wall time, mean of 15 fresh processes each (M-series Mac, CPython
-3.13). The **Δ import** column is the decisive part: it is completion time with
+Cold-process wall time: median of 40 fresh processes after three discarded
+warmups, `±` half the p10–p90 spread (M-series Mac, CPython 3.14). Means over
+15 runs with no warmup — what this page used to report — could not reproduce
+themselves on a machine doing anything else. The **Δ import** column is the decisive part: it is completion time with
 a 0.25 s project-import cost minus completion time with none. A runner that
 re-imports your tasks on every TAB shows a ~0.25 s delta; one that does not
 shows ~0.
 
 | runner  | completion (per TAB) | Δ import | re-imports per TAB?      | `--list` |
 | ------- | -------------------: | -------: | ------------------------ | -------: |
-| footman |            **28 ms** |     2 ms | **no** (cached manifest) |   340 ms |
-| duty    |               363 ms |   276 ms | **yes**                  |   341 ms |
-| invoke  |               387 ms |   289 ms | **yes**                  |   353 ms |
-| poe     |                61 ms |     5 ms | no (reads TOML)          |    91 ms |
+| footman |          **20±1 ms** |     0 ms | **no** (cached manifest) |  307±5 ms |
+| poe     |              45±1 ms |     0 ms | no (reads TOML)          |   60±4 ms |
+| invoke  |            336±20 ms |   263 ms | **yes**                  | 359±19 ms |
+| duty    |             349±9 ms |   289 ms | **yes**                  |      378 ms |
 
 Reading it:
 
 - **duty and invoke re-import the project on every TAB.** This is measured
   here, independently — duty's `completions.bash` calls `duty --complete`, which
   loads `duties.py` (and therefore the whole project) before answering. The
-  276 ms delta is that import. At completion time footman is **~13× faster**.
+  289 ms delta is that import — the whole of it, on every keystroke.
 - **footman pays the import cost too — but only on the execution path.** Its
-  `--list` is 313 ms, right alongside the others, because listing runs your
+  `--list` is ~307 ms, right alongside the others, because listing runs your
   code. Completion is the only thing that must be instant, and it is: it reads a
   cached JSON manifest and never imports the framework or your tasks.
 - **poe is also fast at completion — for a different reason.** Its tasks are
@@ -108,11 +110,11 @@ Floors: 0.5 s parallel, 2.0 s serial. Reproduce with
 
 | runner  | composition                    | wall (mean) | overhead over floor |
 | ------- | ------------------------------ | ----------: | ------------------: |
-| footman | parallel (pre-deps, *default*) |  **615 ms** |              115 ms |
-| poe     | parallel (`parallel` task)     |      642 ms |              142 ms |
-| typer   | serial (no orchestration)      |     2083 ms |               83 ms |
-| duty    | serial (pre-duties)            |     2138 ms |              138 ms |
-| invoke  | serial (pre-tasks)             |     2138 ms |              138 ms |
+| footman | parallel (pre-deps, *default*) |  **592 ms** |               92 ms |
+| poe     | parallel (`parallel` task)     |      617 ms |              117 ms |
+| typer   | serial (no orchestration)      |     2080 ms |               80 ms |
+| duty    | serial (pre-duties)            |     2131 ms |              131 ms |
+| invoke  | serial (pre-tasks)             |     2210 ms |              210 ms |
 
 - **The gap that matters is ~3.5×, and it isn't overhead — it's architecture**
   (4× before overhead: a 0.5 s parallel floor against a 2.0 s serial one).
@@ -277,7 +279,7 @@ bare required positionals — so those are *not* where footman pulls ahead.
 footman's verified edges over current duty are: no `ctx` boilerplate, native
 nested groups, **eager choice/type validation** (duty accepts an invalid
 `Literal` value; footman rejects it), `Literal`/`Enum`-driven completion, and
-completion that doesn't re-import your project (~13× faster per TAB).
+completion that doesn't re-import your project at all.
 
 **Where footman is still behind:** typer's `--help` formatting is richer —
 `rich`-painted panels where footman prints plain text. An optional renderer is
