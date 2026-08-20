@@ -455,3 +455,51 @@ def test_fetch_reports_byte_progress(server, monkeypatch):
 def test_cache_lives_where_footman_caches(server, tmp_path):
     assert _fetch.cache_dir().is_relative_to(_paths.footman_cache_dir())
     assert Path(_fetch.fetch(server)).is_relative_to(_paths.footman_cache_dir())
+
+
+# --- the teaching paths -------------------------------------------------------
+
+# fetch()'s refusals and fallbacks for a machine that can't reach the URL
+# were never executed by the suite (audit, suite pass): the named-but-missing
+# backend, the corporate-proxy teaching on a dead connection, and the
+# documented offline behaviour — a cached copy beats a failed refresh.
+
+
+def test_a_named_but_missing_backend_is_a_taught_refusal(monkeypatch):
+    monkeypatch.setattr(_fetch, "_available", lambda name: False)
+    with pytest.raises(_fetch.FetchError, match="not installed"):
+        _fetch._resolve_backend("httpx")
+    with pytest.raises(_fetch.FetchError, match="not on PATH"):
+        _fetch._resolve_backend("curl")
+    with pytest.raises(_fetch.FetchError, match="choose one of"):
+        _fetch._resolve_backend("wget")
+
+
+def test_a_dead_connection_teaches_the_curl_escape(server, monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    def down(*a, **kw):
+        raise urllib.error.URLError("network unreachable")
+
+    monkeypatch.setattr(urllib.request, "urlopen", down)
+    with pytest.raises(_fetch.FetchError) as caught:
+        _fetch.fetch(server, backend="urllib")
+    said = str(caught.value)
+    assert 'backend = "curl"' in said  # the corporate-proxy escape, named
+    assert "network unreachable" in said
+
+
+def test_a_cached_copy_beats_a_failed_refresh(server, monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    first = _fetch.fetch(server, backend="urllib")
+    body = first.read_bytes()
+
+    def down(*a, **kw):
+        raise urllib.error.URLError("offline now")
+
+    monkeypatch.setattr(urllib.request, "urlopen", down)
+    again = _fetch.fetch(server, backend="urllib", refresh=True)
+    assert again.read_bytes() == body
