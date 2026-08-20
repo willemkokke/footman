@@ -7,6 +7,15 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Documentation
+
+- **Where footman writes.** The configuration page names the three
+  user-level directories (cache, data, config), what lives in each, the
+  Windows spellings, and the variables that move them. The layout itself —
+  XDG paths on every platform — is deliberate. Also mends the environment
+  table, which a stray paragraph had split in two, and corrects the
+  `FOOTMAN_DATA_DIR` description.
+
 ### Fixed
 
 - **An explicit `--config` no longer overwrites the plain completion
