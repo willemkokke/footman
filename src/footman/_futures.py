@@ -506,6 +506,29 @@ def work_of(
     return _key(task, tuple(args), kwargs, given)
 
 
+def retire(key: Any) -> None:
+    """Drop a finished cell so the next request for it runs fresh.
+
+    The one caller is the retry loop: an attempt that failed with attempts
+    left must not be the answer a later request receives. Left in place, the
+    memo would hand every subsequent attempt the first attempt's failure —
+    the body would run once and be reported N times, which is the opposite
+    of "each attempt IS a record".
+
+    Only ever called between attempts of work this thread owns, and only on
+    a resolved cell. A requester that joined *during* the failed attempt has
+    already been handed it: sharing binds to the terminal attempt for
+    everyone who asks from here on, not retroactively.
+    """
+    run = _active
+    if run is None or key is None:
+        return
+    with run.lock:
+        cell = run.cells.get(key)
+        if cell is not None and cell.future.done():
+            del run.cells[key]
+
+
 def claim(key: Any, label: str) -> tuple[bool, Any]:
     """Take this work, or hand back the cell that already holds it.
 

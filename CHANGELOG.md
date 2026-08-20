@@ -25,6 +25,32 @@ versions may include breaking changes.
   footman cut the work off, false when the deadline passed and the body
   finished on its own. "Timed out" never means "did not run".
 
+- **`@task(retries=N)` — attempt it again, and record every attempt.**
+  `retries=2` means up to three runs. Every attempt is a real row with
+  its own timing, output and audit; nothing is merged and nothing is
+  hidden, because each attempt *is* a record. The earlier ones carry the
+  new `retried` state — additive, and the `state` set was always
+  documented as open — and the terminal attempt carries the outcome.
+
+  A retriable failure is **not yet a failure**: it does not trigger
+  fail-fast, does not block a dependent, and never reaches the exit
+  code. Finality moves from "a task failed" to "a task failed with no
+  attempts left". A *different* task's terminal failure still wins —
+  fail-fast means no new work, and an unstarted attempt is new work.
+
+  Retry is your choice, with no theory about what deserves it: a
+  deliberate `fail()` retries exactly like a crash. `pre=` runs once,
+  and so does every gate that guards an attempt rather than performing
+  it — availability, `needs_project`, and the confirm prompt, which is
+  never re-asked. All attempts count as one unit on the progress bar.
+  Your task re-runs from the top, so idempotence is yours to arrange.
+
+  `retries` is visible in the manifest, deliberately: a caller that can
+  see a task already retries will not wrap it in a retry of its own. Note
+  that a task retry is **outer** to whatever a tool does internally —
+  with `[fetch] backend = "curl"` (which already passes `--retry 2`),
+  adding `@task(retries=2)` can mean as many as six attempts.
+
 ## [0.42.0] - 2026-08-19
 
 ### Added

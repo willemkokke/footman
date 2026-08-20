@@ -466,6 +466,7 @@ _POST = "_footman_post"
 _KEEP_GOING = "_footman_keep_going"
 _ATOMIC = "_footman_atomic"
 _TIMEOUT = "_footman_timeout"
+_RETRIES = "_footman_retries"
 _INFINITE = "_footman_infinite"
 _SHARED = "_footman_shared"
 _NEEDS_PROJECT = "_footman_needs_project"
@@ -683,6 +684,7 @@ _OPTS_ATTRS = {
     "keep_going": _KEEP_GOING,
     "atomic": _ATOMIC,
     "timeout": _TIMEOUT,
+    "retries": _RETRIES,
     "interactive": _INTERACTIVE,
     "progress": _PROGRESS,
     "confirm": _CONFIRM,
@@ -707,6 +709,7 @@ class TaskOpts(TypedDict, total=False):
     keep_going: bool | None
     atomic: bool
     timeout: float | None
+    retries: int
     interactive: bool
     progress: bool
     confirm: str
@@ -976,6 +979,7 @@ def _apply_policy(
     keep_going: bool | None,
     atomic: bool,
     timeout: float | None = None,
+    retries: int = 0,
     cwd: str | Path = "",
     rel: str | Path = "",
     serial: bool = False,
@@ -1018,6 +1022,13 @@ def _apply_policy(
         setattr(fn, _KEEP_GOING, keep_going)
     if atomic:
         setattr(fn, _ATOMIC, True)
+    if retries:
+        if not isinstance(retries, int) or isinstance(retries, bool) or retries < 0:
+            raise TypeError(
+                f"retries={retries!r} — a whole number of EXTRA attempts after "
+                f"the first (retries=2 means up to three runs); omit it for none"
+            )
+        setattr(fn, _RETRIES, retries)
     if timeout is not None:
         if timeout <= 0:
             raise TypeError(
@@ -1296,6 +1307,7 @@ class TaskDecorator(Protocol):
         keep_going: bool | None = None,
         atomic: bool = False,
         timeout: float | None = None,
+        retries: int = 0,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -1511,6 +1523,7 @@ class Group:
         keep_going: bool | None = None,
         atomic: bool = False,
         timeout: float | None = None,
+        retries: int = 0,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -1536,6 +1549,7 @@ class Group:
         keep_going: bool | None = None,
         atomic: bool = False,
         timeout: float | None = None,
+        retries: int = 0,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -1654,6 +1668,7 @@ class Group:
                 keep_going=keep_going,
                 atomic=atomic,
                 timeout=timeout,
+                retries=retries,
                 cwd=cwd,
                 rel=rel,
                 serial=serial,
@@ -2056,6 +2071,7 @@ class Group:
         keep_going: bool | None = None,
         atomic: bool = False,
         timeout: float | None = None,
+        retries: int = 0,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -2078,6 +2094,7 @@ class Group:
         keep_going: bool | None = None,
         atomic: bool = False,
         timeout: float | None = None,
+        retries: int = 0,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -2130,6 +2147,7 @@ class Group:
                 keep_going=keep_going,
                 atomic=atomic,
                 timeout=timeout,
+                retries=retries,
                 cwd=cwd,
                 rel=rel,
                 serial=serial,
@@ -2384,6 +2402,17 @@ def task_timeout(fn: Task) -> float | None:
     long is left rather than how long was allowed."""
     value = getattr(fn, _TIMEOUT, None)
     return None if value is None else float(value)
+
+
+def task_retries(fn: Task) -> int:
+    """Extra attempts after the first — `@task(retries=2)` means up to three
+    runs. `0` (the default) means the first attempt is the only one.
+
+    A count of *retries*, never of attempts: "retry twice" is what an author
+    says out loud, and reading it as a total would silently halve every
+    declaration."""
+    value = getattr(fn, _RETRIES, 0)
+    return value if isinstance(value, int) else 0
 
 
 def task_confirm(fn: Task) -> str:

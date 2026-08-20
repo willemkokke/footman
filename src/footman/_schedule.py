@@ -38,6 +38,7 @@ from footman.registry import (
     sharing,
     task_confirm,
     task_name,
+    task_retries,
     wants_progress,
     work_key,
 )
@@ -53,6 +54,15 @@ class _Node:
     deps: set[int] = field(default_factory=set)
     state: str = "pending"  # pending / running / done / skipped
     result: _executor.TaskResult | None = None
+    attempts: list[_executor.TaskResult] = field(default_factory=list)
+    """The non-terminal attempts of a retried task, oldest first.
+
+    `result` is always the LAST attempt — the one the run's verdict, the
+    dependents and any sharer read. Every earlier attempt is a real row with
+    its own timing, output and audit, kept here and spliced into the report
+    ahead of the terminal row. Nothing is merged and nothing is hidden:
+    three attempts are three records, because each attempt *is* a record
+    (notes/20260807-timeout-and-retry.md)."""
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
     forwarded_given: set[str] = field(default_factory=set)  # …which were asked for
     forward_targets: list[_Node] = field(default_factory=list)  # …and out
@@ -905,7 +915,23 @@ def _run_plan(
         for n in ordered
         if n.result is None and n.seg.task not in already
     ]
-    return denied + [n.result for n in ordered if n.result is not None] + skipped
+    # A retried task contributes its earlier attempts ahead of its terminal
+    # row, so the report reads in the order the work happened: attempt, then
+    # attempt, then the outcome. They are ordinary rows — real timing, real
+    # output, their own audit — distinguished only by `state="retried"`.
+    ran_rows: list[_executor.TaskResult] = []
+    for n in ordered:
+        if n.result is None:
+            continue
+        for earlier in n.attempts:
+            # One request, so one stamp — the sort then falls to `started`,
+            # which is chronological because a node's attempts run in
+            # sequence on one thread.
+            if earlier.seq is None:
+                earlier.seq = n.result.seq
+            ran_rows.append(earlier)
+        ran_rows.append(n.result)
+    return denied + ran_rows + skipped
 
 
 def _run_sequential(
@@ -946,9 +972,7 @@ def _run_sequential(
             hint = f"{node.seg.task} runs until you stop it — Ctrl-C"
             err.write(_describe.dim(hint, True) + "\n")
             err.flush()
-        node.result = _executor.run_task(
-            node.fn, node.seg, ctx, node.forwarded, frozenset(node.forwarded_given)
-        )
+        node.result = _run_attempts(node, ctx)
         if node.result.seq is None or node.seq is None:
             node.result.seq = node.seq
         else:  # a shared row keeps its above-the-record floor
@@ -958,6 +982,58 @@ def _run_sequential(
             status.unit_finished(node.seg.task, node.result.ok)
         done[node.key] = node.result.ok
         failed = failed or not node.result.ok
+
+
+def _run_attempts(node: _Node, ctx: Any) -> _executor.TaskResult:
+    """Run one node's body, retrying a failed attempt while attempts remain.
+
+    Every attempt is a real record. The non-terminal ones are kept on the
+    node (`attempts`) and reported as their own `retried` rows; the last one
+    becomes `node.result` — the row the run's verdict, the dependents and any
+    sharer read. Nothing is merged, so `records are never fiction` holds
+    without special pleading: each attempt IS a record.
+
+    The retry lives here, above `run_task`, for the property ruling 1 needs:
+    a retriable failure never reaches the scheduler's failure handling, so it
+    latches no fail-fast and blocks no dependent. There is no failure to
+    react to until the attempts are spent — *"it hasn't failed yet"*.
+
+    What is NOT re-run: `pre=` (prerequisites are their own nodes and already
+    ran), and every gate that guards an attempt rather than performing it —
+    availability, `needs_project`, and above all the confirm prompt, which
+    resolved before this is called. A retry that re-prompts a human is a bug
+    read as broken rather than as an oversight.
+
+    Fail-fast still wins over a pending retry: an abort latched by a
+    *different* task's terminal failure means "no new work", and an unstarted
+    attempt is new work.
+    """
+    left = task_retries(node.fn)
+    attempt = 0
+    while True:
+        result = _executor.run_task(
+            node.fn,
+            node.seg,
+            ctx,
+            node.forwarded,
+            frozenset(node.forwarded_given),
+            attempt=attempt,
+        )
+        if result.ok or left <= 0:
+            return result
+        # An abort raised by someone else's terminal failure stops the next
+        # attempt from starting — this attempt becomes the terminal one.
+        if context.abort_reaches(node.keep_going):
+            return result
+        result.state = "retried"
+        node.attempts.append(result)
+        left -= 1
+        attempt += 1
+        # Each attempt keeps the node's request stamp — they are one request —
+        # so the report's `(seq, started)` sort would place them by start time
+        # alone. That is already chronological, but only because every attempt
+        # of one node runs on one thread; pinning the stamp here says so
+        # deliberately rather than relying on it.
 
 
 def _make_status(
@@ -1036,9 +1112,7 @@ def _run_parallel(
             # parallel pool: the arbiter's console lane guarantees one owner,
             # and captured siblings' flushes queue on the gate below.
             ctx.sink = ctx.err_sink = None
-        n.result = _executor.run_task(
-            n.fn, n.seg, ctx, n.forwarded, frozenset(n.forwarded_given)
-        )
+        n.result = _run_attempts(n, ctx)
         if n.result.seq is None or n.seq is None:
             n.result.seq = n.seq
         else:  # a shared row keeps its above-the-record floor

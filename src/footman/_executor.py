@@ -2186,6 +2186,7 @@ def run_task(
     ctx: Context,
     forwarded: dict[str, Any] | None = None,
     forwarded_given: frozenset[str] = frozenset(),
+    attempt: int = 0,
 ) -> TaskResult:
     """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
@@ -2229,7 +2230,7 @@ def run_task(
                 # (a bind-time span needs closing), with the refusal result.
                 _exit_task_hooks(life, handle, result)
             return result
-        return run_bound(fn, seg, ctx, args, kwargs, handle=handle)
+        return run_bound(fn, seg, ctx, args, kwargs, handle=handle, attempt=attempt)
     finally:
         _current.reset(token)
 
@@ -2243,6 +2244,7 @@ def run_bound(
     *,
     as_call: bool = False,
     handle: TaskHandle | None = None,
+    attempt: int = 0,
 ) -> TaskResult:
     """Run *fn* with arguments already resolved — everything after binding.
 
@@ -2269,6 +2271,12 @@ def run_bound(
         if ctx.shared and not as_call
         else None
     )
+    if attempt and work is not None:
+        # A retry: the previous attempt resolved this cell with its failure,
+        # and the memo would hand it straight back — the body would run once
+        # and be reported N times. Retire it so this attempt runs fresh and
+        # the terminal one is what later requests share.
+        _futures.retire(work)
     claimed, cell = _futures.claim(work, seg.task)
     if not claimed:
         # The pair is per request — only the body is shared. The pre fires
