@@ -6,8 +6,8 @@ unruled beyond "do it first, it's the cheap half". Nothing is implemented.
 The roadmap entry these close is *Per-task timeout, and retry* in the
 after-1.0 backlog.
 
-Related: [20260731-work-item-model.md](20260731-work-item-model.md) and
-[20260731-work-item-spec.md](20260731-work-item-spec.md) (the record model
+Related: [20260731-execution-model-record.md](20260731-execution-model-record.md) and
+[20260731-execution-model-spec.md](20260731-execution-model-spec.md) (the record model
 this leans on entirely), [20260725-process-globals.md](20260725-process-globals.md)
 (boundary-atomic claims — why cancellation happens where it does).
 

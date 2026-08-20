@@ -1,8 +1,8 @@
-# The work-item build (order of battle)
+# The execution model — the build (order of battle)
 
 **Status: BUILT — shipped in 0.28.0 (2026-08-01), the target release,
 as one coherent wave.** The spec it implements is
-[20260731-work-item-spec.md](20260731-work-item-spec.md); the public
+[20260731-execution-model-spec.md](20260731-execution-model-spec.md); the public
 contract is docs/design.md.
 
 Reconciled against the code 2026-08-19, stage by stage: `recorded=` is

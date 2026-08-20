@@ -4,7 +4,7 @@
 redaction chokepoint — because it is a security promise and could not wait.
 The rest of the lane is unbuilt and undesigned.
 
-Successor to `20260731-work-item-spec.md` decision 4, which split the
+Successor to `20260731-execution-model-spec.md` decision 4, which split the
 verbosity question, ruled the default, and parked the remainder:
 
 > **4: split as proposed, with the default ruled.** At normal verbosity the
@@ -39,7 +39,7 @@ around the design.
 
 ## What the shape already is, and must stay
 
-`20260731-work-item-spec.md` ruled the shape while killing a "global
+`20260731-execution-model-spec.md` ruled the shape while killing a "global
 redaction plugin" as an observer write:
 
 > it rewrote `returned` while the same secret sat in captured stdout, in
