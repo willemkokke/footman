@@ -493,7 +493,7 @@ def _write_latest_changes() -> None:
         # carries the changelog link itself, right after the include.
         body_block = f'??? info "{title}"\n\n{indented}\n'
 
-    out = Path("docs/_generated/latest-changes.md")
+    out = Path("_generated/latest-changes.md")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(body_block, encoding="utf-8")
     print(f"wrote {out}")
@@ -942,10 +942,15 @@ def _generate_pages() -> None:
     from footman.tasks.docs import site as taskdocs_site
 
     # Start from nothing, which is the only state that ever gets validated:
-    # both trees are gitignored, so CI builds them from an empty checkout
+    # the trees are gitignored, so CI builds them from an empty checkout
     # while a working copy accumulates whatever an older layout left behind.
     # Clearing costs nothing: every file below is rewritten unconditionally.
-    for stale in (Path("docs/_generated"), Path("docs/tasks")):
+    # Two generated homes on purpose: snippet sources live in `_generated/`
+    # *outside* docs/, so the site never publishes them as orphan pages —
+    # only what a page `--8<--`-includes reaches the reader. `docs/_generated`
+    # keeps what genuinely is site content: the errors reference (in the
+    # nav) and the shots/ images the pages embed.
+    for stale in (Path("docs/_generated"), Path("docs/tasks"), Path("_generated")):
         shutil.rmtree(stale, ignore_errors=True)
 
     # The API reference regenerates from the export table every build — the
@@ -956,14 +961,14 @@ def _generate_pages() -> None:
         target="docs",
         heading=3,
         flavor="material",
-        out=Path("docs/_generated/tasks-page.md"),
+        out=Path("_generated/tasks-page.md"),
     )
     # The CLI reference's global-options table, from the grammar itself —
     # reference.md snippet-includes it, so it can't drift from --help.
-    taskdocs_globals(out=Path("docs/_generated/globals.md"))
+    taskdocs_globals(out=Path("_generated/globals.md"))
     # The [tool.footman] key table, from the keys the runner recognises —
     # configuration.md snippet-includes it, so it can't fall behind.
-    taskdocs_config(out=Path("docs/_generated/config.md"))
+    taskdocs_config(out=Path("_generated/config.md"))
     # Every error and note the runtime can say, extracted from the source —
     # a reference page that regenerates each build and so can never drift.
     taskdocs_errors(out=Path("docs/_generated/errors.md"))

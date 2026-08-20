@@ -65,7 +65,7 @@ embedded, via a [`pymdownx.snippets`](https://facelessuser.github.io/pymdown-ext
 include of a file the docs build regenerates:
 
 ```markdown
---8<-- "docs/_generated/tasks-page.md"
+--8<-- "_generated/tasks-page.md"
 ```
 
 `--flavor=plain` (the default) is pure CommonMark and pipe tables, safe for
@@ -98,8 +98,8 @@ is exactly that, regenerated on every docs build, so it *cannot* drift,
 because it was never written by hand.
 
 ```console
-$ fm docs.globals --out=docs/_generated/globals.md
-wrote docs/_generated/globals.md
+$ fm docs.globals --out=_generated/globals.md
+wrote _generated/globals.md
 ```
 
 ## Terminal screenshots: `fm docs.shots`
@@ -174,8 +174,8 @@ def docs_build(check: bool = False):
     from toolroom import zensical
 
     site(Path("docs/tasks"))
-    page(target="docs", heading=3, out=Path("docs/_generated/tasks-page.md"))
-    globals_(out=Path("docs/_generated/globals.md"))
+    page(target="docs", heading=3, out=Path("_generated/tasks-page.md"))
+    globals_(out=Path("_generated/globals.md"))
     zensical.build(clean=True, strict=check)
 ```
 
@@ -194,4 +194,4 @@ doesn't document itself unless asked).
 Everything below this line is `fm docs.page --target=docs
 --heading=3 --flavor=material`, regenerated on every docs build:
 
---8<-- "docs/_generated/tasks-page.md"
+--8<-- "_generated/tasks-page.md"

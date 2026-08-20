@@ -87,7 +87,7 @@ corner on its own.
 Every key the runner recognises, rendered from its own list on each docs
 build, so this table can neither invent a key nor miss one:
 
---8<-- "docs/_generated/config.md"
+--8<-- "_generated/config.md"
 
 ## Environment variables
 

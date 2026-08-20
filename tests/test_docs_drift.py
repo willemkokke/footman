@@ -442,7 +442,7 @@ def test_every_config_key_is_live_and_documented():
     # The page must actually mount the generated table in; a hand-written
     # copy would drift the moment a key changed.
     page = (DOCS / "configuration.md").read_text(encoding="utf-8")
-    assert '--8<-- "docs/_generated/config.md"' in page, (
+    assert '--8<-- "_generated/config.md"' in page, (
         "configuration.md stopped including the generated key table"
     )
 
@@ -616,7 +616,7 @@ def test_documented_invocations_attach_their_values():
 
 def test_the_newest_changelog_entries_carry_no_relative_links():
     """`_write_latest_changes` lifts the newest release's entries into
-    `docs/_generated/latest-changes.md`, which the home page includes but
+    `_generated/latest-changes.md`, which the home page includes but
     which is *validated as its own page* — so a relative `typing.md#…`
     resolves from `_generated/` and does not exist.
 
