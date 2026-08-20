@@ -13,7 +13,7 @@ call. Reviews ran 2026-08-05; the 24 rulings below were made one by one on
 2026-08-05/06. Related notes: [20260725-foundations-plan.md](20260725-foundations-plan.md)
 (the Foundations section this plan leaves untouched),
 [20260805-structured-returns.md](20260805-structured-returns.md) and
-[20260731-work-item-spec.md](20260731-work-item-spec.md) (the era whose
+[20260731-execution-model-spec.md](20260731-execution-model-spec.md) (the era whose
 vocabulary this plan finishes rolling out).
 
 ## The brief
@@ -371,17 +371,17 @@ design.md growth list (ruling 17).
    design.md: no.
 2. **The completion hot path never imports framework or user code** — every
    feature checked against the ~20 ms budget (20260726-plugin-architecture,
-   20260731-work-item-spec). design.md: no.
+   20260731-execution-model-spec). design.md: no.
 3. **The manifest is written from declarations, never executions** —
    runtime creation can name work in the report, never on the CLI
-   (20260726-plugin-architecture, 20260731-work-item-spec I9). design.md: no.
+   (20260726-plugin-architecture, 20260731-execution-model-spec I9). design.md: no.
 4. **One spelling per concept, everywhere** — dotted addressing set the
    precedent; contracts differ by name, never by a boolean on a shared name
    (20260725-dotted-addressing, 20260726-plugin-architecture D19/D22,
    20260727-incremental-caching). design.md: no.
 5. **The typed signature is the whole contract** — both directions since
    0.31; no decorator, no schema language (20260805-structured-returns,
-   20260731-work-item-model). design.md: partly.
+   20260731-execution-model-record). design.md: partly.
 6. **Errors teach** — name the culprit, state the expectation, spell the
    fix; a refusal must never misdiagnose (20260725-dotted-addressing,
    20260726-plugin-architecture; CHANGELOG 0.5.0). design.md: partly.
@@ -390,28 +390,28 @@ design.md growth list (ruling 17).
    design.md: partly.
 8. **Resource claims are boundary-atomic, never mid-body** — deadlock-free
    by construction (20260725-process-globals v1 obituary,
-   20260731-work-item-spec I8). design.md: yes.
+   20260731-execution-model-spec I8). design.md: yes.
 9. **footman must not know who is calling it** — enforced by a grep test;
    survived into toolroom unnamed (20260726-process-boundary,
    20260801-tools-namespace-package). design.md: no.
 10. **No different rules for plugins and core** — core dogfoods its own
-    extension points (20260726-plugin-architecture, 20260731-work-item-spec).
+    extension points (20260726-plugin-architecture, 20260731-execution-model-spec).
     design.md: partly.
 11. **Records are never fiction** — the forged receipt is unspellable, not
-    discouraged (20260731-work-item-spec I3, 20260731-work-item-model).
+    discouraged (20260731-execution-model-spec I3, 20260731-execution-model-record).
     design.md: yes.
 12. **Verdicts are decided in the open; observers may veto, never forge**
-    (20260731-work-item-spec). design.md: yes.
+    (20260731-execution-model-spec). design.md: yes.
 13. **A Result is its exit code** — the record subclasses int; later
-    promotions stay non-breaking (20260731-work-item-spec I2). design.md: yes.
+    promotions stay non-breaking (20260731-execution-model-spec I2). design.md: yes.
 14. **Model the lane, not the fix** — point-fixes accrue a bill;
     `step=False` → forged receipts is the canonical tale
-    (20260731-work-item-model). design.md: partly.
+    (20260731-execution-model-record). design.md: partly.
 15. **Right, not configurable** — when a design change removes the need,
     the knob is never built (20260726-process-boundary, 20260801-ssh-man-stubs,
     20260729-env-handoff "`isolated=` is never built"). design.md: no.
 16. **Pre-1.0 breaks freely but loudly; docs timeless; CHANGELOG owns the
-    narrative** (20260726-process-boundary, 20260731-work-item-model).
+    narrative** (20260726-process-boundary, 20260731-execution-model-record).
     design.md: partly. Extended this session by the history-secondary
     ruling above.
 17. **The CLI grammar is deterministic and lexical — refusals over
@@ -425,24 +425,24 @@ design.md growth list (ruling 17).
     didn't see** (20260726-tool-option-history, 20260723-color-support-plan,
     20260726-process-boundary). design.md: partly.
 20. **Declaration is the commitment boundary** — declare, don't observe
-    (20260731-work-item-spec I13, 20260731-work-item-model). design.md: yes.
+    (20260731-execution-model-spec I13, 20260731-execution-model-record). design.md: yes.
 21. **Handles, not strings** — a resource is a binding; a typo is a
-    NameError (20260731-work-item-spec). design.md: yes.
+    NameError (20260731-execution-model-spec). design.md: yes.
 22. **Recorded by default; noise is a display problem, never a recording
     problem** — green is collapsible, failure is never hidden
-    (20260731-work-item-model). design.md: yes.
+    (20260731-execution-model-record). design.md: yes.
 23. **No bare callables at footman's boundaries — limitations are a
-    legitimate purchase** (20260731-work-item-model, 20260731-work-item-spec
+    legitimate purchase** (20260731-execution-model-record, 20260731-execution-model-spec
     I12). design.md: yes.
 24. **One identity rule everywhere; no declared-vs-dynamic difference**
-    (20260726-plugin-architecture, 20260731-work-item-spec I6). design.md: yes.
+    (20260726-plugin-architecture, 20260731-execution-model-spec I6). design.md: yes.
 25. **An error must never read as an answer; cache keys fail toward the
     safe side** (20260726-tool-option-history, 20260727-incremental-caching).
     design.md: no.
 26. **stdout is the answer, stderr is the commentary** (20260721-interactive-
     input, 20260726-process-boundary; CHANGELOG 0.11.0). design.md: no.
 27. **A vocabulary register with tiers; plain words in public** — a
-    notes-word in docs or an error is a bug (20260731-work-item-model,
+    notes-word in docs or an error is a bug (20260731-execution-model-record,
     20260727-incremental-caching "two axes, one word each"). design.md:
     partly. Ratified as law this session (ruling 15).
 28. **Explicit beats implicit at every boundary; the caller names the
@@ -458,7 +458,7 @@ design.md growth list (ruling 17).
     approximation** (20260725-process-globals). design.md: no.
 32. **Enforcement over convention** — invariants get structural tests or
     type-level seals; "declarations nothing checks become lies"
-    (20260726-process-boundary, 20260731-work-item-model,
+    (20260726-process-boundary, 20260731-execution-model-record,
     20260730-typing-citizenship). design.md: partly.
 33. **Never hang, never silently proceed** (20260721-interactive-input,
     20260725-process-globals). design.md: no.
@@ -515,14 +515,14 @@ strongest are the built-on openers and design.md exhibits (ruling 17).
     query, "no tools read, no network" (20260726-tool-option-history;
     CHANGELOG 0.30.0).
 14. `parallel()` returning Results was non-breaking because a Result is an
-    int — I2 did the compatibility work (20260731-work-item-spec).
+    int — I2 did the compatibility work (20260731-execution-model-spec).
 15. The flat report derives the tree — and a jsonl streaming form — for
-    free; addresses encode parentage (20260731-work-item-spec).
+    free; addresses encode parentage (20260731-execution-model-spec).
 16. The bare-callable ban enforces itself in the type system — both maker
-    protocols demand `.opts`, which a lambda lacks (20260731-work-item-spec).
+    protocols demand `.opts`, which a lambda lacks (20260731-execution-model-spec).
 17. hse's djlint gate collapsed to one line — the review window + Result-
     as-int made "fail by this tool's definition" free
-    (20260731-work-item-spec).
+    (20260731-execution-model-spec).
 18. Structured returns needed no data path — the value already rode
     `items[].returned`; drift-snapshots fell out of `--describe` existing
     (20260805-structured-returns).
@@ -543,7 +543,7 @@ strongest are the built-on openers and design.md exhibits (ruling 17).
     same scraped choices list (20260723-color-support-plan).
 25. Per-argument caching and mid-sweep resume pre-exist — the args-key
     means per-date entries with no extra work (20260727-incremental-caching,
-    20260731-work-item-spec walk 6).
+    20260731-execution-model-spec walk 6).
 26. Dotted cherry-picking rode the composition merge — every rule reused
     one the plan already had (20260725-dotted-addressing).
 
@@ -552,7 +552,7 @@ strongest are the built-on openers and design.md exhibits (ruling 17).
 1. **The chdir lock** — killed by deadlock audit; obituary kept "so nobody
    resurrects it"; became boundary-atomic claims, then lanes, then provably
    safe generator cancellation (20260725-process-globals,
-   20260731-work-item-model, 20260731-work-item-spec).
+   20260731-execution-model-record, 20260731-execution-model-spec).
 2. **A caller-side `--emit` flag** — "the task knows, and the caller should
    not have to"; the declaration moved into the return annotation and
    structured returns reused it wholesale (20260726-process-boundary,
@@ -570,23 +570,23 @@ strongest are the built-on openers and design.md exhibits (ruling 17).
 6. **Default-shared memoisation** — Willem argued off his own default
    ("you have convinced me for now"); the honest default later collapsed
    cleanly into the single identity key (20260726-plugin-architecture,
-   20260731-work-item-spec).
+   20260731-execution-model-spec).
 7. **`fail(code=0)` as a pass-branch** — "one verb fighting its own name";
    the ruling later closed the observer greenwash hole
-   (20260724-task-failure, 20260731-work-item-spec).
+   (20260724-task-failure, 20260731-execution-model-spec).
 8. **A receipt primitive** — "a forged receipt with the mask off"; hse's
-   real need got the honest `pre_record` instead (20260731-work-item-model,
-   20260731-work-item-spec).
+   real need got the honest `pre_record` instead (20260731-execution-model-record,
+   20260731-execution-model-spec).
 9. **Flipping recording off by default** — "guts dry-run, inverts the
    failure mode to silence"; noise was solved as display policy
-   (20260731-work-item-model).
+   (20260731-execution-model-record).
 10. **The bare-callable-in-Annotated convenience** — removed on one-
     spelling grounds though it worked; opened the plugin-marker lane
     safely (20260727-incremental-caching).
 11. **An advisory type-checker tier** — "all four gate, or they're out";
     the gate became a design instrument (the typed loom forced findings
     1–10 of the work-item spec) (20260730-typing-citizenship,
-    20260731-work-item-spec).
+    20260731-execution-model-spec).
 12. **`argv(fmt=…)` + `.do()` terminators** — format belongs at the
     boundary, on the value; a forgotten `.do()` is a silent no-op; the
     toolroom twin later worked *because* the value stayed a plain token
@@ -607,7 +607,7 @@ strongest are the built-on openers and design.md exhibits (ruling 17).
     (20260723-color-support-plan).
 17. **File-derived DAG edges / observed-read cache keys** — "keep `pre=`
     the only edge"; dry-run, --where and completion stay readable from
-    declarations (20260727-incremental-caching, 20260731-work-item-model).
+    declarations (20260727-incremental-caching, 20260731-execution-model-record).
 18. **A `ctx.returned()` accessor** — "calling the task *is* the
     accessor"; closed the body-call hole and fixed two latent parity bugs
     (20260726-plugin-architecture).

@@ -1,9 +1,9 @@
-# The work-item model
+# The execution model — the thinking record
 
 **Status: CLOSED — every open decision was called on 2026-07-31, and the
 model it describes shipped in 0.28.0 (2026-08-01).** The build that
-implemented it is [20260731-work-item-build.md](20260731-work-item-build.md),
-the called spec is [20260731-work-item-spec.md](20260731-work-item-spec.md).
+implemented it is [20260731-execution-model-build.md](20260731-execution-model-build.md),
+the called spec is [20260731-execution-model-spec.md](20260731-execution-model-spec.md).
 
 The body below is unchanged, and stays as it was written: a thread being
 thought through live, with the reasoning, the probes, the rejected turns

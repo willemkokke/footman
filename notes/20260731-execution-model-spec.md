@@ -1,12 +1,12 @@
-# The work-item spec (move 1: core and derivation ledger)
+# The execution model — the spec (move 1: core and derivation ledger)
 
 **Status: CALLED, and BUILT — the model shipped in 0.28.0 (2026-08-01).**
 The normative core distilled from
-[the thinking record](20260731-work-item-model.md), which holds the
+[the thinking record](20260731-execution-model-record.md), which holds the
 evidence, the register, and the history. This note is the other
 direction: definitions and invariants first, and every feature either
 derives or gets cut. The build that implemented it is
-[20260731-work-item-build.md](20260731-work-item-build.md).
+[20260731-execution-model-build.md](20260731-execution-model-build.md).
 
 The ⚠ marks below read as *"incoherence hiding here"* in the draft; every
 one was worked through in this same note before the build started — the
@@ -1029,7 +1029,7 @@ twin, both forged-receipt lambdas and the cwd workaround
 
 ## Links
 
-- Thinking record: [20260731-work-item-model.md](20260731-work-item-model.md)
+- Thinking record: [20260731-execution-model-record.md](20260731-execution-model-record.md)
 - Process-globals v2 (lanes' parent): 20260725-process-globals.md
 - The saga's origin: the hse receipt request, 2026-07-30 (recorded in
   the thinking record's causal chain).
