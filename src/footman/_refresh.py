@@ -65,7 +65,16 @@ def _rebuild() -> None:
     from footman import _config, _discover, _manifest, _paths, registry
 
     cwd = Path.cwd()
-    ceiling = _paths.find_repo_root(cwd)
+    # The walk's reach is the run's: the user-level `cascade` key (and its
+    # FOOTMAN_CASCADE override) bounds this child exactly as it bounds the
+    # runner — otherwise TAB offers tasks the runner then refuses.
+    mode = _config.cascade_mode()
+    if mode == "none":
+        ceiling = cwd
+    elif mode == "filesystem":
+        ceiling = Path(cwd.anchor)
+    else:
+        ceiling = _paths.find_repo_root(cwd)
     cfg = _config.load_config(cwd, ceiling)
     filename = cfg.get("tasks")
     if not isinstance(filename, str):

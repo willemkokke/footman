@@ -2,7 +2,7 @@
 
 Footman treats error messages as product surface: every one names the
 culprit, states the expectation, and proposes the fix. This page is the
-catalogue. Each example below is real output, not paraphrase. If you ever
+catalog. Each example below is real output, not paraphrase. If you ever
 hit a raw Python traceback instead of one of these, that's a footman bug;
 please report it.
 

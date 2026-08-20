@@ -25,8 +25,10 @@ world, every other thread sees immediately, whether it wanted to or not.
 
 There is exactly one working directory *per process*, not per thread. There
 is one environment. There is one stdin. These are called **process
-globals**, and no amount of careful code makes them per-thread, because the
-operating system simply does not offer that.
+globals**, and no amount of careful code makes them per-thread: nothing the
+operating systems agree on offers that. (Linux alone can give a thread its
+own filesystem context via `unshare` — nothing portable, and nothing
+CPython exposes.)
 
 ## Why it matters to a task runner
 

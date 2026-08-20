@@ -34,7 +34,18 @@ class TasksImportError(Exception):
     def __init__(self, path: Path, original: BaseException) -> None:
         self.path = path
         self.original = original
-        super().__init__(f"{path}: {type(original).__name__}: {original}")
+        if isinstance(original, SystemExit):
+            # `sys.exit()` at import time would otherwise propagate its raw
+            # code with no words at all — a silent death wearing footman's
+            # exit status.
+            message = (
+                f"{path}: calls sys.exit({original.code!r}) at import time — "
+                f"a task file is imported to list its tasks, so the exit "
+                f"belongs inside a task body"
+            )
+        else:
+            message = f"{path}: {type(original).__name__}: {original}"
+        super().__init__(message)
 
 
 class HookError(Exception):
@@ -81,6 +92,8 @@ def _import_file(path: Path, index: int) -> Group:
     sys.path.insert(0, parent)
     try:
         spec.loader.exec_module(module)
+    except SystemExit as exc:
+        raise TasksImportError(path, exc) from exc
     except Exception as exc:
         raise TasksImportError(path, exc) from exc
     finally:

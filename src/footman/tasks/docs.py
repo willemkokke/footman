@@ -886,22 +886,6 @@ def _contrast(one: str, two: str) -> float:
     return (a + 0.05) / (b + 0.05)
 
 
-def _caption_at(key_log: list[tuple[float, str]], when: float) -> str:
-    """The key caption in force at *when* — the most recent one pressed.
-
-    It persists rather than blinking off, because the interesting moment is
-    the one *after* the key: Tab is pressed, and the menu it opened sits
-    there for a second while the caption explains where it came from.
-    """
-    caption = ""
-    for at, text in key_log:
-        if at <= when + 1e-6:
-            caption = text
-        else:
-            break
-    return caption
-
-
 # rich centres the window title at y=27; the caption sits on that line at
 # the other end of the chrome, right-aligned a little in from the edge.
 _SVG_OPEN = re.compile(r"<svg[^>]*viewBox=\"0 0 ([\d.]+) [\d.]+\"[^>]*>")
@@ -1273,9 +1257,9 @@ def errors(
 ) -> list[str] | None:
     """Render every runtime error and note as a markdown reference page.
 
-    The entries are extracted from footman's own source (AST, not prose):
-    every message-bearing `raise` and every teach-once `_note(...)` in the
-    runtime modules, with f-string placeholders shown as `\u27e8expr\u27e9`. A page
+    The entries are read from the source itself rather than written by
+    hand: every taught error and every teach-once note the runner can
+    print, with the runtime-filled parts shown as \u27e8like this\u27e9. A page
     that regenerates this on each docs build can never drift from what the
     runner actually says. Without --out the page is the task's stdout.
     """
@@ -1298,8 +1282,11 @@ def errors(
 
     src = Path(footman.__file__).parent
     entries: list[tuple[str, str, str]] = []  # (module, kind, message)
+    titles: dict[str, str] = {}  # module stem -> its docstring's first line
     for py in sorted(src.glob("*.py")):
         tree = ast.parse(py.read_text(encoding="utf-8"))
+        summary = (ast.get_docstring(tree) or "").partition("\n")[0].strip()
+        titles[py.stem] = summary.rstrip(".")
         for node in ast.walk(tree):
             if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
                 call = node.exc
@@ -1330,7 +1317,9 @@ def errors(
         "",
     ]
     for module in sorted({m for m, _, _ in entries}):
-        lines += [f"## `{module}`", ""]
+        # The heading a reader can use: the module's own one-line summary,
+        # not its private filename. The stem is the fallback, never the face.
+        lines += [f"## {titles.get(module) or f'`{module}`'}", ""]
         module_entries = sorted((k, msg) for m, k, msg in entries if m == module)
         for kind, message in module_entries:
             lines += [f"**{kind}**", "", "``` text", message.rstrip(), "```", ""]
@@ -1352,10 +1341,9 @@ def config(
 ) -> list[str] | None:
     """Render the `[tool.footman]` keys as a markdown table.
 
-    The rows come from `_config.KEYS`, the list the runner itself
-    recognises, so a reference page that regenerates this on each docs
-    build can neither describe a key footman lacks nor miss one it has —
-    which is how `cwd` went four releases undocumented. Without --out the
+    The rows come from the runner's own list of recognised keys, so a
+    reference page that regenerates this on each docs build can neither
+    describe a key footman lacks nor miss one it has. Without --out the
     table is the task's stdout; with --out it is written to the file.
     """
     text = markdown.config_table()

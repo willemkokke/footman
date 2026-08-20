@@ -297,9 +297,15 @@ def _mechanics(p: dict[str, Any]) -> str:
     if choices:
         # A dynamic parameter's values are what its completer answered just
         # now, not a fixed set — say so, the way a computed default does, so
-        # nobody reads this list as the law of the task.
+        # nobody reads this list as the law of the task. A *static* option's
+        # set is already in its own spelling (`--mode={dev|prod}`), so
+        # repeating it here would print the list twice in one row; only a
+        # positional, whose spelling is just its name, still needs the list.
         listed = "one of " + "|".join(choices)
-        bits.append(f"{listed} (dynamic)" if p.get("dynamic") else listed)
+        if p.get("dynamic"):
+            bits.append(f"{listed} (dynamic)")
+        elif p["kind"] == "positional":
+            bits.append(listed)
     elif p.get("types"):
         bits.append(" or ".join(TYPE_WORD.get(str(t), str(t)) for t in p["types"]))
     if p.get("mapping"):

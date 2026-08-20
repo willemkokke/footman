@@ -79,7 +79,7 @@ def typecheck():
     by flag), since mypy has no all-platforms mode; ty and pyrefly check
     every platform at once (`python-platform = "all"`) at the scopes
     pyproject pins. All four gate: a checker footman uses is a checker the
-    tree is clean against (notes/20260730-typing-citizenship.md).
+    tree is clean against.
     """
 
     def based():

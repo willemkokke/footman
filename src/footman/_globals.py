@@ -54,11 +54,6 @@ def active() -> bool:
     return _installs > 0
 
 
-def snapshot_env() -> dict[str, str]:
-    """A copy of the pinned run-start environment (empty outside a run)."""
-    return dict(_snapshot)
-
-
 # Never inherited: the caller's interpreter is never a spawned tool's
 # interpreter. On Windows `uv run` exports PYTHONHOME pointing at the
 # environment it launched — footman's own — and every child inherits it, so a

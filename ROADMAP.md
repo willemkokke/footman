@@ -7,7 +7,7 @@ shipped in the releases since. The file does two jobs: the road ahead, and
 release that closed it. The full stories live in the
 [changelog](https://willemkokke.github.io/footman/changelog/).
 
-**Where footman stands (2026-08-16, v0.41.0, Beta on PyPI).** The typed core
+**Where footman stands (2026-08-20, v0.43.0, Beta on PyPI).** The typed core
 — coercion, chain grammar, manifest, scheduler, cascade — held up; everything
 since has been built on it without structural change. The runner now has a
 real help story, a testing story, a composition story, completion installed
