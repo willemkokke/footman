@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-08-20
+
 ### Added
 
 - **`@task(timeout=…)` — a deadline for one task.** The fail-fast event,
@@ -5643,7 +5645,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/willemkokke/footman/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/willemkokke/footman/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/willemkokke/footman/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/willemkokke/footman/compare/v0.39.1...v0.40.0
