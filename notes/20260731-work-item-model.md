@@ -1,7 +1,16 @@
 # The work-item model
 
-**Status: DRAFT — being thought through live (2026-07-31); nothing below is
-decided unless marked so. Open decisions at the bottom.**
+**Status: CLOSED — every open decision was called on 2026-07-31, and the
+model it describes shipped in 0.28.0 (2026-08-01).** The build that
+implemented it is [20260731-work-item-build.md](20260731-work-item-build.md),
+the called spec is [20260731-work-item-spec.md](20260731-work-item-spec.md).
+
+The body below is unchanged, and stays as it was written: a thread being
+thought through live, with the reasoning, the probes, the rejected turns
+and the horizons. Its "Open decisions" section is a record of ten
+decisions *and their dispositions* — each carries the RULED / CLOSED /
+DISSOLVED verdict it received, ending "MOVE 5 COMPLETE; every open
+decision closed". Read the marks, not the section title.
 
 Tasks and steps are two ontologies where one may do. This note holds the
 evidence that the split has decayed, the model that would replace it, what
