@@ -63,6 +63,25 @@ The user-level `~/.config/footman/config.toml` uses the standalone form.
 Unknown keys are kept but ignored, so a newer setting never breaks an
 older footman.
 
+## Where footman writes
+
+Nothing footman writes lands inside your project. Three user-level
+directories, each honouring its `XDG_*` variable:
+
+| Directory | Default | What lives there |
+| --------- | ------- | ---------------- |
+| Cache | `~/.cache/footman/` (`XDG_CACHE_HOME`) | Derived data, safe to delete: completion manifests, timing history, `fetch()` downloads. The cache collector sweeps this directory and nothing else. |
+| Data | `~/.local/share/` (`XDG_DATA_HOME`) | Durable files that survive every cache sweep — the installed completion hooks live at `fm/completion.*` in here. |
+| Config | `~/.config/footman/` (`XDG_CONFIG_HOME`) | Your own writing: the user-level `config.toml` and the user-level tasks file, which travel together. |
+
+The spellings are the same on every operating system — the convention uv,
+ruff, and git's own XDG support follow — so on Windows everything lives
+under `%USERPROFILE%`: `C:\Users\you\.cache\footman\`,
+`C:\Users\you\.config\footman\`, and so on. The `XDG_*` variables move the
+base directories on any platform, and the
+[footman-specific variables](#environment-variables) below move each
+corner on its own.
+
 ## Keys
 
 Every key the runner recognises, rendered from its own list on each docs
@@ -77,19 +96,19 @@ build, so this table can neither invent a key nor miss one:
 | `FOOTMAN_CONFIG`    | Path of the user-level config file.                 |
 | `FOOTMAN_CONFIG_DIR` | Moves footman's config corner whole (the config file and the user-level tasks file travel together). |
 | `FOOTMAN_CACHE_DIR` | Moves every footman cache (completion manifests, timing history). |
-| `FOOTMAN_DATA_DIR`  | Moves footman's data directory (provisioned tools and their stubs). |
-
-Values for a *task's* environment are a different lane: `.env` files load
-through the first-party `footman.env_files` plugin (`--env-file=.env`) —
-see [the built-in on the hooks page](hooks.md#the-built-in-footmanenv_files)
-— and a per-parameter `env("VAR")` marker reads a single variable as a
-default.
+| `FOOTMAN_DATA_DIR`  | Moves footman's data directory (durable files that survive a cache sweep). |
 | `FOOTMAN_NO_UV`     | Disables both uv handoffs (project and script environment), regardless of any config. |
 | `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
 | `FOOTMAN_CASCADE`   | Overrides the `cascade` key for one invocation (`none` / `repo` / `filesystem`). |
 | `FOOTMAN_STACKS_AFTER` | Seconds between stack dumps to stderr, for a run that stops moving ([Troubleshooting](troubleshooting.md#when-a-run-stops-moving)). |
 | `NO_COLOR` / `TERM=dumb` | Disable ANSI styling, for footman and for every tool it spawns, which footman tells to stay monochrome too. |
 | `FORCE_COLOR`       | Force ANSI styling on, even piped (below `--color` and `[tool.footman] color` in the ladder). |
+
+Values for a *task's* environment are a different lane: `.env` files load
+through the first-party `footman.env_files` plugin (`--env-file=.env`) —
+see [the built-in on the hooks page](hooks.md#the-built-in-footmanenv_files)
+— and a per-parameter `env("VAR")` marker reads a single variable as a
+default.
 
 See also [Monorepos & config](monorepos.md) for how the tasks cascade
 itself composes, and the [CLI reference](reference.md) for the flags that
