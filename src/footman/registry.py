@@ -465,6 +465,7 @@ _PRE = "_footman_pre"
 _POST = "_footman_post"
 _KEEP_GOING = "_footman_keep_going"
 _ATOMIC = "_footman_atomic"
+_TIMEOUT = "_footman_timeout"
 _INFINITE = "_footman_infinite"
 _SHARED = "_footman_shared"
 _NEEDS_PROJECT = "_footman_needs_project"
@@ -681,6 +682,7 @@ def _empty_body(fn: object) -> bool:
 _OPTS_ATTRS = {
     "keep_going": _KEEP_GOING,
     "atomic": _ATOMIC,
+    "timeout": _TIMEOUT,
     "interactive": _INTERACTIVE,
     "progress": _PROGRESS,
     "confirm": _CONFIRM,
@@ -704,6 +706,7 @@ class TaskOpts(TypedDict, total=False):
 
     keep_going: bool | None
     atomic: bool
+    timeout: float | None
     interactive: bool
     progress: bool
     confirm: str
@@ -972,6 +975,7 @@ def _apply_policy(
     interactive: bool,
     keep_going: bool | None,
     atomic: bool,
+    timeout: float | None = None,
     cwd: str | Path = "",
     rel: str | Path = "",
     serial: bool = False,
@@ -1014,6 +1018,13 @@ def _apply_policy(
         setattr(fn, _KEEP_GOING, keep_going)
     if atomic:
         setattr(fn, _ATOMIC, True)
+    if timeout is not None:
+        if timeout <= 0:
+            raise TypeError(
+                f"timeout={timeout!r} — a deadline must be a positive number of "
+                f"seconds; omit it for no deadline"
+            )
+        setattr(fn, _TIMEOUT, timeout)
     if cwd == "unmanaged" and rel:
         raise TypeError(
             "rel=… needs a managed base and cwd='unmanaged' has none — "
@@ -1284,6 +1295,7 @@ class TaskDecorator(Protocol):
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        timeout: float | None = None,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -1498,6 +1510,7 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        timeout: float | None = None,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -1522,6 +1535,7 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        timeout: float | None = None,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -1639,6 +1653,7 @@ class Group:
                 interactive=interactive,
                 keep_going=keep_going,
                 atomic=atomic,
+                timeout=timeout,
                 cwd=cwd,
                 rel=rel,
                 serial=serial,
@@ -2040,6 +2055,7 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        timeout: float | None = None,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -2061,6 +2077,7 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        timeout: float | None = None,
         cwd: str | Path = "",
         rel: str | Path = "",
         serial: bool = False,
@@ -2112,6 +2129,7 @@ class Group:
                 interactive=interactive,
                 keep_going=keep_going,
                 atomic=atomic,
+                timeout=timeout,
                 cwd=cwd,
                 rel=rel,
                 serial=serial,
@@ -2356,6 +2374,16 @@ def is_atomic(fn: Task) -> bool:
     """Whether *fn*'s subprocesses opt out of fail-fast's kill:
     `@task(atomic=True)` — they run to completion rather than be cut off."""
     return getattr(fn, _ATOMIC, False) is True
+
+
+def task_timeout(fn: Task) -> float | None:
+    """The `@task(timeout=…)` deadline in seconds, or `None` for no deadline.
+
+    A duration here, an instant on the context: the scheduler turns one into
+    the other when the body starts, because everything downstream asks how
+    long is left rather than how long was allowed."""
+    value = getattr(fn, _TIMEOUT, None)
+    return None if value is None else float(value)
 
 
 def task_confirm(fn: Task) -> str:

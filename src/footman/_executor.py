@@ -70,6 +70,26 @@ class TaskResult:
     output: str = ""
     steps: list[Result] = field(default_factory=list)
     cancelled: bool = False  # failed only because fail-fast killed it mid-run
+    timed_out: bool = False
+    """`@task(timeout=…)` expired before this task concluded. A verdict about
+    the *deadline*, never about how much work happened — read `stopped` for
+    that."""
+    stopped: bool = False
+    """Did footman actually stop the work when the deadline passed?
+
+    True when a checkpoint or a subprocess boundary cut the task off, which
+    is every timeout footman can currently produce: the deadline kills the
+    process tree, so the work certainly did not finish. False when the
+    deadline passed but nothing was interruptible — a body of straight-line
+    Python has no checkpoint, so it runs to its own end and footman reports
+    the breach without having caused it.
+
+    The field exists because "timed out" must never be read as "did not
+    run". That is true today only because the work is local; a call across a
+    process or machine boundary can breach a deadline while the far side
+    runs on, and a retry that assumed otherwise would double it. One field
+    now is cheaper than a change to every consumer later
+    (notes/20260807-timeout-and-retry.md)."""
     started: float | None = None
     """When this task began, on the run's monotonic clock — the ordering key of
     the report. `None` for something that never began (an unavailable task, a
@@ -2287,6 +2307,15 @@ def run_bound(
     ctx.fn = fn  # what inherited() reads to find the shadowed task
     ctx.interactive = registry.is_interactive(fn)  # arms the prompt guard
     ctx.atomic = registry.is_atomic(fn)  # its subprocesses opt out of the kill
+    # The deadline starts here — at the body, not at the request. Everything
+    # before this point (binding, availability, the confirm gate, the
+    # prerequisites) is work the caller asked for around this task rather
+    # than the task itself, and a human staring at a confirm prompt must not
+    # spend the deadline. `.opts(timeout=…)` has already been folded into the
+    # task's markers by the time this reads them.
+    if (limit := registry.task_timeout(fn)) is not None:
+        ctx.deadline = time.perf_counter() + limit
+        ctx.timeout_declared = limit
     if ctx.cwd is None:  # a preset ctx.cwd (tests / use_context) wins
         try:
             ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
@@ -2476,6 +2505,26 @@ def run_bound(
     # failure and hid every one after it, which is the opposite of the flag.
     if not result.ok and context.abort_reaches(ctx.keep_going):
         result.cancelled = True
+    # The deadline is judged after the body, because that is the first moment
+    # its breach is knowable for every body shape: a step or a subprocess was
+    # cut off at a checkpoint (and said so), or a straight-line body simply
+    # ran past it and returned. Both are timeouts; only the first is a stop,
+    # which is exactly the distinction `stopped` carries.
+    if ctx.overdue():
+        result.timed_out = True
+        result.stopped = any(step.timed_out for step in result.steps)
+        if result.ok:
+            # A body that outran its deadline did not succeed *within* it.
+            # 124 is the shell's convention for "killed by a timeout", the
+            # same code `run(timeout=…)` already answers with.
+            result.ok = False
+            result.code = 124
+            if result.error is None:
+                result.error = context.TimedOut(
+                    seg.task,
+                    registry.task_timeout(fn) or 0.0,
+                    stopped=result.stopped,
+                )
     return result
 
 

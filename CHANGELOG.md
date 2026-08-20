@@ -7,6 +7,24 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`@task(timeout=…)` — a deadline for one task.** The fail-fast event,
+  scoped: past the deadline no new work starts, the task's in-flight
+  subprocess trees are terminated, and generator steps unwind at their
+  next checkpoint. A `run()` inside the task inherits whatever is left,
+  so a call with no bound of its own is still bounded, and one with a
+  longer bound cannot outlive the task. Answers 124, the shell's
+  convention, and raises `TimedOut` — a `Failed`, so `except
+  footman.Failed:` keeps catching it.
+
+  It means **cancelled at the first checkpoint or subprocess boundary
+  past the deadline**, not a hard stop: a body of straight-line Python
+  has neither and runs to its own end. That case is reported rather than
+  hidden, and the record says which happened — `stopped` is true when
+  footman cut the work off, false when the deadline passed and the body
+  finished on its own. "Timed out" never means "did not run".
+
 ## [0.42.0] - 2026-08-19
 
 ### Added
