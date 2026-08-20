@@ -1,8 +1,9 @@
 # Task timeout, and retry — the scheduler learns two new reasons to stop
 
-**Status: DESIGNED, not built.** Willem ruled the retry semantics on
-2026-08-07 (this note records those rulings); task timeout is assessed but
-unruled beyond "do it first, it's the cheap half". Nothing is implemented.
+**Status: BUILT 2026-08-20.** Both parts, in the order this note
+prescribes: timeout first, then retry. What the build learned that the
+design could not have known is recorded at the bottom under "What the
+build found"; the open questions below were answered there too.
 The roadmap entry these close is *Per-task timeout, and retry* in the
 after-1.0 backlog.
 
@@ -251,3 +252,40 @@ decide that a deliberate `fail()` is more final than a crash. It says nothing
 about **declared task properties**, so a future rule that keys retry
 behaviour on something the author wrote down is consistent with it rather
 than a reversal of it.
+
+## What the build found (2026-08-20)
+
+Three things surfaced only under a running scheduler, each worth keeping:
+
+- **The futures memo answered every attempt with the first attempt's
+  failure.** A retried task ran its body once and was reported N times —
+  the exact opposite of "each attempt IS a record". Cells are retired
+  between attempts now (`_futures.retire`), so an attempt runs fresh and
+  the terminal one is what later requests share. The narrow race the note
+  should have anticipated: a requester that *joined* during a failed
+  attempt was handed that attempt. Sharing binds to the terminal attempt
+  for everyone who asks from then on, not retroactively.
+- **The exit code counted retried rows**, so a run that recovered still
+  exited non-zero. `retried` had to join `skipped` and `cancelled` as a
+  state that is recorded but never the verdict — and the filter belongs at
+  the source, or the fallback path picks one up anyway.
+- **The failure line reported the wrong number.** A task-imposed bound
+  printed `0s` (the call's own, which was None) and then the microsecond
+  remainder (`0.399666s`). Both read as a broken timeout. One helper now
+  serves both raise sites with the declared seconds.
+
+The three open questions, answered by building:
+
+- **Attempt rows vs the audit.** Sibling rows, as designed. They sort
+  chronologically because attempts of one node share a request stamp and
+  the report's `(seq, started)` order then falls to start time.
+- **`retries=` on step makers.** Task-only for now. The record question
+  the note raised is real: a step's rows would need the same
+  retried/terminal split, and nothing yet asks for it.
+- **Backoff.** Not built — the honest minimum, as the note proposed. It
+  wants its own ruling because a delay changes what a deadline means.
+
+Still open, and now more concrete: `timeout` and `retries` compose in a
+way neither half specifies. A timed-out attempt is retriable like any
+other failure, so `@task(timeout=5, retries=2)` can take fifteen seconds.
+That is defensible, and it is not written down anywhere a user would look.
