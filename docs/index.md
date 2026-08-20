@@ -126,7 +126,7 @@ this site.)
     internal, and what has to be true before 1.0 are written down in the
     [stability promise](stability.md).
 
---8<-- "docs/_generated/latest-changes.md"
+--8<-- "_generated/latest-changes.md"
 
 The full history lives in the [changelog](changelog.md).
 

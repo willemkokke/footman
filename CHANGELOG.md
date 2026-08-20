@@ -9,6 +9,12 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **Snippet sources no longer publish as orphan pages.** The generated
+  key table, globals table, task-page example and latest-changes blurb
+  are included into real pages, yet also shipped as standalone pages in
+  the site and its search index. They now regenerate outside `docs/`, so
+  only what a page actually includes reaches the reader; the errors
+  reference (a nav page) and the terminal shots stay where they were.
 - **Where footman writes.** The configuration page names the three
   user-level directories (cache, data, config), what lives in each, the
   Windows spellings, and the variables that move them. The layout itself —

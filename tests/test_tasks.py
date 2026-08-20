@@ -370,7 +370,7 @@ def test_the_home_page_quotes_the_newest_release(tmp_path, monkeypatch):
     )
     tasks._write_latest_changes()
 
-    out = Path("docs/_generated/latest-changes.md").read_text(encoding="utf-8")
+    out = Path("_generated/latest-changes.md").read_text(encoding="utf-8")
     assert "Latest release: 0.23.0 — 2026-07-27" in out
     assert "The newest thing." in out
     assert "Older." not in out  # only the newest section
@@ -385,7 +385,7 @@ def test_a_changelog_with_no_release_yet_writes_nothing(tmp_path, monkeypatch):
         "# Changelog\n\n## [Unreleased]\n", encoding="utf-8"
     )
     tasks._write_latest_changes()
-    assert Path("docs/_generated/latest-changes.md").read_text(encoding="utf-8") == ""
+    assert Path("_generated/latest-changes.md").read_text(encoding="utf-8") == ""
 
 
 def test_a_cast_that_lost_its_interaction_fails_the_build(tmp_path):
