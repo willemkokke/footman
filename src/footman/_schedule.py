@@ -39,6 +39,7 @@ from footman.registry import (
     task_confirm,
     task_name,
     task_retries,
+    task_timeout,
     wants_progress,
     work_key,
 )
@@ -1007,6 +1008,28 @@ def _run_attempts(node: _Node, ctx: Any) -> _executor.TaskResult:
     Fail-fast still wins over a pending retry: an abort latched by a
     *different* task's terminal failure means "no new work", and an unstarted
     attempt is new work.
+
+    **A timeout footman could not stop is terminal**, whatever attempts
+    remain. With `stopped=True` the worst a retry costs is a repeated side
+    effect: attempt 1 finished doing whatever it did, then attempt 2 does it
+    again. With `stopped=False` the body is *still running*, so attempt 2
+    would race a live copy of itself — two writers on one file, two calls
+    against one API, at the same time. That is a fork, not a retry.
+
+    The practical cost is worse than the semantic one: `retries=3` on a body
+    with no checkpoints leaks three hung workers, which under a bounded
+    `--jobs` exhausts the pool and can wedge the run at exit on non-daemon
+    threads. And it cannot succeed anyway — a body that blew its deadline
+    without reaching a checkpoint has no checkpoint to reach, so the next
+    attempt hangs identically.
+
+    This does not contradict ruling 3 ("no theory about what deserves
+    retry"). That forbids footman judging whether a *failure* deserves
+    another chance; this is footman observing it cannot coherently *start*
+    another attempt, because the previous one never ended — the same
+    category as fail-fast beating a pending retry. Deliberately not
+    configurable: a flag would be API surface for a case unsafe by
+    construction (notes/20260807-timeout-and-retry.md).
     """
     left = task_retries(node.fn)
     attempt = 0
@@ -1021,9 +1044,29 @@ def _run_attempts(node: _Node, ctx: Any) -> _executor.TaskResult:
         )
         if result.ok or left <= 0:
             return result
-        # An abort raised by someone else's terminal failure stops the next
-        # attempt from starting — this attempt becomes the terminal one.
-        if context.abort_reaches(node.keep_going):
+        if result.timed_out and result.after_deadline != "stopped":
+            # Only a *stopped* timeout is retriable — killed mid-flight, so
+            # possibly slow for a transient reason, and definitively not
+            # running now. The other two are terminal for different reasons:
+            #
+            #   completed — the body finished, just late. Nothing transient
+            #     to retry: it outran the deadline once and will again.
+            #     Deterministic waste, and it repeats work that happened.
+            #   escaped — footman could not stop it, so it may still be
+            #     running. A second attempt would race a live copy of the
+            #     first — a fork, not a retry — and leaks a hung worker per
+            #     attempt, which under a bounded --jobs deadlocks the run.
+            #
+            # Neither is footman forming a theory about which failures
+            # deserve another chance (ruling 3). Both are structural facts
+            # about whether another attempt can coherently start.
+            if left > 0 and result.after_deadline == "escaped":
+                result.error = context.TimedOut(
+                    node.seg.task,
+                    task_timeout(node.fn) or 0.0,
+                    after="escaped",
+                    not_retried=True,
+                )
             return result
         result.state = "retried"
         node.attempts.append(result)

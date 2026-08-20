@@ -74,22 +74,27 @@ class TaskResult:
     """`@task(timeout=…)` expired before this task concluded. A verdict about
     the *deadline*, never about how much work happened — read `stopped` for
     that."""
-    stopped: bool = False
-    """Did footman actually stop the work when the deadline passed?
+    after_deadline: str = ""
+    """What became of the work once the deadline fired — a token, not a
+    boolean, because the domain has three live values and a fourth coming.
+    Empty when no deadline fired.
 
-    True when a checkpoint or a subprocess boundary cut the task off, which
-    is every timeout footman can currently produce: the deadline kills the
-    process tree, so the work certainly did not finish. False when the
-    deadline passed but nothing was interruptible — a body of straight-line
-    Python has no checkpoint, so it runs to its own end and footman reports
-    the breach without having caused it.
+    - `completed` — the body finished on its own, just late. There IS an
+      outcome; the deadline governs anyway (below).
+    - `stopped` — footman terminated it. Definitively not running, no
+      outcome.
+    - `escaped` — footman could not terminate it. No outcome, and it **may
+      still be executing**.
+    - `unknown` — reserved. Becomes the common value once a call crosses a
+      process or machine boundary, where a deadline expiring says nothing
+      about whether the far side ran.
 
-    The field exists because "timed out" must never be read as "did not
-    run". That is true today only because the work is local; a call across a
-    process or machine boundary can breach a deadline while the far side
-    runs on, and a retry that assumed otherwise would double it. One field
-    now is cheaper than a change to every consumer later
-    (notes/20260807-timeout-and-retry.md)."""
+    A boolean cannot carry this. `stopped=True/False` conflated *completed*
+    with *escaped* — the harmless case with the dangerous one, the worst
+    possible pairing — and `finished` would conflate *stopped* with
+    *escaped*, hiding the one distinction that governs whether a retry is
+    safe. Tokens are lowercase ASCII, and the set is open in the way
+    `state` is (notes/20260807-timeout-and-retry.md)."""
     started: float | None = None
     """When this task began, on the run's monotonic clock — the ordering key of
     the report. `None` for something that never began (an unavailable task, a
@@ -2520,19 +2525,43 @@ def run_bound(
     # which is exactly the distinction `stopped` carries.
     if ctx.overdue():
         result.timed_out = True
-        result.stopped = any(step.timed_out for step in result.steps)
+        # Which of the three states this is. The body has returned by the
+        # time we are here, so `escaped` cannot be observed from this side —
+        # a body footman failed to terminate keeps running and never reaches
+        # this line. It is emitted where the failure to stop is *seen* (an
+        # unkillable child left behind); the token exists so that surface has
+        # somewhere honest to report to.
+        result.after_deadline = (
+            "stopped" if any(step.timed_out for step in result.steps) else "completed"
+        )
+        # The deadline governs, even when the body finished with a verdict.
+        # Honouring a late success would make the outcome depend on a race
+        # between the body and the kill — the same task passing or failing by
+        # scheduler timing. Flaky is worse than strict for something used as
+        # a gate. The receipt still tells the whole truth: what the body
+        # actually did goes into the message rather than being discarded.
         if result.ok:
-            # A body that outran its deadline did not succeed *within* it.
-            # 124 is the shell's convention for "killed by a timeout", the
-            # same code `run(timeout=…)` already answers with.
             result.ok = False
             result.code = 124
             if result.error is None:
                 result.error = context.TimedOut(
                     seg.task,
                     registry.task_timeout(fn) or 0.0,
-                    stopped=result.stopped,
+                    after=result.after_deadline,
+                    body="success",
+                    at=result.duration,
                 )
+        elif result.after_deadline == "completed":
+            # A body that failed *and* overran: the deadline is the verdict,
+            # but the body's own reason is what the author needs to read.
+            result.error = context.TimedOut(
+                seg.task,
+                registry.task_timeout(fn) or 0.0,
+                after="completed",
+                body=str(result.error) if result.error else "failure",
+                at=result.duration,
+            )
+            result.code = 124
     return result
 
 

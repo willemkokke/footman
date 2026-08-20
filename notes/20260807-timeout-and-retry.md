@@ -285,7 +285,67 @@ The three open questions, answered by building:
 - **Backoff.** Not built — the honest minimum, as the note proposed. It
   wants its own ruling because a delay changes what a deadline means.
 
-Still open, and now more concrete: `timeout` and `retries` compose in a
-way neither half specifies. A timed-out attempt is retriable like any
-other failure, so `@task(timeout=5, retries=2)` can take fifteen seconds.
-That is defensible, and it is not written down anywhere a user would look.
+## How timeout and retries compose (ruled 2026-08-20)
+
+**Both are per call.** Each attempt gets a fresh deadline, so
+`@task(timeout=5, retries=2)` can take fifteen seconds. One budget shared
+across attempts would be worse — the last attempt gets the least time, so
+the deadline would mean something different each round. A cap on the whole
+task including retries is a different feature wanting a different name.
+
+**The post-deadline state is three-valued, not boolean.** The first ruling
+here reasoned about "timed out and could not be killed"; the implementation's
+`stopped=False` actually meant "the body finished on its own, just late".
+Both cases are real, they are different states, and a boolean cannot carry
+the domain — `stopped` conflated *completed* with *escaped* (the harmless
+case with the dangerous one), and `finished` would have conflated *stopped*
+with *escaped*. So `after_deadline` is a token:
+
+| token | meaning | retry? | why |
+| --- | --- | --- | --- |
+| `completed` | the body finished before the stop landed — a real outcome, late | **terminal** | Nothing transient to retry: it outran the deadline once and will again. Deterministic waste, and it repeats work that happened. |
+| `stopped` | footman terminated it — definitively not running, no outcome | **retriable** | The ordinary case: killed mid-flight, possibly slow for a transient reason. Ruling 3 applies unchanged. |
+| `escaped` | footman could not terminate it — no outcome, **may still be executing** | **terminal** | A second attempt races a live copy of the first — a fork, not a retry — and leaks a hung worker per attempt, which under a bounded `--jobs` deadlocks the run. Dangerous *and* futile. |
+
+`unknown` is reserved: it becomes the common value once calls cross a
+process or machine boundary, where a deadline expiring says nothing about
+whether the far side ran. The set is open the way `state` is.
+
+The two terminal cases are terminal for *different* reasons — futility for
+`completed`, danger plus futility for `escaped`. Neither is footman forming a
+theory about which failures deserve another chance (ruling 3); both are
+structural facts about whether another attempt can coherently start, the same
+category as fail-fast beating a pending retry.
+
+**Determinism is why `completed` fails rather than passes.** A body finishing
+at 30.001s against `timeout=30` exceeded its declared contract. Honouring the
+late result would make the outcome depend on a race between the body and the
+kill — the same task passing or failing by scheduler timing. Flaky is worse
+than strict, especially for something used as a gate.
+
+**No fiction.** Where the state is `completed`, the record says what the body
+actually did — *"the body completed at 30.2s with success — the deadline
+governs"*, and a body that failed keeps its own reason — rather than
+presenting it as work that never finished. `escaped` reads *"could not be
+stopped — not retried"*, because the diagnosis the author needs is *this body
+has no checkpoint*, and that is only inferable if it reads differently from
+ordinary retry exhaustion.
+
+**Not configurable.** No flag to force retries on `completed` or `escaped`:
+both are unsafe or futile by construction, and it is purely additive if a
+real need appears.
+
+### Where `escaped` is not yet emitted
+
+Worth knowing for whoever meets this next. The executor judges the deadline
+*after the body returns*, so from that vantage the state is only ever
+`completed` or `stopped` — a body footman genuinely failed to terminate never
+reaches the judging line at all. `escaped` is defined, carried, and honoured
+by the retry rule, but nothing emits it today. It belongs to the surface that
+*sees* the failure to stop (an unkillable child left behind, an `atomic=True`
+subprocess that opts out of the kill), and to the remote case that brings
+`unknown` with it.
+
+That is a gap in coverage, not in design: the token exists so those surfaces
+have somewhere honest to report, and adding an emitter later changes no
+consumer.

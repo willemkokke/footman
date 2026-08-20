@@ -39,7 +39,9 @@ def drive(build, line, **kw):
     tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
     rows = _schedule.run_plan(reg, segments, **kw)
-    code = next((r.code for r in rows if not r.ok), 0)
+    # `retried` rows are recorded but never the verdict — the same filter the
+    # app applies, so this helper cannot disagree with the real exit code.
+    code = next((r.code for r in rows if not r.ok and r.state != "retried"), 0)
     return code, rows
 
 
@@ -108,7 +110,7 @@ def test_a_subprocess_is_killed_at_the_task_deadline():
     assert code != 0
     (row,) = [r for r in results if r.task == "hangs"]
     assert row.timed_out
-    assert row.stopped, "a killed subprocess is work footman knows it stopped"
+    assert row.after_deadline == "stopped", "the tree was killed at the deadline"
     # Generous, but far under the 5 s the sleep asked for: the point is that
     # the deadline cut it off rather than that it cut it off promptly.
     assert elapsed < 4, f"the deadline did not stop the subprocess ({elapsed:.1f}s)"
@@ -134,7 +136,7 @@ def test_a_generator_step_unwinds_at_its_first_checkpoint_past_the_deadline():
     assert code != 0
     (row,) = [r for r in results if r.task == "loops"]
     assert row.timed_out
-    assert row.stopped, "a checkpoint cancellation is a stop footman caused"
+    assert row.after_deadline == "stopped", "the checkpoint cancelled it"
     assert ran, "the body should have started"
     assert len(ran) < 200, "the body should not have run to completion"
 
@@ -161,7 +163,7 @@ def test_a_straightline_body_outruns_its_deadline_and_says_so():
     assert code != 0
     (row,) = [r for r in results if r.task == "uninterruptible"]
     assert row.timed_out
-    assert row.stopped is False, "footman did not stop this body — it finished"
+    assert row.after_deadline == "completed", "it finished on its own, just late"
     assert finished == [True], "the body ran to completion, as documented"
 
 
@@ -241,16 +243,20 @@ def test_timed_out_is_catchable_as_failed():
     err = TimedOut("deploy", 5.0)
     assert err.code == 124
     assert err.timeout == 5.0
-    assert err.stopped is True
+    assert err.after == "stopped"
     assert "5s" in str(err)
 
 
 def test_the_error_says_whether_the_work_was_stopped():
-    stopped = TimedOut("deploy", 5.0, stopped=True)
-    ran_on = TimedOut("deploy", 5.0, stopped=False)
-    assert "stopped" in str(stopped)
-    assert "ran on" in str(ran_on)
-    assert ran_on.stopped is False
+    stopped = TimedOut("deploy", 5.0, after="stopped")
+    late = TimedOut("deploy", 5.0, after="completed", body="success", at=5.2)
+    escaped = TimedOut("deploy", 5.0, after="escaped")
+    assert "was stopped" in str(stopped)
+    # No fiction: a body that finished says so, and says what it decided.
+    assert "the body completed at 5.2s with success" in str(late)
+    assert "the deadline governs" in str(late)
+    assert "could not be stopped" in str(escaped)
+    assert "not retried" not in str(escaped), "only said where a retry was declined"
 
 
 # --- what the deadline does NOT do -------------------------------------------
@@ -347,3 +353,107 @@ def test_time_left_clamps_at_zero_rather_than_going_negative():
     ctx.deadline = time.perf_counter() - 5
     assert ctx.time_left() == 0.0
     assert ctx.overdue() is True
+
+
+# --- timeout meets retry ------------------------------------------------------
+# Ruled 2026-08-20: a timeout footman could NOT stop is terminal, whatever
+# attempts remain. With `stopped=True` a retry costs at worst a repeated side
+# effect; with `stopped=False` the body may still be running, so a second
+# attempt races a live copy of itself — a fork, not a retry.
+
+
+def test_an_unstoppable_timeout_is_not_retried():
+    """The body has no checkpoint, so it is still running. Starting attempt 2
+    would put two copies of it on the same file, API or state at once."""
+    calls: list[int] = []
+
+    def build(reg):
+        @reg.task(timeout=0.3, retries=2)
+        def straggler():
+            calls.append(1)
+            time.sleep(0.6)
+
+    code, results = drive(build, "straggler")
+
+    assert len(calls) == 1, "one attempt only — a retry would fork the body"
+    assert code == 124
+    rows = [r for r in results if r.task == "straggler"]
+    assert len(rows) == 1, "no retried rows: there was no second attempt"
+    assert rows[0].timed_out and rows[0].after_deadline == "completed"
+
+
+def test_a_late_body_reports_what_it_actually_did():
+    """No fiction: where the body completed, the receipt says so — and says
+    what the body decided — rather than presenting it as work that never
+    finished. The task still fails, on its contract."""
+
+    def build(reg):
+        @reg.task(timeout=0.3)
+        def late():
+            time.sleep(0.6)
+
+    _, results = drive(build, "late")
+    (row,) = [r for r in results if r.task == "late"]
+    said = str(row.error)
+    assert "the body completed" in said
+    assert "with success" in said, "the outcome being discarded is named"
+    assert "the deadline governs" in said
+    assert not row.ok, "the deadline is the verdict — flaky is worse than strict"
+
+
+def test_a_late_body_that_also_failed_keeps_its_own_reason():
+    """The deadline is the verdict, but the body's reason is what the author
+    needs to read — so it rides along rather than being replaced."""
+    from footman import fail
+
+    def build(reg):
+        @reg.task(timeout=0.3)
+        def late_and_broken():
+            time.sleep(0.6)
+            fail("the real problem")
+
+    _, results = drive(build, "late-and-broken")
+    (row,) = [r for r in results if r.task == "late-and-broken"]
+    said = str(row.error)
+    assert "the real problem" in said, "the body's own reason survives"
+    assert "the deadline governs" in said
+
+
+def test_a_stoppable_timeout_still_retries():
+    """The distinction is whether footman could stop the work, never whether
+    the failure was a timeout: a killed subprocess certainly did not finish,
+    so another attempt is safe and happens."""
+    calls: list[int] = []
+
+    def build(reg):
+        @reg.task(timeout=0.4, retries=1)
+        def hangs():
+            calls.append(1)
+            run(_sleep(5))
+
+    _, results = drive(build, "hangs")
+
+    assert len(calls) == 2, "a stoppable timeout is retried like any failure"
+    rows = [r for r in results if r.task == "hangs"]
+    assert [r.state for r in rows[:-1]] == ["retried"]
+    assert all(r.after_deadline == "stopped" for r in rows), "each tree was killed"
+
+
+def test_an_ordinary_failure_under_a_timeout_still_retries():
+    """Ruling 3 stands: footman has no theory about which *failures* deserve
+    another chance. The unstoppable-timeout rule is not about failure kinds —
+    it is footman observing it cannot coherently start another attempt."""
+    from footman import fail
+
+    calls: list[int] = []
+
+    def build(reg):
+        @reg.task(timeout=30, retries=2)
+        def flaky():
+            calls.append(1)
+            if len(calls) < 3:
+                fail("not yet")
+
+    code, _ = drive(build, "flaky")
+    assert len(calls) == 3
+    assert code == 0

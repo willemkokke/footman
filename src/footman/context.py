@@ -1317,23 +1317,51 @@ class TimedOut(Failed):
     """A task's `@task(timeout=…)` deadline expired.
 
     A `Failed`, so `except footman.Failed:` keeps catching it and the reason
-    renders verbatim in the failure line and the `--json` error field. Catch
-    this to tell a deadline from any other deliberate stop.
+    renders verbatim in the failure line and the `--json` error field.
 
-    Carries `.timeout` (the declared seconds) and `.stopped` — whether
-    footman actually stopped the work. Today `stopped` is True whenever
-    anything was interruptible: a checkpoint or a subprocess boundary cut
-    the task off. A body of straight-line Python has neither, so it runs to
-    its own end and this reports the breach without having caused it. The
-    distinction matters because "timed out" must not be read as "did not
-    run" (notes/20260807-timeout-and-retry.md).
+    Carries `.timeout` (the declared seconds) and `.after` — what became of
+    the work: `completed` (the body finished, just late), `stopped` (footman
+    terminated it), or `escaped` (footman could not terminate it, and it may
+    still be running). `unknown` is reserved for calls that cross a process
+    or machine boundary.
+
+    The message never pretends the work did not happen. Where the body
+    completed, it says so and says what the body's own verdict was, then
+    states that the deadline governs — the receipt tells the whole truth
+    while the task still fails on its contract
+    (notes/20260807-timeout-and-retry.md).
     """
 
-    def __init__(self, task: str, timeout: float, *, stopped: bool = True) -> None:
+    def __init__(
+        self,
+        task: str,
+        timeout: float,
+        *,
+        after: str = "stopped",
+        body: str = "",
+        at: float = 0.0,
+        not_retried: bool = False,
+    ) -> None:
         self.timeout = timeout
-        self.stopped = stopped
-        how = "and was stopped" if stopped else "and ran on to its own end"
-        super().__init__(f"{task} exceeded its {timeout:g}s timeout {how}", code=124)
+        self.after = after
+        self.not_retried = not_retried
+        said = f"{task} exceeded its {timeout:g}s deadline"
+        if after == "completed":
+            # Report the outcome being discarded rather than presenting this
+            # as work that never finished.
+            when = f" at {at:g}s" if at else ""
+            verdict = f" with {body}" if body else ""
+            said += f"; the body completed{when}{verdict} — the deadline governs"
+        elif after == "escaped":
+            said += " and could not be stopped"
+        else:
+            said += " and was stopped"
+        if not_retried:
+            # The diagnosis the author needs is "this body has no
+            # checkpoint", and it is only inferable if this reads
+            # differently from ordinary retry exhaustion.
+            said += " — not retried"
+        super().__init__(said, code=124)
 
 
 def coroutine_refusal(kind: str, fn: Any = None) -> Failed:

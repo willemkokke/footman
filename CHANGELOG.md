@@ -21,9 +21,16 @@ versions may include breaking changes.
   It means **cancelled at the first checkpoint or subprocess boundary
   past the deadline**, not a hard stop: a body of straight-line Python
   has neither and runs to its own end. That case is reported rather than
-  hidden, and the record says which happened — `stopped` is true when
-  footman cut the work off, false when the deadline passed and the body
-  finished on its own. "Timed out" never means "did not run".
+  hidden, and the record says which happened: `after_deadline` is
+  `completed` when the body finished on its own (late), `stopped` when
+  footman terminated it, or `escaped` when it could not be terminated and
+  may still be running. "Timed out" never means "did not run".
+
+  A late body still fails. Honouring a result that arrived after the
+  deadline would make the verdict depend on a race between the body and
+  the kill, and flaky is worse than strict for something used as a gate —
+  but the receipt tells the whole truth, naming what the body actually
+  decided and that the deadline governs.
 
 - **`@task(retries=N)` — attempt it again, and record every attempt.**
   `retries=2` means up to three runs. Every attempt is a real row with
@@ -39,7 +46,12 @@ versions may include breaking changes.
   fail-fast means no new work, and an unstarted attempt is new work.
 
   Retry is your choice, with no theory about what deserves it: a
-  deliberate `fail()` retries exactly like a crash. `pre=` runs once,
+  deliberate `fail()` retries exactly like a crash. The one exception is
+  not about failure kinds at all — only a `stopped` timeout is retried,
+  because a body that merely finished late has nothing transient to retry
+  (and would repeat work that happened), and one that could not be
+  stopped may still be running, so a second attempt would race a live
+  copy of the first rather than replace it. `pre=` runs once,
   and so does every gate that guards an attempt rather than performing
   it — availability, `needs_project`, and the confirm prompt, which is
   never re-asked. All attempts count as one unit on the progress bar.
