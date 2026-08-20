@@ -39,7 +39,6 @@ from footman.registry import (
     task_confirm,
     task_name,
     task_retries,
-    task_timeout,
     wants_progress,
     work_key,
 )
@@ -1045,28 +1044,17 @@ def _run_attempts(node: _Node, ctx: Any) -> _executor.TaskResult:
         if result.ok or left <= 0:
             return result
         if result.timed_out and result.after_deadline != "stopped":
-            # Only a *stopped* timeout is retriable — killed mid-flight, so
-            # possibly slow for a transient reason, and definitively not
-            # running now. The other two are terminal for different reasons:
+            # Only a *stopped* timeout is retriable — cut off mid-flight, so
+            # possibly slow for a transient reason and definitively not
+            # running now. A `completed` one is terminal through futility:
+            # the body finished, so there is nothing transient to retry, it
+            # outran the deadline once and will again, and another attempt
+            # repeats work that already happened.
             #
-            #   completed — the body finished, just late. Nothing transient
-            #     to retry: it outran the deadline once and will again.
-            #     Deterministic waste, and it repeats work that happened.
-            #   escaped — footman could not stop it, so it may still be
-            #     running. A second attempt would race a live copy of the
-            #     first — a fork, not a retry — and leaks a hung worker per
-            #     attempt, which under a bounded --jobs deadlocks the run.
-            #
-            # Neither is footman forming a theory about which failures
-            # deserve another chance (ruling 3). Both are structural facts
-            # about whether another attempt can coherently start.
-            if left > 0 and result.after_deadline == "escaped":
-                result.error = context.TimedOut(
-                    node.seg.task,
-                    task_timeout(node.fn) or 0.0,
-                    after="escaped",
-                    not_retried=True,
-                )
+            # This is not footman forming a theory about which failures
+            # deserve another chance (ruling 3) — it is a structural fact
+            # about whether another attempt can coherently start, the same
+            # category as fail-fast beating a pending retry.
             return result
         result.state = "retried"
         node.attempts.append(result)

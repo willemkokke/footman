@@ -250,13 +250,13 @@ def test_timed_out_is_catchable_as_failed():
 def test_the_error_says_whether_the_work_was_stopped():
     stopped = TimedOut("deploy", 5.0, after="stopped")
     late = TimedOut("deploy", 5.0, after="completed", body="success", at=5.2)
-    escaped = TimedOut("deploy", 5.0, after="escaped")
     assert "was stopped" in str(stopped)
     # No fiction: a body that finished says so, and says what it decided.
     assert "the body completed at 5.2s with success" in str(late)
     assert "the deadline governs" in str(late)
-    assert "could not be stopped" in str(escaped)
-    assert "not retried" not in str(escaped), "only said where a retry was declined"
+    # Only two values ship. `escaped` and `unknown` are designed but not
+    # emittable — see TaskResult.after_deadline — and a value nothing can
+    # emit is a claim the system can never make.
 
 
 # --- what the deadline does NOT do -------------------------------------------
@@ -292,21 +292,34 @@ def test_the_deadline_starts_at_the_body_not_at_the_request():
     Charging a slow `pre=` to the body's deadline would make `timeout=` mean
     "the whole subtree", which is not what it says — and would make a task's
     own bound depend on how long its neighbours took.
+
+    Asserted on the remaining time rather than on the outcome: an outcome
+    test needs the deadline to sit between the body's cost and the
+    prerequisite's, and on Windows the body's cost is dominated by process
+    creation, so that window is a flake generator. What is left on the clock
+    when the body starts answers the question directly.
     """
+    left: list[float] = []
 
     def build(reg):
         @reg.task
         def slow_prereq():
-            time.sleep(0.5)
+            time.sleep(0.3)
 
-        @reg.task(pre=[slow_prereq], timeout=0.4)
-        def after():
-            run(_sleep(0.01))
+        @reg.task(pre=[slow_prereq], timeout=30)
+        def after(ctx):
+            left.append(ctx.time_left() or 0.0)
 
     code, results = drive(build, "after")
     (row,) = [r for r in results if r.task == "after"]
+
     assert code == 0
-    assert not row.timed_out, "the prerequisite's time is not the body's deadline"
+    assert not row.timed_out
+    # Nearly the whole 30 s is still there: the prerequisite's 0.3 s was
+    # never charged against it.
+    assert left[0] > 29, (
+        f"the prerequisite's time was charged to the body ({left[0]:.1f}s left)"
+    )
 
 
 # --- inheritance into the calls a body makes ---------------------------------
@@ -421,22 +434,34 @@ def test_a_late_body_that_also_failed_keeps_its_own_reason():
 
 def test_a_stoppable_timeout_still_retries():
     """The distinction is whether footman could stop the work, never whether
-    the failure was a timeout: a killed subprocess certainly did not finish,
-    so another attempt is safe and happens."""
+    the failure was a timeout: work cut off at a checkpoint certainly did not
+    finish, so another attempt is safe and happens.
+
+    A generator step rather than a subprocess: the checkpoint is in-process
+    and deterministic, where a subprocess needs to *start* inside a
+    sub-second deadline — which on Windows is a race against process
+    creation, not a test of anything.
+    """
     calls: list[int] = []
 
     def build(reg):
         @reg.task(timeout=0.4, retries=1)
         def hangs():
             calls.append(1)
-            run(_sleep(5))
+
+            def body():
+                for _ in range(200):
+                    time.sleep(0.02)
+                    yield
+
+            parallel(step(body, title="body")())
 
     _, results = drive(build, "hangs")
 
     assert len(calls) == 2, "a stoppable timeout is retried like any failure"
     rows = [r for r in results if r.task == "hangs"]
     assert [r.state for r in rows[:-1]] == ["retried"]
-    assert all(r.after_deadline == "stopped" for r in rows), "each tree was killed"
+    assert all(r.after_deadline == "stopped" for r in rows), "each was cut off"
 
 
 def test_an_ordinary_failure_under_a_timeout_still_retries():

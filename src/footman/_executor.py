@@ -75,26 +75,34 @@ class TaskResult:
     the *deadline*, never about how much work happened — read `stopped` for
     that."""
     after_deadline: str = ""
-    """What became of the work once the deadline fired — a token, not a
-    boolean, because the domain has three live values and a fourth coming.
-    Empty when no deadline fired.
+    """What became of the work once the deadline fired. Empty when no
+    deadline fired.
 
-    - `completed` — the body finished on its own, just late. There IS an
-      outcome; the deadline governs anyway (below).
-    - `stopped` — footman terminated it. Definitively not running, no
-      outcome.
-    - `escaped` — footman could not terminate it. No outcome, and it **may
-      still be executing**.
-    - `unknown` — reserved. Becomes the common value once a call crosses a
-      process or machine boundary, where a deadline expiring says nothing
-      about whether the far side ran.
+    The discriminator is not *how the body ended* but **whether footman
+    issued a stop before the body returned** — which is fully observable
+    from here, where "did it really stop?" is not:
 
-    A boolean cannot carry this. `stopped=True/False` conflated *completed*
-    with *escaped* — the harmless case with the dangerous one, the worst
-    possible pairing — and `finished` would conflate *stopped* with
-    *escaped*, hiding the one distinction that governs whether a retry is
-    safe. Tokens are lowercase ASCII, and the set is open in the way
-    `state` is (notes/20260807-timeout-and-retry.md)."""
+    - `stopped` — footman issued a stop. Includes a body that caught the
+      interruption and returned normally: what is recorded is that footman
+      asked.
+    - `completed` — no stop was issued and the deadline had already passed.
+      The body finished on its own, just late. There IS an outcome; the
+      deadline governs anyway.
+
+    **An open set** — the `state` convention, "tolerate values you don't
+    know". Two more values are designed and deliberately NOT shipped,
+    because each needs a mechanism that does not exist yet and a value
+    nothing can emit is a claim the system can never make:
+
+    - `escaped` (footman could not stop it; it may still be running) needs
+      an observer running *concurrently with* the body — a watchdog, a
+      supervisor, or teardown noticing an unjoined worker. This judgment
+      happens after the body returns, so a body that never returns never
+      reaches it: there is no receipt at all, and the run hangs.
+    - `unknown` arrives with calls that cross a process or machine
+      boundary, where a deadline expiring says nothing about the far side.
+
+    (notes/20260807-timeout-and-retry.md)"""
     started: float | None = None
     """When this task began, on the run's monotonic clock — the ordering key of
     the report. `None` for something that never began (an unavailable task, a
@@ -2525,12 +2533,11 @@ def run_bound(
     # which is exactly the distinction `stopped` carries.
     if ctx.overdue():
         result.timed_out = True
-        # Which of the three states this is. The body has returned by the
-        # time we are here, so `escaped` cannot be observed from this side —
-        # a body footman failed to terminate keeps running and never reaches
-        # this line. It is emitted where the failure to stop is *seen* (an
-        # unkillable child left behind); the token exists so that surface has
-        # somewhere honest to report to.
+        # Did footman issue a stop before the body returned? A step that
+        # timed out is that stop — a killed subprocess tree, or a generator
+        # closed at its checkpoint. Nothing here can observe a body that
+        # never returned, so `escaped` is not among the values this site can
+        # produce; see the field's docstring for why it is not shipped.
         result.after_deadline = (
             "stopped" if any(step.timed_out for step in result.steps) else "completed"
         )

@@ -1320,10 +1320,10 @@ class TimedOut(Failed):
     renders verbatim in the failure line and the `--json` error field.
 
     Carries `.timeout` (the declared seconds) and `.after` — what became of
-    the work: `completed` (the body finished, just late), `stopped` (footman
-    terminated it), or `escaped` (footman could not terminate it, and it may
-    still be running). `unknown` is reserved for calls that cross a process
-    or machine boundary.
+    the work: `stopped` (footman issued a stop before the body returned) or
+    `completed` (no stop was issued and the body finished on its own, just
+    late). An open set: `TaskResult.after_deadline` explains which further
+    values are designed and why they are not shipped.
 
     The message never pretends the work did not happen. Where the body
     completed, it says so and says what the body's own verdict was, then
@@ -1352,8 +1352,6 @@ class TimedOut(Failed):
             when = f" at {at:g}s" if at else ""
             verdict = f" with {body}" if body else ""
             said += f"; the body completed{when}{verdict} — the deadline governs"
-        elif after == "escaped":
-            said += " and could not be stopped"
         else:
             said += " and was stopped"
         if not_retried:

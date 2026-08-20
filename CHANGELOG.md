@@ -22,9 +22,10 @@ versions may include breaking changes.
   past the deadline**, not a hard stop: a body of straight-line Python
   has neither and runs to its own end. That case is reported rather than
   hidden, and the record says which happened: `after_deadline` is
-  `completed` when the body finished on its own (late), `stopped` when
-  footman terminated it, or `escaped` when it could not be terminated and
-  may still be running. "Timed out" never means "did not run".
+  `stopped` when footman issued a stop before the body returned, or
+  `completed` when no stop was issued and the body finished on its own,
+  late. "Timed out" never means "did not run". The field is an open set,
+  like `state` — tolerate values you don't know.
 
   A late body still fails. Honouring a result that arrived after the
   deadline would make the verdict depend on a race between the body and
@@ -48,10 +49,9 @@ versions may include breaking changes.
   Retry is your choice, with no theory about what deserves it: a
   deliberate `fail()` retries exactly like a crash. The one exception is
   not about failure kinds at all — only a `stopped` timeout is retried,
-  because a body that merely finished late has nothing transient to retry
-  (and would repeat work that happened), and one that could not be
-  stopped may still be running, so a second attempt would race a live
-  copy of the first rather than replace it. `pre=` runs once,
+  because a body that merely finished late has nothing transient to
+  retry: it outran the deadline once and will again, and another attempt
+  repeats work that already happened. `pre=` runs once,
   and so does every gate that guards an attempt rather than performing
   it — availability, `needs_project`, and the confirm prompt, which is
   never re-asked. All attempts count as one unit on the progress bar.

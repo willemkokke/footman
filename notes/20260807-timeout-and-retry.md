@@ -293,29 +293,57 @@ across attempts would be worse — the last attempt gets the least time, so
 the deadline would mean something different each round. A cap on the whole
 task including retries is a different feature wanting a different name.
 
-**The post-deadline state is three-valued, not boolean.** The first ruling
-here reasoned about "timed out and could not be killed"; the implementation's
+**The post-deadline state is a token, not a boolean.** The first ruling here
+reasoned about "timed out and could not be killed"; the implementation's
 `stopped=False` actually meant "the body finished on its own, just late".
 Both cases are real, they are different states, and a boolean cannot carry
 the domain — `stopped` conflated *completed* with *escaped* (the harmless
 case with the dangerous one), and `finished` would have conflated *stopped*
-with *escaped*. So `after_deadline` is a token:
+with *escaped*. So `after_deadline` is a token.
 
-| token | meaning | retry? | why |
+**The discriminator is what footman can actually observe**: not how the body
+ended, but whether a stop was issued before it returned.
+
+| value | meaning | retry? | why |
 | --- | --- | --- | --- |
-| `completed` | the body finished before the stop landed — a real outcome, late | **terminal** | Nothing transient to retry: it outran the deadline once and will again. Deterministic waste, and it repeats work that happened. |
-| `stopped` | footman terminated it — definitively not running, no outcome | **retriable** | The ordinary case: killed mid-flight, possibly slow for a transient reason. Ruling 3 applies unchanged. |
-| `escaped` | footman could not terminate it — no outcome, **may still be executing** | **terminal** | A second attempt races a live copy of the first — a fork, not a retry — and leaks a hung worker per attempt, which under a bounded `--jobs` deadlocks the run. Dangerous *and* futile. |
+| `stopped` | footman issued a stop — including a body that caught the interruption and returned normally; what is recorded is that footman *asked* | **retriable** | Cut off mid-flight, so possibly slow for a transient reason. Ruling 3 applies unchanged. |
+| `completed` | no stop was issued and the deadline had already passed — the body finished on its own, late | **terminal** | Nothing transient to retry: it outran the deadline once and will again, and another attempt repeats work that already happened. |
 
-`unknown` is reserved: it becomes the common value once calls cross a
-process or machine boundary, where a deadline expiring says nothing about
-whether the far side ran. The set is open the way `state` is.
+That `completed` is terminal is not footman forming a theory about which
+failures deserve another chance (ruling 3); it is a structural fact about
+whether another attempt can coherently start, the same category as fail-fast
+beating a pending retry.
 
-The two terminal cases are terminal for *different* reasons — futility for
-`completed`, danger plus futility for `escaped`. Neither is footman forming a
-theory about which failures deserve another chance (ruling 3); both are
-structural facts about whether another attempt can coherently start, the same
-category as fail-fast beating a pending retry.
+### Two values ship. `escaped` and `unknown` do not, and that is the point
+
+**`escaped` is a missing observer, not a missing value.** The executor judges
+the deadline *after the body returns*. If the body never returns, that
+judgment point is never reached — there is no receipt, no state, nothing, and
+the run hangs (Part 1's documented limit, and the same shape the services
+measurements found: `_python_exit` joining a worker that never returns).
+Detecting escape needs an observer running **concurrently with** the body: a
+watchdog, a supervisor thread, or teardown noticing an unjoined worker. None
+exists, so nothing can truthfully say `escaped`.
+
+Shipping it as reserved vocabulary anyway would be worse than omitting it. A
+value nothing can emit is a claim the system can never make: consumers who
+branch on it write dead code forever, and may believe footman detects the
+case when it does not. That is the `infinite=True` lesson in enum form — a
+declaration that can disagree with reality is worse than a narrower one that
+cannot.
+
+So the field is an **open set** (the `state` convention, "tolerate values you
+don't know") and each value arrives with the mechanism that can observe it:
+
+| value | ships when |
+| --- | --- |
+| `completed` | now |
+| `stopped` | now |
+| `escaped` | a concurrent observer exists — watchdog, supervisor, or the services work on unstoppable bodies |
+| `unknown` | calls cross a process or machine boundary |
+
+**For whoever picks this up:** adding the value is not the job. Building the
+observer is the job; the value is the last line of it.
 
 **Determinism is why `completed` fails rather than passes.** A body finishing
 at 30.001s against `timeout=30` exceeded its declared contract. Honouring the
