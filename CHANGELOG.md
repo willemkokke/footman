@@ -18,6 +18,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A grouped positional checks each value against its own slot.** A
+  NamedTuple/tuple shape taken positionally validated every token against
+  the first field's type — `tag 3 hot` against `(copies: int, text: str)`
+  was refused claiming "copies expects an integer (got 'hot')", and a bad
+  value that happened to fit the first slot escaped the eager refusal to
+  fail later, at binding. The stream index now rides into validation
+  exactly as it always did on the option path, so a heterogeneous line
+  parses and a wrong value is refused naming *its* field.
 - **An explicit `--config` no longer overwrites the plain completion
   cache.** A `--config=<file>` run reshapes the task tree, and its
   manifest used to land on the cwd's own completion cache — after which a

@@ -1497,7 +1497,18 @@ def _consume_positional(
         )
     if p.get("multiple"):
         for part in _values(p, tok):
-            _validate(seg.task, p, part, choices_for=choices_for)
+            # The stream index rides along, exactly as the option path passes
+            # it: a grouped shape's positions have a type each, and without
+            # `at` every token was checked against slot 0 — `plot 1 two`
+            # against `(x: int, y: str)` refused naming x, and a bad value
+            # that happened to fit slot 0's type escaped to binding.
+            _validate(
+                seg.task,
+                p,
+                part,
+                at=len(seg.values.get(p["name"], ())),
+                choices_for=choices_for,
+            )
             seg.values.setdefault(p["name"], []).append(part)
     else:
         _validate(seg.task, p, tok, choices_for=choices_for)

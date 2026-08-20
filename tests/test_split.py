@@ -16,6 +16,13 @@ class Box(NamedTuple):
     height: int
 
 
+class Tag(NamedTuple):
+    # not `count`: that name is a tuple method, and the checkers refuse the
+    # override
+    copies: int
+    text: str
+
+
 def build_tree(build):
     reg = Group("root")
     build(reg)
@@ -409,6 +416,30 @@ def test_a_grouped_shape_is_refused_before_anything_runs():
     with pytest.raises(ChainError, match=r"leaves 1 over"):
         split_chain(tree, ["route", "--points=1,2", "--points=3"])
     split_chain(tree, ["route", "--points=1,2", "--points=3,4"])  # whole: fine
+
+
+def test_a_grouped_positional_checks_each_slot_not_slot_zero():
+    """The stream index rides into validation for positionals exactly as it
+    does for options: each token is checked against its own slot's type, so
+    a heterogeneous shape's legal line parses, and a bad value is refused
+    naming *its* field. Without the index every token validated as slot 0 —
+    `tag 3 hot` refused claiming copies expects an integer."""
+
+    def tasks(reg):
+        @reg.task
+        def render(size: Box): ...
+
+        @reg.task
+        def tag(label: Tag): ...
+
+    _, tree = build_tree(tasks)
+
+    (seg,) = segs(tree, "tag 3 hot")  # a str at slot 1 is simply legal
+    assert seg.values == {"label": ["3", "hot"]}
+    with pytest.raises(ChainError, match=r"copies expects an integer"):
+        split_chain(tree, ["tag", "three", "hot"])
+    with pytest.raises(ChainError, match=r"height expects an integer"):
+        split_chain(tree, ["render", "800", "tall"])
 
 
 def test_a_task_option_written_where_globals_live_points_right(tree):
