@@ -256,6 +256,43 @@ def test_systemexit_int_code_stays_bare(project, capsys):
     assert "SystemExit" not in err
 
 
+def test_a_bad_marker_is_a_taught_cli_refusal_not_a_traceback(tmp_path):
+    # The build-time twin of the strict-completer refusal below: a
+    # ManifestError (here a bare callable in Annotated) rides the same
+    # `_refuse` door, and nothing at the CLI level pinned it — deleting
+    # the except left a raw traceback with the suite green (audit, suite
+    # pass).
+    import textwrap
+
+    from footman.testing import Runner
+
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from typing import Annotated
+
+            from footman import task
+
+            def lister():
+                return []
+
+            @task
+            def deploy(target: Annotated[str, lister] = ""):
+                "Deploy."
+            """
+        )
+    )
+    result = Runner().invoke("--list", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert "a bare callable is not a marker" in result.stderr
+    assert "suggest(lister)" in result.stderr  # the way out, named
+    assert "Traceback" not in result.stderr
+    enveloped = Runner().invoke("--json --list", cwd=tmp_path)
+    assert enveloped.exit_code == EX_USAGE
+    payload = json.loads(enveloped.stdout)
+    assert "bare callable" in payload["error"]["message"]
+
+
 def test_a_raising_strict_completer_is_a_taught_cli_refusal(tmp_path):
     # Audit M96: the CLI's refusal for a strict completer that raises had
     # no CLI-level test — it could regress to a raw traceback (or refuse
