@@ -47,6 +47,17 @@ commands. A `step(fn)(…)` or a `fetch()` produces a receipt rather than an
 effect, while the body's own inline Python still runs for real. Remember it
 when a task mixes subprocesses with in-process work.
 
+A recording answers every call with a blank success — it captures what
+would run, it cannot say what a run would have printed or how it would
+have failed. When a test needs that — canned stdout to parse, an injected
+non-zero to exercise an error path — and the calls go through toolroom's
+handles, use
+[`toolroom.testing.answers()`](https://willemkokke.github.io/toolroom/testing/):
+it answers bridge calls from a table, upstream of footman, with the real
+handles doing the real rendering. Nested inside a `recording()` block,
+`answers()` wins — it intercepts before footman is involved, so its
+answers stand and the record sees nothing.
+
 Under the hood this is `Context(dry_run=True, quiet=True)` installed with
 `use_context()`. Both are public, so you can compose your own variants:
 

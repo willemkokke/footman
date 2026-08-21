@@ -14,7 +14,11 @@ the run and routes through `run()` on its own, so it earns a receipt,
 obeys `--dry-run`, and shows up in `recording()` without opting in. That
 is the whole seam, and it is why this page can describe `run()` and leave
 the handles to
-[toolroom's own docs](https://willemkokke.github.io/toolroom/).
+[toolroom's own docs](https://willemkokke.github.io/toolroom/). The seam
+has a testing half too: where `recording()` captures bridge calls,
+[`toolroom.testing.answers()`](https://willemkokke.github.io/toolroom/testing/)
+*answers* them — canned output and injected failures, footman present or
+not — see [Testing](testing.md).
 
 Task bodies run tools through `run()`. With toolroom installed they can also
 use its typed tool handles, which detect footman and route every call through
