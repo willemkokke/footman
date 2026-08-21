@@ -398,7 +398,7 @@ dev = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "requests", specifier = ">=2.31" },
     { name = "ruff", specifier = ">=0.6" },
-    { name = "toolroom", specifier = ">=0.6.0" },
+    { name = "toolroom", specifier = ">=0.6.1" },
     { name = "ty" },
     { name = "uv" },
 ]
@@ -1257,11 +1257,11 @@ wheels = [
 
 [[package]]
 name = "toolroom"
-version = "0.6.0"
+version = "0.6.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/eb/a0/91195b13b8d6900f421e81109abae93b184d1702576fba171001d8928b47/toolroom-0.6.0.tar.gz", hash = "sha256:167a2bb2cb56e43bf7067f30e24994a0eee2b3db65f4d0c17da557f9b4075e45", size = 140120, upload-time = "2026-08-21T09:42:25.402Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/81/93/bbcf50797c3e3f91d7b519b8833b1818b9a2cfe120f3ee9b1acb973cc749/toolroom-0.6.1.tar.gz", hash = "sha256:946b44a605e389ba4ddc61008fdc50b344f197a20d0ea146a16c7fe2bed20b4e", size = 141991, upload-time = "2026-08-21T18:19:16.136Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/37/f8/fdc5f84de3e2b0f3c93feb03dbb28124c83ebbd945c0ae3688180ade75ed/toolroom-0.6.0-py3-none-any.whl", hash = "sha256:2206e523b89a30628da94a7bf2febe591cf0a3ebbba21e29f671fc6a86cf7f98", size = 168174, upload-time = "2026-08-21T09:42:23.868Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/99/4a2fc57be0450973ff0e20ddef472e29cb7a13b645d2c2c45662908a837e/toolroom-0.6.1-py3-none-any.whl", hash = "sha256:7c4e0b09bc9c770d704542b901fc6c013deb671bf85e6fa91af6734c353ec687", size = 170532, upload-time = "2026-08-21T18:19:14.701Z" },
 ]
 
 [[package]]

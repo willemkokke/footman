@@ -31,7 +31,10 @@ from footman import registry as _registry
 with _registry.capture():
     import tasks
 
+from toolroom.testing import answers
+
 from footman.context import Failed, Result, RunFailed
+from footman.testing import recording
 
 
 def _failed_run(command: str = "ruff") -> RunFailed:
@@ -406,72 +409,37 @@ def test_a_cast_that_lost_its_interaction_fails_the_build(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("call", "attr", "expected"),
+    ("call", "prefix", "expected_args", "expected_kwargs"),
     [
-        (lambda: tasks.lint(), "ruff", (("check", (".",)), {"fix": False})),
-        (lambda: tasks.lint(fix=True), "ruff", (("check", (".",)), {"fix": True})),
-        (lambda: tasks.format(), "ruff_format", ((None, (".",)), {"check": False})),
+        (lambda: tasks.lint(), ["ruff", "check"], (".",), {"fix": False}),
+        (lambda: tasks.lint(fix=True), ["ruff", "check"], (".",), {"fix": True}),
+        (lambda: tasks.format(), ["ruff", "format"], (".",), {"check": False}),
         # `warnings=True`: basedpyright exits 0 on warnings, so the gate
         # would pass over one — and two had been passing over for as long as
         # they had existed.
-        (
-            lambda: tasks.typecheck(),
-            "basedpyright",
-            ((None, ()), {"warnings": True}),
-        ),
+        (lambda: tasks.typecheck(), ["basedpyright"], (), {"warnings": True}),
     ],
 )
 def test_a_wrapper_task_calls_its_tool_over_the_whole_repo(
-    call, attr, expected, monkeypatch
+    call, prefix, expected_args, expected_kwargs
 ):
     """`SRC` is the whole repo, as CI lints it. Anything narrower lets a
     tracked file outside src/tests pass the gate and fail the build — which
     tracking `notes/` proved within minutes.
 
-    Every checker is recorded, not only the one under assertion. `typecheck`
-    is a real `parallel()` over six steps, so patching one tool leaves the
-    other five reaching for the actual binaries — and if a sibling raises,
-    fail-fast cancels in-flight work and the tool under test is never
-    called, which reads as a bare `assert [] == [...]` with nothing to say
-    why. Recording all of them keeps the run hermetic *and* leaves a
-    transcript: this test failed once under a saturated box (2026-08-19)
-    and the assertion detail was lost, so the next occurrence explains
-    itself."""
-    seen: list[tuple[object, ...]] = []
-    transcript: list[str] = []
-
-    class Recorder:
-        def __init__(self, name, verb=None, log=None):
-            self._name, self._verb, self._log = name, verb, log
-
-        def __getattr__(self, name):
-            return Recorder(self._name, name, self._log)
-
-        def __call__(self, *args, **kwargs):
-            transcript.append(f"{self._name}.{self._verb or '__call__'}{args}{kwargs}")
-            if self._log is not None:
-                self._log.append(((self._verb, args), kwargs))
-
-    # The tool under assertion logs into `seen`; its siblings are stubbed so
-    # nothing spawns, and every call lands in the shared transcript.
-    for name in ("ruff", "ruff_format", "basedpyright", "mypy", "ty", "pyrefly"):
-        if hasattr(tasks, name):
-            monkeypatch.setattr(
-                tasks, name, Recorder(name, log=seen if name == attr else None)
-            )
-
-    raised: BaseException | None = None
-    try:
+    `answers()` intercepts every checker at toolroom's seam, so the run is
+    hermetic by construction — `typecheck` is a real `parallel()` over six
+    steps, and each of the six gets a canned success instead of reaching
+    for an actual binary. The assertion is on the call *as handed*
+    (`Call.args`/`Call.kwargs`), not the rendered argv: a flag handed as
+    False is omitted from the real command line, and these tests are about
+    what the task decided to pass."""
+    with answers(hosted=True) as calls:
         call()
-    except BaseException as exc:  # re-reported below, with the transcript
-        raised = exc
 
-    assert raised is None, (
-        f"{attr}: the task raised {type(raised).__name__}: {raised}\n"
-        f"calls recorded: {transcript}"
-    )
-    assert seen == [expected], (
-        f"{attr}: recorded {seen!r}\ncalls across every checker: {transcript}"
+    mine = [c for c in calls if list(c.argv[: len(prefix)]) == prefix]
+    assert [(c.args, c.kwargs) for c in mine] == [(expected_args, expected_kwargs)], (
+        f"calls across every checker: {[c.command for c in calls]}"
     )
 
 
@@ -523,27 +491,23 @@ def test_the_gate_gives_every_run_its_own_coverage_file(monkeypatch):
     assert files[0] != files[1]  # never the repo's own .coverage, never shared
 
 
-def test_sync_goes_through_the_projects_own_uv(monkeypatch):
+def test_sync_goes_through_the_projects_own_uv():
     """A mismatched system uv silently rewriting the lock is the source of
     the one-line churn this avoids."""
-    seen: list[str] = []
-
-    class Uv:
-        def sync(self):
-            seen.append("sync")
-
-    monkeypatch.setattr(tasks, "uv", Uv())
-    tasks.sync()
-    assert seen == ["sync"]
+    with answers(hosted=True) as calls:
+        tasks.sync()
+    assert [list(c.argv[:2]) for c in calls] == [["uv", "sync"]]
 
 
-def test_the_dist_tasks_build_and_clean(monkeypatch):
-    seen: list[tuple[str, ...] | str] = []
-    monkeypatch.setattr(tasks, "uv", lambda *args: seen.append(args))
-    monkeypatch.setattr(tasks, "run", lambda cmd, **kw: seen.append(cmd))
-    tasks.build()
-    tasks.clean()
-    assert seen == [("build",), "rm -rf dist"]
+def test_the_dist_tasks_build_and_clean():
+    """The two doors, dogfooded: `answers()` catches the bridge call and the
+    recording catches the plain `run()` — nested, `answers()` wins and the
+    record never sees the uv call."""
+    with recording() as steps, answers(hosted=True) as calls:
+        tasks.build()
+        tasks.clean()
+    assert [list(c.argv) for c in calls] == [["uv", "build"]]
+    assert [s.command for s in steps] == ["rm -rf dist"]
 
 
 def test_the_docs_tasks_regenerate_before_they_serve(monkeypatch):
