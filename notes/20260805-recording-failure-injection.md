@@ -82,6 +82,14 @@ there is the honest lane; no counterfeit risk.
 
 ## Addendum (2026-08-21): adopt toolroom's table grammar
 
+(The plan note,
+[20260801-recording-injection.md](20260801-recording-injection.md), was
+rebased the same day and carries the current design. It keeps this
+addendum's grammar but widens the scope back to the whole `run()` door
+— bridge calls route through it under a live context anyway — and adds
+the two answer kinds toolroom's table deliberately refused: exception
+values and ordered sequences. Read it, not this, for what to build.)
+
 toolroom has since shipped its standalone-side testing ergonomics —
 the "later, if ever" convenience this note anticipated over the seam —
 as `toolroom.testing.answers()` (toolroom's
