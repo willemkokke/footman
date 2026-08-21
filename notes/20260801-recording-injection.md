@@ -2,7 +2,10 @@
 
 Status: PLAN — rebased 2026-08-21 onto footman 0.43.0 and toolroom
 0.6.0 (`toolroom.testing.answers()`, toolroom's
-`notes/20260821-testing-seam.md`). The original 2026-08-01 draft posed
+`notes/20260821-testing-seam.md`). Later the same day toolroom 0.6.1
+(the as-handed `Call` record) and footman 0.44.0 both released, so
+every dependency this note names exists; only the build itself
+remains. The original 2026-08-01 draft posed
 ten decision points; the table grammar toolroom shipped settles six of
 them, this rebase settles a seventh, and the remaining opens are listed
 with sharper edges than they had. Origin unchanged: hse's 0.29.1
@@ -171,10 +174,11 @@ What each remaining double needs, and which door retires it:
   feature); the migration itself is hse's call, they patch their own
   `_git.query` one level above the bridge.
 - `FakeTool` bridge sites (orchestrate/release/template + the
-  `_FakeUv`/`_FakeGit` clones) → toolroom's `answers()` today, except
-  the flag-never-handed assertions, which wait on toolroom 0.6.1's
-  as-handed `Call.args`/`Call.kwargs` (toolroom's
-  `notes/20260821-call-as-handed.md`, handed over 2026-08-21).
+  `_FakeUv`/`_FakeGit` clones) → toolroom's `answers()`, with the
+  flag-never-handed assertions on 0.6.1's as-handed
+  `Call.args`/`Call.kwargs` (planned in toolroom's
+  `notes/20260821-call-as-handed.md`, built and released the same
+  day). Nothing blocks this migration; it needs no footman feature.
 - `env=`/`cwd=` kwargs assertions on plain `run()` → the run-policy
   capture open above; until then those stay monkeypatches, honestly.
 
