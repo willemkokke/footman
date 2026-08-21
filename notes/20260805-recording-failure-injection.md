@@ -1,6 +1,8 @@
 # Failure injection in recordings
 
 Status: FEATURE REQUEST — analysis only, nothing designed or built.
+An addendum (2026-08-21, at the bottom) narrows the scope and proposes
+adopting the table grammar toolroom has since shipped.
 The ask (outstanding, not yet filed as an issue): a test using
 `recording()` should be able to introduce failure points — designate
 that specific recorded calls yield a failing `Result` (chosen code,
@@ -77,3 +79,63 @@ there is the honest lane; no counterfeit risk.
   every-match.
 - Whether availability faking (the missing-tool scenario) is wanted
   as its own lane, or explicitly out of scope.
+
+## Addendum (2026-08-21): adopt toolroom's table grammar
+
+toolroom has since shipped its standalone-side testing ergonomics —
+the "later, if ever" convenience this note anticipated over the seam —
+as `toolroom.testing.answers()` (toolroom's
+`notes/20260821-testing-seam.md`). That changes this feature's scope
+and settles its two open surface questions.
+
+### What narrows
+
+Bridge calls no longer need this feature for canned stdout or injected
+failure: `answers()` intercepts at toolroom's `_host` seam — upstream
+of `run()`'s door — with real handles doing real rendering, both lanes,
+footman present or not. Nested inside a `recording()`, `answers()`
+wins and the record sees nothing (pinned by toolroom's conformance
+suite against released footman, so the nesting contract is already
+load-bearing).
+
+What remains is exactly the calls toolroom cannot see: **plain `run()`
+calls** — a command string, a bare list, an in-process callable — with
+no toolroom handle behind them. That is still a real population (task
+bodies shell out directly all over), so the feature stays worth
+landing, but it is failure/answer injection for `run()` calls only.
+The "canned stdout is a semantic stretch for a recorder" worry shrinks
+with the scope: for the calls left, there is no other door.
+
+### What settles
+
+The two open questions (addressing surface, failure payload) now have
+a worked answer with a consumer already trained on it. `answers()`
+takes a table:
+
+- **Keys are argv prefixes** — tuples of tokens, or one string split
+  on whitespace; the longest matching prefix wins. Matching is against
+  the name-led token list, which for a `run()` call is simply its
+  split command — stdlib through and through, satisfying this note's
+  one guardrail (no bridge types) by construction.
+- **Values are the answer**: a `str` is stdout with exit 0, an `int`
+  is an exit code, a full `Result` sets code and both streams.
+- **Unmatched calls keep recording's default** — silent success — so
+  the empty table degenerates to today's `recording()` exactly.
+- **A non-zero answer takes the failing lane honestly**: returned
+  under `nofail`, raised as `RunFailed` otherwise, so
+  `keep_going`/fail-fast/adjudication exercise their real paths with
+  footman's sealed `Result`, per the original analysis.
+
+Proposed spelling: `recording(answers={...})` — the parameter named
+for the sister feature, so a consumer who learned one table teaches
+themselves the other. hse already holds both packages; toolroom's CI
+pins `footman.testing` — one grammar, two doors (`answers()` for
+bridge calls, `recording(answers=)` for `run()` calls) is the whole
+story a downstream test suite has to learn.
+
+Per-match counting (one-shot vs every-match) stayed out of toolroom's
+v1 and should stay out here for symmetry until a consumer asks; same
+for callable values. The deliberate blind spot is unchanged:
+`installed_version()` remains outside the task context — toolroom now
+cans it from *its* table via the seam's `probe()` door, which is
+toolroom's business, not a recording's.
