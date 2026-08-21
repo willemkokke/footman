@@ -84,7 +84,7 @@ dev = [
     # before footman sees them, so a `Secret` passed to a typed handle loses
     # the marker and prints in the clear on every surface that shows a command.
     # footman's half of that promise is worth nothing without this half.
-    "toolroom>=0.5.1",
+    "toolroom>=0.6.0",
     "pytest>=8.0",
     # For the env_files plugin's tests only — the plugin itself imports it
     # lazily and teaches by name when absent; never a runtime dependency.
