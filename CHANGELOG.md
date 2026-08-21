@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-08-21
+
 ### Documentation
 
 - **The testing page names the other door.** `recording()` captures
@@ -5715,7 +5717,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/willemkokke/footman/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/willemkokke/footman/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/willemkokke/footman/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/willemkokke/footman/compare/v0.40.0...v0.41.0
