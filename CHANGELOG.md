@@ -9,6 +9,12 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The testing page names the other door.** `recording()` captures
+  commands but answers every one with a blank success; tests that need
+  canned output or an injected failure on a bridge call are pointed at
+  `toolroom.testing.answers()`, with the nesting rule stated (inside a
+  recording, `answers()` wins and the record sees nothing). The tools
+  page carries the matching sentence at the seam description.
 - **Snippet sources no longer publish as orphan pages.** The generated
   key table, globals table, task-page example and latest-changes blurb
   are included into real pages, yet also shipped as standalone pages in

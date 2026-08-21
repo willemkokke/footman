@@ -1,90 +1,194 @@
-# Scripted replies for recording() — first-class output/failure injection
+# Scripted answers for recording() — output/failure injection at the run() door
 
-Status: PLAN — nothing built. Decisions marked **open** await Willem's
-call. Origin: hse's 0.29.1 conversion report, twice: three of their
-suites assert on tool *output* (parsing `uv tool list`), on *failure*
-(a build failure restoring the README), and on *environment* (a var
-not leaking into an install) — and `recording()` can do none of that,
-so they built a `FakeTool` in `hse.devkit.testing`. Their acceptance
-test is the right one and is adopted here verbatim: **when this
-ships, that fake becomes deletable.**
+Status: PLAN — rebased 2026-08-21 onto footman 0.43.0 and toolroom
+0.6.0 (`toolroom.testing.answers()`, toolroom's
+`notes/20260821-testing-seam.md`). The original 2026-08-01 draft posed
+ten decision points; the table grammar toolroom shipped settles six of
+them, this rebase settles a seventh, and the remaining opens are listed
+with sharper edges than they had. Origin unchanged: hse's 0.29.1
+conversion report — suites that assert on tool *output*, *failure*, and
+*environment*, which `recording()` can do none of. The acceptance test
+is still theirs: when this ships (with toolroom 0.6.1's as-handed
+`Call` record), their `FakeTool` becomes deletable.
 
-## Why the old doubles stopped working
+## The two doors
 
-Patching a module's `run` no longer intercepts bridge calls: the
-bridge binds `from footman.context import run as _run` at import, so
-neither a caller-module patch nor a late `footman.context.run` patch
-reaches it. That is not a regression to fix — the alias is deliberate
-(`tools.run` must never resolve to the function) — it is why the
-faking lane has to be footman's own.
+toolroom shipped the hermetic half: `answers()` swaps `_host.run`/
+`_host.probe` for a table, upstream of footman, real handles doing real
+rendering, footman present or not. Nested inside a `recording()`,
+`answers()` wins and the record sees nothing (pinned by toolroom's
+`tests/test_testing.py`). That door is the only one a footman-free
+consumer (hse-sdk) can hold, and it deliberately stays a minimal
+static table.
+
+This feature is the other door: `recording(answers={...})` at footman's
+`run()` entry. Its population is **the whole door, not just plain
+calls**: under a live footman context, host detection routes every
+bridge call through `run()` (toolroom's `tests/test_detection.py` pins
+that detection cannot be bypassed), so one `recording(answers=)` block
+covers a task body's plain `run("git push")` *and* its `tools.git.push()`
+in the same table. What distinguishes this door is not population but
+**vocabulary**: it is the hosted rehearsal, so it owns the failure
+lanes — and it takes the two answer kinds toolroom's table deliberately
+refused:
+
+- **Exception-valued answers.** An `Exception` instance as a table
+  value is raised at the door — the missing-tool story
+  (`FileNotFoundError`), which hse guards with four production
+  `except OSError:` branches and today can only test by patching
+  `footman.run`. A raise at the door propagates back through a bridge
+  handle exactly as a real spawn failure would.
+- **Sequenced answers.** A `list` of answers is consumed in order for
+  repeated matches of the same prefix — the `side_effect`
+  constituency (hse's `test_version.py`/`test_status.py` patch their
+  git seam ~120 times with ordered reply lists; a static table cannot
+  express "the same `git describe` answers differently twice").
+
+Division of labour, stated once: `answers()` replaces the world;
+`recording(answers=)` scripts the rehearsal. A suite that holds footman
+uses whichever door fits the test — and nested, the innermost
+(`answers()`, upstream) wins.
 
 ## The shape
 
-`recording()` accepts scripted replies; a `run()`/`tools.*` call that
-matches one is faked *with that reply* instead of the blank success:
-
 ```python
-with recording(replies=[
-    on("uv tool list", stdout=LISTING),
-    on("uv build", code=1, stderr="boom"),
-]) as steps:
+with recording(answers={
+    "uv tool list": LISTING,                  # str  → stdout, exit 0
+    "uv build": 1,                            # int  → exit code
+    "git push": RunFailedResult,              # Result → code + both streams
+    "uv python find": FileNotFoundError(),    # raises at the door
+    "git describe": ["v1.2.0", "v1.3.0"],     # ordered: 1st, then 2nd match
+}) as steps:
     ...
 ```
 
-Sketch, not signature — every part below is open.
+## Settled (was: decisions 1, 2, 3, 6, 7, 10)
 
-## Decision points
+- **Keying** (1): argv-prefix table, toolroom's grammar verbatim —
+  tuple of tokens or one string split on whitespace, longest matching
+  prefix wins. Matching is against the name-led token list: for a list
+  command its tokens, for a command string its split, for a bridged
+  call the normalised shown command (`_show.text(exact=False)` — the
+  same spelling `Result.command` records). Stdlib through and through:
+  the one guardrail the toolroom split imposed (no bridge types in the
+  matching API) holds by construction.
+- **Reply shape** (2): `str`/`int`/`Result` base values, plus the two
+  additions above. Results stay sealed — a table's `Result` value is
+  re-minted at the door with the real `command`/`tokens`/`address`, the
+  same way `answers()` re-mints into its own vocabulary. No
+  `timed_out` in v1 (nothing in the acceptance population needs it).
+- **Failure semantics** (3): a scripted non-zero takes the real lane —
+  returned under `nofail`, raised as `RunFailed` otherwise, seats a
+  failed step, fail-fast sees it. This was never really open; it is
+  the point.
+- **Unmatched recorded calls** (6): today's blank success — the empty
+  table degenerates to today's `recording()` exactly, and the existing
+  suites must not notice this feature shipping.
+- **Consumption** (7): scalar values answer every match (a listing
+  asked twice is the same listing); list values consume in order.
+  What an exhausted list answers is open below.
+- **Naming** (10): `answers=` — the parameter named for the sister
+  feature, one grammar, two doors. A consumer who learned one table
+  taught themselves the other.
 
-1. **Keying.** Sequence-position is brittle; a matcher against the
-   *normalised shown command* (`Result.command`, what recordings
-   already assert on) keeps one vocabulary for both directions —
-   telling the tape what happened and asking it what happened.
-   **Open**: substring vs glob vs predicate; lean substring-or-
-   predicate, the two ends of the ladder, nothing between.
-2. **Reply shape.** `code`/`stdout`/`stderr` kwargs, not a
-   hand-built `Result` (Results are sealed, minted by the runtime).
-   **Open**: whether a reply can also set `timed_out`.
-3. **Failure semantics.** A scripted non-zero must behave exactly as
-   live: raises `RunFailed` unless `nofail=True`, seats a failed step,
-   fail-fast sees it. Anything less and the double lies about the lane
-   it doubles. Lean: not open, this is the point.
-4. **Reviewers run.** `pre_record=` hooks review the scripted draft —
-   a reviewer is part of the story being tested (hse's djlint-style
-   exit-code adjudication wants testing *against* scripted exits).
-   Lean yes.
-5. **Off-the-record calls.** Today `recorded=False` calls *execute*
-   under `recording()` — "a value read is not the story". But hse's
-   `uv tool list` parse IS a value read; without interception their
-   suite still shells out. Lean: an explicit reply match intercepts
-   even off-record calls — the test author declaring the world beats
-   honest execution — while unmatched off-record calls keep executing.
-   **Open**, and the subtlest call here.
-6. **Unmatched recorded calls** keep today's blank success — the
-   existing suites must not notice this feature shipping.
-7. **Consumption.** A reply answering once vs every match. Lean: every
-   match (a listing asked twice is the same listing), with an optional
-   `times=`/ordered mode only if a real suite needs it. **Open.**
-8. **`Runner.invoke` channel.** The same `replies=` on Runner, so
-   branded-CLI suites test identically. Lean yes.
-9. **In-process tools** under recording are faked like spawns; a
-   matching reply supplies their output the same way. Lean yes.
-10. **Naming.** `replies=` / `script=` / `answers=`. **Open.**
+## Implementation facts (so the build is mechanical)
+
+Gathered 2026-08-21 against 0.43.0:
+
+- The slot is one place: `src/footman/context.py:3120`, the
+  `ctx.dry_run and recorded` branch, between the tokens computation
+  (`:3116`) and the `Result(0, …)` mint (`:3129`).
+- **Command strings carry `tokens == ()`** (`to_argv()` refuses
+  strings), so matching must split at match time — `shlex.split` on
+  POSIX, mirroring what the real spawn path does at `:3236`. Windows
+  hands command strings to subprocess unsplit; the matching story
+  there needs a decision (lean: match on the POSIX split anyway — the
+  table is a test artifact, not a spawn).
+- The dry-run branch **returns before the failing lane**: the
+  `nofail`/`RunFailed` gate lives at `context.py:3404-3412` and is
+  unreachable from the `:3141` early return. An injected non-zero
+  needs that logic reachable from the recording path (shared tail, not
+  a duplicate).
+- `recording(**overrides)` splats everything into `Context`
+  (`testing.py:87`) — `answers=` must be carved out as a keyword-only
+  parameter before the splat, or `Context.__init__` eats it.
+- Plain callables are refused at the door (`context.py:3075`) unless
+  they arrive from the bridge with `_show` — so the old decision 9
+  ("in-process tools under recording") is moot: the only callables
+  that reach the door are bridged, and they match like any other call.
+
+## Still open
+
+- **`recorded=False` interception** (was decision 5, now
+  load-bearing). Today an off-record call *executes* under
+  `recording()` (pinned by `tests/test_context.py:2431`) — "a value
+  read is not the story". But hse's value reads are exactly the calls
+  that need answers: `uv tool list` parses, `--version` probes via
+  plain `run(recorded=False)`. Lean unchanged from the addendum: an
+  explicit match intercepts even off-record calls — the test author
+  declaring the world beats honest execution — while unmatched
+  off-record calls keep executing. The subtlest call here.
+- **Reviewers** (was decision 4). Dry-run never runs `pre_record`
+  (`context.py:3022` — "nothing ran, nothing captured"). With canned
+  output that premise breaks: a scripted draft is reviewable, and
+  hse's exit-code adjudication wants testing against scripted exits.
+  If reviewers should fire, the review block (`:3306`) must become
+  reachable from the injected path. Lean yes, but it widens the
+  change.
+- **Exhausted sequences**: sticky-last vs refusal. Lean refusal that
+  names the prefix and the count, toolroom's unmatched-probe manner —
+  a sequence is a script, and running past its end is the test being
+  wrong, not the world being benign.
+- **Exception values**: instance only, or type too? Lean instance only
+  (`FileNotFoundError("uv")`) — a type invites argument-less
+  reconstruction guesses.
+- **Run-policy capture.** Several hse sites assert on what a call was
+  *handed* — `env=`/`cwd=` kwargs, and the *absence* of `env=`
+  (`test_template_cmd.py:988`, `test_check.py:662/739`). Neither door
+  records that today (steps are sealed `Result`s; toolroom's `Call`
+  keeps `.opts` but only for bridge calls). Out of scope for
+  `answers=` itself; if wanted it is its own lane — a richer step
+  record, designed against the sealed-Result constraint.
+- **`Runner.invoke` channel** (was decision 8). Now known to be a
+  materially larger build: `invoke` has no Context seam — the executor
+  mints its own (`testing.py:186-218`) — so `replies=` there is
+  plumbing, not parameter-passing. Deferred until a branded-CLI suite
+  asks. (Meanwhile `answers()` already works around `invoke`: the
+  seam swap is process-wide.)
+
+## The acceptance population (hse, audited 2026-08-21)
+
+What each remaining double needs, and which door retires it:
+
+- `test_release_cmd.py:802/817` — `_run_cliff` retry logic, patched
+  `footman.run` MagicMock → canned `Result` answers (this feature).
+- `test_emission_contract.py:403` — `footman.run` raising
+  `FileNotFoundError` → exception-valued answers (this feature).
+- `tasks/workspace.py` `_installed_version` `--version` read →
+  canned stdout + the `recorded=False` open above (this feature).
+- `mock_run` + `side_effect` ordered lists (~120 sites,
+  `test_version.py`/`test_status.py`) → sequenced answers (this
+  feature); the migration itself is hse's call, they patch their own
+  `_git.query` one level above the bridge.
+- `FakeTool` bridge sites (orchestrate/release/template + the
+  `_FakeUv`/`_FakeGit` clones) → toolroom's `answers()` today, except
+  the flag-never-handed assertions, which wait on toolroom 0.6.1's
+  as-handed `Call.args`/`Call.kwargs` (toolroom's
+  `notes/20260821-call-as-handed.md`, handed over 2026-08-21).
+- `env=`/`cwd=` kwargs assertions on plain `run()` → the run-policy
+  capture open above; until then those stay monkeypatches, honestly.
 
 ## Non-goals
 
 - Not a general mocking framework: no call-count assertions, no
   argument capture beyond what `steps` already records.
-- Not for live runs: replies exist only inside `recording()` (and
-  `Runner.invoke` if 8 lands). `--dry-run` stays exactly as it is —
-  a rehearsal of the real world, never a scripted one.
-
-## Related but separate
-
-- `tools.python.at(path)` — hse's identity-channel suggestion
-  (executable selection must not ride `.opts()`, which is policy).
-  Separate small build, undecided.
-- Docs seams from the same report, cheap and independent: state the
-  placement rule plainly on the bridge page (call keywords land after
-  positionals; `.flags()` hoists to tool level, before any
-  subcommand), and warn that `Result.raw` is the platform-exact
-  spelling — parse `stdout`, never `raw`.
+- Not for live runs: answers exist only inside `recording()`.
+  `--dry-run` stays exactly as it is — a rehearsal of the real world,
+  never a scripted one. The `step=False` arc taught that
+  report-shaping switches in production get counterfeited; recordings
+  are the sanctioned doubles whose job is to lie, and this stays on
+  that side of the line.
+- `installed_version()` stays unfakeable from footman — it sits
+  outside the task context on purpose. toolroom cans it from *its*
+  table via the seam's `probe()` door, which is toolroom's business,
+  not a recording's.

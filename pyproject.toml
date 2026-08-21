@@ -80,10 +80,11 @@ dev = [
     "uv",
     # The typed tool surfaces footman's own tasks run through — the spun-out
     # bridge, dogfooding the hosted lane. Dev-only: footman ships zero deps.
-    # 0.5.1 is the floor on purpose: below it the bridge stringifies arguments
-    # before footman sees them, so a `Secret` passed to a typed handle loses
-    # the marker and prints in the clear on every surface that shows a command.
-    # footman's half of that promise is worth nothing without this half.
+    # 0.6.0 is the floor for `toolroom.testing.answers()`, the seam-level
+    # double the docs point bridge-call testers at (and the earlier 0.5.1
+    # floor still matters: below it the bridge stringifies arguments before
+    # footman sees them, so a `Secret` passed to a typed handle loses the
+    # marker and prints in the clear on every surface that shows a command).
     "toolroom>=0.6.0",
     "pytest>=8.0",
     # For the env_files plugin's tests only — the plugin itself imports it
