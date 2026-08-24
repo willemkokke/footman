@@ -7,6 +7,19 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`--self-install` puts the CLI on your PATH, or brings it up to date.**
+  One command, `uv tool install --upgrade <dist> --with uv`: it installs
+  when nothing is there and moves an existing install to the latest
+  release, bundling uv into the tool environment so the handoffs work
+  where PATH has none. Always the latest release — a project's pinned
+  copy (`uv run fm --self-install`) installs the global `fm` at latest,
+  never the version it is itself running. A branded CLI gets the same
+  flag from its `dist=`; without one it refuses by name rather than
+  guess a package. Nothing may follow the flag — it takes the whole
+  invocation — and `--help` still wins over it.
+
 ## [0.44.0] - 2026-08-21
 
 ### Documentation

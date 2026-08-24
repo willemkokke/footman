@@ -24,6 +24,13 @@ dependencies inline. The full rules, and the opt-out, live in the
 cookbook:
 [a tasks file that carries its own dependencies](cookbook.md#a-tasks-file-that-carries-its-own-dependencies).
 
+Any copy can do that global install for you: `fm --self-install` runs
+`uv tool install --upgrade footman --with uv` — installing when nothing is
+there, moving an existing install to the latest release otherwise, and
+bundling uv either way. It always installs the latest release, even from a
+project's older pinned copy (`uv run fm --self-install`): the flag is about
+the `fm` on your PATH, not the one that happens to be running.
+
 ## Write a tasks file
 
 Tasks are plain functions. A `@task` decorator registers one; a `group()` opens
