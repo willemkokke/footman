@@ -1553,6 +1553,42 @@ def _completion_action(key: str, shell: object) -> int:
     return 0
 
 
+def _self_install_action(json_mode: bool) -> int:
+    """`--self-install`: put this CLI on the PATH with uv, or bring it up to date.
+
+    One command, `uv tool install --upgrade <dist> --with uv`: it installs
+    when nothing is there and moves an existing install to the latest
+    release, so the flag never has to ask which. Always the latest from
+    the index — a pinned copy inside a project (`uv run fm --self-install`)
+    installs the *global* copy at latest, never the version it is running
+    itself. `--with uv` bundles uv into the tool environment, so the
+    handoffs work where no uv is on the PATH. uv's own output is the
+    report; nothing here paraphrases it.
+    """
+    flag = "--self-install"
+    if _brand.dist is None:
+        return _refuse(
+            json_mode,
+            f"{flag}: {_brand.prog} declares no distribution to install — "
+            f"pass dist= to App so it knows which package ships it",
+        )
+    uv = _find_uv()
+    if uv is None:
+        return _refuse(
+            json_mode,
+            f"{flag}: no uv found — this runner's environment has none and "
+            f"PATH has none; install uv first (https://docs.astral.sh/uv/)",
+        )
+    cmd = [uv, "tool", "install", "--upgrade", _brand.dist, "--with", "uv"]
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        done = subprocess.run(cmd)
+    except OSError as exc:
+        return _refuse(json_mode, f"{flag}: uv would not start ({exc})")
+    return done.returncode
+
+
 # --- orchestration -----------------------------------------------------------
 
 
@@ -1987,6 +2023,16 @@ def _run(
                     _split._expects_value(None, flag, "[SHELL]", argv[after]),
                 )
             return _completion_action(key, value)
+    if g.get("self_install") and not wants_help:
+        if after < len(argv):
+            # The flag ends the invocation — a task chain behind it would
+            # never run, so a word there is a mistake to name, not ignore.
+            return _refuse(
+                bool(g.get("json")),
+                f"--self-install takes the whole invocation; drop "
+                f"{argv[after]!r} and run it on its own",
+            )
+        return _self_install_action(bool(g.get("json")))
 
     # May replace the process (POSIX) or exit with the child's code
     # (Windows); returns quietly whenever the handoff doesn't apply.

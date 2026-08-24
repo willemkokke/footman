@@ -55,6 +55,7 @@ _GLOBALS = frozenset(
         "--json", "--timings",
         "--directory", "-C", "--tasks-file", "-f", "--config",
         "--install-completion", "--setup-completion", "--uninstall-completion",
+        "--self-install",
     }
 )  # fmt: skip
 # Value positions that are file paths. footman can't know the filesystem from a
