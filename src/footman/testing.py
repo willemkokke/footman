@@ -38,7 +38,7 @@ import io
 import os
 import shlex
 import tempfile
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -60,14 +60,31 @@ __all__ = [
 
 
 @contextlib.contextmanager
-def recording(**overrides: Any) -> Generator[list[Result]]:
+def recording(
+    *, answers: Mapping[Any, Any] | None = None, **overrides: Any
+) -> Generator[list[Result]]:
     """Capture the commands a block would `run()` — silently, not executing.
 
     Yields the live step list; each `run()` call inside the block — hosted
-    toolroom calls included — appends a `Result` instead of executing.
-    In-process callables passed to
-    `run()` are skipped too — that is the point, but worth knowing. Keyword
-    overrides go to the underlying `Context` (e.g. `env={...}`).
+    toolroom calls included — appends a `Result` instead of executing, and
+    answers with a blank success. Keyword overrides go to the underlying
+    `Context` (e.g. `env={...}`).
+
+    `answers=` scripts the answers instead. Keys are command prefixes —
+    `"uv tool list"`, or a tuple of tokens — matched against the recorded
+    command (`Result.command`), longest match first. Values: a `str` is
+    stdout with exit 0, an `int` is an exit code, a `Result` sets code and
+    both streams, an exception instance is *raised* by the call (a missing
+    binary), and a list answers consecutive matches in order and refuses by
+    name when it runs dry. Unmatched calls keep the blank success. A
+    non-zero answer takes the real failing lane — returned under
+    `nofail=True`, raised as `RunFailed` otherwise — and a matched call is
+    answered even when it opted out of the record with `recorded=False`.
+    A recorded step also keeps the `env` and `cwd` it would have run with.
+
+    toolroom's `answers()` is the same table applied one layer down, at the
+    bridge's own seam; nested inside a recording, it wins and the record
+    sees nothing.
     """
     # Build the kwargs dict so `overrides` can win over the dry_run/quiet
     # defaults — passing them as positional defaults made `recording(quiet=False)`
@@ -76,6 +93,8 @@ def recording(**overrides: Any) -> Generator[list[Result]]:
     # defaults (a direct `Context(dry_run=True, **overrides)` would raise on
     # a duplicate keyword instead).
     merged: dict[str, Any] = {"dry_run": True, "quiet": True, **overrides}
+    if answers is not None:
+        merged["answers"] = context._Answers(answers)
     ctx = Context(**merged)
     with use_context(ctx):
         yield ctx.steps
@@ -155,6 +174,7 @@ class Runner:
         tasks: Path | Group | None = None,
         cwd: Path | None = None,
         stdin: str | bytes | None = None,
+        answers: Mapping[Any, Any] | None = None,
     ) -> InvokeResult:
         """Run one command line and return everything it produced.
 
@@ -165,17 +185,26 @@ class Runner:
         pipe would have delivered — a `str` is encoded UTF-8 — and its
         absence means "a terminal": the invocation never reads the test
         harness's real stream, so `stdin`-bound parameters see exactly what
-        the test says and nothing else. Never raises on task failure — the
-        code is in the `Result`; `KeyboardInterrupt` passes through.
+        the test says and nothing else. `answers` scripts the world the
+        invocation rehearses in — the same table `recording(answers=…)`
+        takes — and implies `--dry-run`, so the CLI runs end to end against
+        scripted commands. Never raises on task failure — the code is in
+        the `Result`; `KeyboardInterrupt` passes through.
         """
         argv = shlex.split(args) if isinstance(args, str) else list(args)
+        if answers is not None and not any(a in ("--dry-run", "-n") for a in argv):
+            argv = ["--dry-run", *argv]
         out, err = io.StringIO(), io.StringIO()
         collected: list[TaskResult] = []
         payload = stdin.encode("utf-8") if isinstance(stdin, str) else stdin
         previous = context._inject_stdin(payload)
+        table = context._inject_answers(
+            context._Answers(answers) if answers is not None else None
+        )
         try:
             return self._invoke(argv, tasks, cwd, out, err, collected)
         finally:
+            context._inject_answers(table)
             context._restore_stdin_payload(previous)
 
     def _invoke(

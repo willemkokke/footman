@@ -24,7 +24,15 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
+from collections.abc import (
+    Callable,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+    Sized,
+)
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -163,6 +171,8 @@ class Result(int):
     _audit: tuple[AuditEntry, ...]
     _tokens: tuple[str, ...]
     _started: float | None
+    _env: dict[str, str] | None
+    _cwd: Path | None
 
     def __new__(
         cls,
@@ -179,8 +189,12 @@ class Result(int):
         audit: tuple[AuditEntry, ...] = (),
         tokens: tuple[str, ...] = (),
         started: float | None = None,
+        env: dict[str, str] | None = None,
+        cwd: Path | None = None,
     ) -> Result:
         self = super().__new__(cls, code)
+        object.__setattr__(self, "_env", env)
+        object.__setattr__(self, "_cwd", cwd)
         object.__setattr__(self, "_timed_out", timed_out)
         object.__setattr__(self, "_address", address)
         object.__setattr__(self, "_started", started)
@@ -306,6 +320,24 @@ class Result(int):
         produced, a review entry per `pre_record` reviewer. Empty for a
         record that executed nothing (a dry-run plan line)."""
         return self._audit
+
+    @property
+    def env(self) -> dict[str, str] | None:
+        """The environment this call would have run in — the task's own, or
+        the `env=` handed to the call — kept on a **recorded** step only, so
+        a `recording()` can assert what a command would have seen (`assert
+        "UV_TOOL_DIR" not in steps[0].env`). `None` on a record that ran:
+        a live environment can hold secrets, and a record travels into
+        `--json` and the report."""
+        return self._env
+
+    @property
+    def cwd(self) -> Path | None:
+        """The directory this call would have run in — the task's resolved
+        one, or the call's `cwd=`/`rel=` — kept on a **recorded** step only,
+        like `env`. `None` on a record that ran, and for a call that opted
+        out with `cwd="unmanaged"`."""
+        return self._cwd
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise AttributeError(
@@ -673,6 +705,12 @@ class Context:
     one call (the `lambda: build("web")` spelling) shows as the single piece
     of work it is. Cleared on claim, so the requests after it — and anything
     the callee itself asks for — count their own."""
+    answers: Any = None
+    """The scripted answers a `recording(answers=…)` block carries — the
+    normalised table, shared by reference with every child context so an
+    ordered sequence is consumed in one place. `None` outside a scripted
+    recording; a raw mapping handed to `Context(answers=…)` is normalised
+    on first use."""
     steps: list[Result] = field(default_factory=list)
     """Every `run()` this task made, in order — what `recording()` and
     the `--json` envelope read."""
@@ -1654,6 +1692,137 @@ def stdin_payload() -> bytes | None:
                 _stdin_payload = None
     payload: bytes | None = _stdin_payload  # the sentinel is gone by here
     return payload
+
+
+# --- scripted answers: the table a recording answers run() from ---------------
+
+
+class _Answers:
+    """A `recording(answers=…)` table, normalised once and shared by reference.
+
+    Keys are command prefixes matched against the normalised shown command
+    (`Result.command` — what a recording asserts on): a key matches when
+    the command *is* it or starts with it followed by a space, and the
+    longest matching key wins. No tokenising: a command string is never
+    split (footman hands it to the OS unsplit on Windows), so the rule is
+    the same on every platform and can never disagree with what would run.
+    A tuple key is joined with spaces; a string key has its whitespace
+    collapsed.
+
+    Values: a `str` is stdout with exit 0; an `int` is an exit code; a
+    `Result` (footman's or toolroom's) sets code and both streams; an
+    exception *instance* is raised at the door — the missing-binary case; a
+    `list` is consumed in order across repeated matches, and refuses by
+    name once exhausted. Sequence cursors live here, under one lock, so a
+    `parallel()` child consuming an entry advances the same script.
+    """
+
+    __slots__ = ("_cursors", "_lock", "_table")
+
+    def __init__(self, table: Mapping[Any, Any]) -> None:
+        canned: dict[str, Any] = {}
+        for key, value in table.items():
+            canned[self._key(key)] = self._checked(value, key)
+        self._table = canned
+        self._cursors: dict[str, int] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _key(key: Any) -> str:
+        if isinstance(key, str):
+            tokens: list[Any] = key.split()
+        else:
+            try:
+                tokens = list(key)
+            except TypeError:
+                tokens = []
+        if not tokens or not all(isinstance(t, str) for t in tokens):
+            raise TypeError(
+                f"recording(answers=): a key is a command prefix — one string "
+                f'("uv tool list") or a tuple of tokens — not {key!r}'
+            )
+        return " ".join(tokens)
+
+    @classmethod
+    def _checked(cls, value: Any, key: Any) -> Any:
+        if isinstance(value, list):
+            if not value or any(isinstance(v, list) for v in value):
+                raise TypeError(
+                    f"recording(answers=): the sequence for {key!r} must be a "
+                    f"non-empty list of single answers — one per match"
+                )
+            return [cls._checked(v, key) for v in value]
+        if isinstance(value, type) and issubclass(value, BaseException):
+            raise TypeError(
+                f"recording(answers=): the answer for {key!r} is an exception "
+                f"class — pass an instance ({value.__name__}(...)), which is "
+                f"what the call will raise"
+            )
+        if isinstance(value, (str, int, BaseException)) or hasattr(value, "stdout"):
+            return value
+        raise TypeError(
+            f"recording(answers=): the answer for {key!r} must be a str "
+            f"(stdout), an int (exit code), a Result, an exception instance, "
+            f"or a list of those — not {type(value).__name__}"
+        )
+
+    def answer(self, command: str) -> tuple[int, str, str] | None:
+        """The scripted (code, stdout, stderr) for *command*, `None` when no
+        key matches; raises the scripted exception, or `LookupError` when a
+        sequence has run dry."""
+        best: str | None = None
+        for key in self._table:
+            if (command == key or command.startswith(key + " ")) and (
+                best is None or len(key) > len(best)
+            ):
+                best = key
+        if best is None:
+            return None
+        value = self._table[best]
+        if isinstance(value, list):
+            with self._lock:
+                n = self._cursors.get(best, 0)
+                if n >= len(value):
+                    plural = "y" if len(value) == 1 else "ies"
+                    raise LookupError(
+                        f"recording(answers=): the sequence for {best!r} "
+                        f"answered its {len(value)} entr{plural} and "
+                        f"`{command}` asked for one more — the script is "
+                        f"shorter than the story; add an entry, or make it a "
+                        f"single value to answer every match"
+                    )
+                self._cursors[best] = n + 1
+            value = value[n]
+        if isinstance(value, BaseException):
+            raise value
+        if isinstance(value, str):
+            return 0, value, ""
+        if hasattr(value, "stdout"):  # a Result — footman's or toolroom's twin
+            return int(value), value.stdout, value.stderr
+        return int(value), "", ""
+
+
+# The table `Runner.invoke(answers=…)` sets for the span of one invocation:
+# the executor mints its own contexts, so the ambient one is never consulted
+# there, and `run()` falls back to this when its context carries no table.
+_injected_answers: _Answers | None = None
+
+
+def _inject_answers(table: _Answers | None) -> _Answers | None:
+    global _injected_answers
+    previous = _injected_answers
+    _injected_answers = table
+    return previous
+
+
+def _scripted_answer(ctx: Context, command: str) -> tuple[int, str, str] | None:
+    table = ctx.answers if ctx.answers is not None else _injected_answers
+    if table is None:
+        return None
+    if not isinstance(table, _Answers):  # a raw mapping given to Context()
+        table = _Answers(table)
+        ctx.answers = table
+    return table.answer(command)
 
 
 def _inject_stdin(payload: bytes | None) -> Any:
@@ -2940,6 +3109,77 @@ def _target_cwd(
     return (base if base is not None else Path.cwd()) / rel_path
 
 
+def _reviewed(
+    ctx: Context,
+    pre_record: Callable[[ResultView], None],
+    cmd: Any,
+    args: tuple[Any, ...],
+    label: str,
+    show_label: str,
+    code: int,
+    out_s: str,
+    err_s: str,
+    duration: float,
+    raw: str,
+    tokens: tuple[str, ...],
+    addr: str,
+    audit: tuple[AuditEntry, ...],
+    timed_out: bool,
+    start: float | None,
+) -> tuple[int, str, str, tuple[AuditEntry, ...]]:
+    """The review window: the work ran (or was scripted) and the record is
+    still a draft. The reviewer reads what was captured and may amend the
+    verdict — title and code — before anything is sealed, shown, or raised.
+    A raising reviewer fails the call with the hook's own error: a broken
+    reviewer is a broken gate, not a shrug. The record keeps what the work
+    honestly produced in that case — review never finished, so nothing it
+    half-did is kept. Returns the reviewed (code, label, shown label, audit).
+    """
+    hook = getattr(pre_record, "__name__", repr(pre_record))
+    view = ResultView(
+        title=label,
+        code=code,
+        stdout=out_s,
+        stderr=err_s,
+        duration=duration,
+        raw=raw,
+        command=label,
+    )
+    try:
+        pre_record(view)
+    except Exception as exc:
+        ctx.steps.append(
+            Result(
+                code,
+                command=label,
+                stdout=out_s,
+                stderr=err_s,
+                duration=duration,
+                raw=raw,
+                shown=show_label,
+                timed_out=timed_out,
+                address=addr,
+                audit=(*audit, _audit_entry("review", hook, None)),
+                tokens=tokens,
+                started=start,
+            )
+        )
+        raise RuntimeError(
+            f"pre_record hook {hook!r} failed reviewing {show_label!r}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+    audit = (
+        *audit,
+        _audit_entry("review", hook, view.code if "code" in view._touched else None),
+    )
+    code = view.code
+    if view.title != label:
+        # A reviewer may rename the record; the name it goes out under is
+        # shown by the same rule the original was.
+        show_label = _shown(cmd, args, view.title)[0]
+    return code, view.title, show_label, audit
+
+
 def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
@@ -3006,8 +3246,10 @@ def run(
     unreported. It runs in `ctx.cwd` with `ctx.env`, inside the task's lane,
     with colour resolved the same way, it is terminated with the rest on a
     fail-fast, and it still raises unless `nofail=True`. It also *executes*
-    under `recording()`, where a step would be faked: a value read is not the
-    story being recorded, and faking it would corrupt the story that is —
+    under `recording()`, where a step would be faked — unless the recording
+    carries a scripted answer for it (`recording(answers=…)`), in which case
+    the script wins: a value read is not the story being recorded, and
+    faking it would corrupt the story that is —
     the real steps downstream would record whatever a blank answer produced.
 
     **`pre_record=` reviews the record before it is sealed.** Some tools
@@ -3117,7 +3359,11 @@ def run(
             () if callable(cmd) or isinstance(cmd, str) else tuple(argv_tokens(cmd))
         )
 
-    if ctx.dry_run and recorded:
+    # A scripted answer is looked up before the recording branch decides,
+    # because an explicit match wins even for an off-record call (below).
+    # The lookup itself may raise: an exception value, or a sequence run dry.
+    scripted = _scripted_answer(ctx, label) if ctx.dry_run else None
+    if ctx.dry_run and (recorded or scripted is not None):
         # Record the step even when not executing: `dry_run` + `quiet` is the
         # silent-capture mode `footman.testing` builds on. The recorded label
         # is normalised; only the shown line colours or (under -v) goes exact.
@@ -3126,17 +3372,75 @@ def run(
         # is how the task learns something — and faking it would corrupt the
         # story that *is*: the real steps downstream would go on to record
         # whatever a blank answer produced (`git tag ` for a missing sha).
+        # Unless the test scripted that very answer: a value read the table
+        # names is intercepted, off the record or not — the author declaring
+        # the world beats honest execution — and only unmatched reads run.
+        addr = _child_address(ctx, _addr_leaf(show_title, show_label))
+        # What the call *would* have seen — the same choice the live lane
+        # makes below — kept on the record so a recording can assert on it.
+        would_env = dict(env) if env is not None else dict(ctx.env)
+        try:
+            would_cwd = _target_cwd(ctx, cwd, rel)
+        except ValueError:
+            would_cwd = None  # the live lane refuses it; a rehearsal records
+        if scripted is None:
+            result = Result(
+                0,
+                command=label,
+                raw=raw,
+                shown=show_label,
+                address=addr,
+                tokens=tokens,
+                env=would_env,
+                cwd=would_cwd,
+            )
+            ctx.steps.append(result)
+            if not ctx.quiet:
+                out.write(f"$ {shown if paint else shown_plain}\n")
+            return result
+        code, out_s, err_s = scripted
+        # A scripted answer is a draft like a live one: reviewers see it —
+        # an adjudicator is tested *against* scripted exits — and a
+        # non-zero takes the real failing lane. The audit says so.
+        audit: tuple[AuditEntry, ...] = (_audit_entry("body", show_label, code),)
+        if pre_record is not None and recorded:
+            code, label, show_label, audit = _reviewed(
+                ctx,
+                pre_record,
+                cmd,
+                args,
+                label,
+                show_label,
+                code,
+                out_s,
+                err_s,
+                0.0,
+                raw,
+                tokens,
+                addr,
+                audit,
+                False,
+                None,
+            )
         result = Result(
-            0,
+            code,
             command=label,
+            stdout=out_s,
+            stderr=err_s,
             raw=raw,
             shown=show_label,
-            address=_child_address(ctx, _addr_leaf(show_title, show_label)),
+            address=addr,
+            audit=audit,
             tokens=tokens,
+            env=would_env,
+            cwd=would_cwd,
         )
-        ctx.steps.append(result)
-        if not ctx.quiet:
-            out.write(f"$ {shown if paint else shown_plain}\n")
+        if recorded:
+            ctx.steps.append(result)
+            if not ctx.quiet:
+                out.write(f"$ {shown if paint else shown_plain}\n")
+        if code != 0 and not nofail:
+            raise RunFailed(result)
         return result
 
     if title is not None and not recorded:
@@ -3302,60 +3606,26 @@ def run(
     # body actor names the work, which is the command line — so it is the
     # shown one, for the same reason the address is: a name is printed
     # wherever the record travels.
-    audit: tuple[AuditEntry, ...] = (_audit_entry("body", show_label, code),)
+    audit = (_audit_entry("body", show_label, code),)
     if pre_record is not None and recorded:
-        # The review window: the work ran and the record is still a draft.
-        # The reviewer reads what was captured and may amend the verdict —
-        # title and code — before anything is sealed, shown, or raised. A
-        # raising reviewer fails the call with the hook's own error: a broken
-        # reviewer is a broken gate, not a shrug. The record keeps what the
-        # work honestly produced in that case — review never finished, so
-        # nothing it half-did is kept.
-        hook = getattr(pre_record, "__name__", repr(pre_record))
-        view = ResultView(
-            title=label,
-            code=code,
-            stdout=out_s,
-            stderr=err_s,
-            duration=duration,
-            raw=raw,
-            command=label,
+        code, label, show_label, audit = _reviewed(
+            ctx,
+            pre_record,
+            cmd,
+            args,
+            label,
+            show_label,
+            code,
+            out_s,
+            err_s,
+            duration,
+            raw,
+            tokens,
+            addr,
+            audit,
+            timed_out,
+            start,
         )
-        try:
-            pre_record(view)
-        except Exception as exc:
-            ctx.steps.append(
-                Result(
-                    code,
-                    command=label,
-                    stdout=out_s,
-                    stderr=err_s,
-                    duration=duration,
-                    raw=raw,
-                    shown=show_label,
-                    timed_out=timed_out,
-                    address=addr,
-                    audit=(*audit, _audit_entry("review", hook, None)),
-                    tokens=tokens,
-                    started=start,
-                )
-            )
-            raise RuntimeError(
-                f"pre_record hook {hook!r} failed reviewing {show_label!r}: "
-                f"{type(exc).__name__}: {exc}"
-            ) from exc
-        audit = (
-            *audit,
-            _audit_entry(
-                "review", hook, view.code if "code" in view._touched else None
-            ),
-        )
-        code = view.code
-        if view.title != label:
-            # A reviewer may rename the record; the name it goes out under is
-            # shown by the same rule the original was.
-            show_label = _shown(cmd, args, view.title)[0]
-        label = view.title
     result = Result(
         code,
         command=label,

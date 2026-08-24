@@ -7,6 +7,29 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`recording(answers=…)` scripts what the commands answer.** A plain
+  recording fakes every call as a blank success; a table of answers —
+  keyed by command prefix, longest match first — makes a recorded call
+  return canned stdout, an exit code, or a full `Result`, raise an
+  exception (the missing-binary case), or answer a list of those in order
+  across repeated matches, refusing by name once the list runs dry. A
+  non-zero answer takes the real failing lane (`RunFailed` unless
+  `nofail=True`), a `pre_record` reviewer runs on the scripted draft, and
+  a matched call is answered even when it opted out of the record with
+  `recorded=False` — a value read is exactly what a test wants to script.
+  Unmatched calls keep the blank success, so existing recordings notice
+  nothing. `Runner.invoke(answers=…)` takes the same table and implies
+  `--dry-run`, so a CLI drives end to end against a scripted world.
+  toolroom's `answers()` is the same grammar at the bridge's own seam and
+  still wins when both are nested.
+- **A recorded step keeps the `env` and `cwd` it would have run with.**
+  `Result.env` and `Result.cwd` are set on a recorded step — the task's
+  environment or the call's own `env=`, the resolved directory or the
+  call's `cwd=`/`rel=` — and `None` on a record that actually ran, so a
+  live environment (which may hold secrets) never travels into `--json`.
+
 ## [0.45.0] - 2026-08-21
 
 ### Added
