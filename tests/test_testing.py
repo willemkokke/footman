@@ -10,11 +10,14 @@ import json
 import sys
 from typing import Literal
 
+import pytest
+
 from footman import Context, run, use_context
 from footman._executor import EX_USAGE
 from footman.app import App
+from footman.context import current
 from footman.registry import Group
-from footman.testing import Runner, recording
+from footman.testing import Result, Runner, recording
 
 
 def _echo(text: str) -> str:
@@ -26,6 +29,207 @@ def _echo(text: str) -> str:
     coreutils on PATH (Windows has an `echo.exe` only when Git's `usr/bin`
     is there); the interpreter running the suite always exists."""
     return f'"{sys.executable}" -c "print(\'{text}\')"'
+
+
+# --- recording(answers=) ------------------------------------------------------
+
+
+def test_answers_script_stdout_by_command_prefix():
+    """A str answers with that stdout and exit 0; the key is a prefix of the
+    recorded command, and the step is still recorded."""
+    with recording(answers={"uv tool list": "hse v1\n- hse\n"}) as steps:
+        listing = run("uv tool list --show-paths")
+    assert listing.stdout == "hse v1\n- hse\n"
+    assert listing.ok
+    assert [s.command for s in steps] == ["uv tool list --show-paths"]
+
+
+def test_answers_longest_prefix_wins_and_needs_a_word_boundary():
+    with recording(answers={"git": 0, "git push": 1, "git pushx": 3}):
+        assert run("git status", nofail=True) == 0
+        assert run("git push --tags", nofail=True) == 1
+        assert run("git pushx", nofail=True) == 3
+        assert run("git pushy", nofail=True) == 0  # "git push" is not a prefix
+
+
+def test_answers_accept_tuple_keys_and_collapse_whitespace():
+    with recording(answers={("uv", "build"): 2, "  git   push ": 1}):
+        assert run("uv build", nofail=True) == 2
+        assert run("git push", nofail=True) == 1
+
+
+def test_a_non_zero_answer_takes_the_real_failing_lane():
+    """Raised as RunFailed unless nofail — the error path under test really
+    runs, with footman's own Result carrying the scripted verdict."""
+    from footman.context import RunFailed
+
+    with recording(answers={"uv build": Result(1, stderr="boom")}) as steps:
+        with pytest.raises(RunFailed) as failed:
+            run("uv build")
+        soft = run("uv build", nofail=True)
+    assert failed.value.result.stderr == "boom"
+    assert soft == 1 and soft.stderr == "boom"
+    assert [s.code for s in steps] == [1, 1]
+
+
+def test_an_unmatched_call_keeps_the_blank_success():
+    with recording(answers={"git push": 1}) as steps:
+        assert run("git tag v1").ok
+    assert steps[0].stdout == ""
+
+
+def test_an_exception_answer_is_raised_by_the_call():
+    """The missing-binary case: the call raises what the table holds, so an
+    `except OSError:` guard in the task is the code path exercised."""
+    with recording(answers={"uv python find": FileNotFoundError("uv")}):
+        with pytest.raises(FileNotFoundError):
+            run("uv python find 3.12")
+        # an unrelated call is untouched
+        assert run("git status").ok
+
+
+def test_a_sequence_answers_in_order_then_refuses_by_name():
+    with recording(answers={"git describe": ["v1.0\n", "v1.1\n"]}):
+        assert run("git describe").stdout == "v1.0\n"
+        assert run("git describe --tags").stdout == "v1.1\n"
+        with pytest.raises(LookupError, match=r"'git describe'.*2 entries"):
+            run("git describe")
+
+
+def test_a_sequence_may_mix_answer_kinds():
+    from footman.context import RunFailed
+
+    with recording(answers={"git push": [1, "ok\n"]}):
+        with pytest.raises(RunFailed):
+            run("git push")
+        assert run("git push").stdout == "ok\n"  # the retry succeeds
+
+
+def test_a_matched_answer_intercepts_an_off_record_read():
+    """hse's git seam calls with recorded=False, nofail=True everywhere: a
+    scripted answer must win over the truthful-read default, or the feature
+    retires nothing. An unmatched off-record call still executes."""
+    with recording(answers={"git rev-parse": "abc123\n"}) as steps:
+        sha = run("git rev-parse HEAD", recorded=False, nofail=True)
+        live = run(_echo("live"), recorded=False)
+    assert sha.stdout == "abc123\n"
+    assert live.stdout.strip() == "live"
+    assert steps == []  # neither was a step; the record is untouched
+
+
+def test_a_recorded_step_keeps_the_env_and_cwd_it_would_have_run_with(tmp_path):
+    with recording(env={"HOME": "/h"}, cwd=tmp_path) as steps:
+        run("git status")
+        run("uv build", env={"UV_TOOL_DIR": "/t"}, rel="pkg")
+        run("ls", cwd="unmanaged")
+    assert steps[0].env == {"HOME": "/h"} and steps[0].cwd == tmp_path
+    assert steps[1].env == {"UV_TOOL_DIR": "/t"}
+    assert steps[1].cwd == tmp_path / "pkg"
+    assert steps[2].cwd is None
+    seen_by_git = steps[0].env
+    assert seen_by_git is not None  # a recorded step always keeps it
+    assert "UV_TOOL_DIR" not in seen_by_git  # the assertion hse writes
+
+
+def test_a_live_record_keeps_no_env():
+    with use_context(Context()) as ctx:
+        run(_echo("x"))
+    assert ctx.steps[0].env is None and ctx.steps[0].cwd is None
+
+
+def test_a_reviewer_sees_a_scripted_answer():
+    """An adjudicator is tested *against* scripted exits: pre_record runs on
+    the scripted draft, may amend the verdict, and the audit says so."""
+    from footman.context import RunFailed
+
+    def adjudicate(view):
+        if "changes required" in view.stdout:
+            view.code = 3
+
+    with (
+        recording(answers={"djlint": "changes required\n"}) as steps,
+        pytest.raises(RunFailed) as failed,
+    ):
+        run("djlint .", pre_record=adjudicate)
+    assert failed.value.result == 3
+    assert [e.moment for e in steps[0].audit] == ["body", "review"]
+
+
+def test_an_unscripted_step_is_still_not_reviewed():
+    seen: list[object] = []
+    with recording() as steps:
+        run("git push", pre_record=seen.append)
+    assert seen == [] and steps[0].audit == ()
+
+
+def test_answers_refuse_a_bad_key_or_value():
+    with pytest.raises(TypeError, match="command prefix"):
+        recording(answers={"": 0}).__enter__()
+    with pytest.raises(TypeError, match="exception class"):
+        recording(answers={"uv": FileNotFoundError}).__enter__()
+    with pytest.raises(TypeError, match="must be a str"):
+        recording(answers={"uv": 1.5}).__enter__()
+    with pytest.raises(TypeError, match="non-empty list"):
+        recording(answers={"uv": []}).__enter__()
+
+
+def test_children_share_the_script():
+    """A parallel() child is born by replace(): the table rides by reference,
+    so a sequence consumed in a child advances the same cursor."""
+    with recording(answers={"git describe": ["a", "b"]}) as steps:
+        parent = current()
+        child = parent.child("x")
+        assert child.answers is parent.answers
+        with use_context(child):
+            run("git describe")
+        run("git describe")
+    assert steps[0].stdout == "b"
+
+
+def test_answers_cover_a_bridge_call_under_a_live_context():
+    """Under a recording, host detection routes a toolroom handle through
+    run(), so one table answers plain calls and handles alike."""
+    from toolroom import git
+
+    with recording(answers={"git branch": "main\n"}) as steps:
+        out = git.branch(show_current=True)
+    assert out.stdout == "main\n"
+    assert steps[0].command.startswith("git branch")
+
+
+def test_toolrooms_table_wins_when_both_are_nested():
+    from toolroom import git
+    from toolroom.testing import answers
+
+    with (
+        recording(answers={"git branch": 1}) as steps,
+        answers({("git", "branch"): "main\n"}) as calls,
+    ):
+        out = git.branch()
+    assert out.stdout == "main\n" and out == 0
+    assert steps == [] and len(calls) == 1
+
+
+def test_runner_invoke_answers_script_the_whole_invocation():
+    """`invoke(answers=)` implies --dry-run and reaches the executor's own
+    contexts, so the CLI runs end to end against a scripted world."""
+    tree = Group("t")
+
+    @tree.task
+    def describe():
+        print(run("git describe").stdout.strip())
+
+    result = Runner().invoke("describe", tasks=tree, answers={"git describe": "v9\n"})
+    assert result.ok
+    assert "v9" in result.stdout
+
+
+def test_runner_invoke_without_answers_keeps_the_process_clean():
+    from footman import context as _context
+
+    assert _context._injected_answers is None
+    Runner().invoke("greet", tasks=_demo_group(), answers={"x": 0})
+    assert _context._injected_answers is None
 
 
 # --- recording() / use_context ------------------------------------------------

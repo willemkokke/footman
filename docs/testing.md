@@ -47,15 +47,77 @@ commands. A `step(fn)(…)` or a `fetch()` produces a receipt rather than an
 effect, while the body's own inline Python still runs for real. Remember it
 when a task mixes subprocesses with in-process work.
 
-A recording answers every call with a blank success — it captures what
-would run, it cannot say what a run would have printed or how it would
-have failed. When a test needs that — canned stdout to parse, an injected
-non-zero to exercise an error path — and the calls go through toolroom's
-handles, use
-[`toolroom.testing.answers()`](https://willemkokke.github.io/toolroom/testing/):
-it answers bridge calls from a table, upstream of footman, with the real
-handles doing the real rendering. Nested inside a `recording()` block,
-`answers()` wins — it intercepts before footman is involved, so its
+### Script the answers
+
+A plain recording answers every call with a blank success. When the task
+under test *reads* a command's output, or has an error path worth
+exercising, hand the recording a table of answers:
+
+<!-- example: fragment -->
+```python
+from footman.testing import recording
+from tasks import release
+
+def test_release_refuses_to_push_a_dirty_tree():
+    with recording(answers={
+        "git status --porcelain": " M README.md\n",   # str: stdout, exit 0
+        "git push": 1,                                # int: exit code
+    }) as steps:
+        with pytest.raises(RunFailed):
+            release("1.2.0")
+    assert "git push" not in [s.command for s in steps]
+```
+
+Keys are command prefixes — the recorded command either *is* the key or
+starts with it followed by a space — and the longest match wins, so
+`"git"` can answer everything and `"git push"` override one verb. A tuple
+of tokens is the same key spelled apart. Nothing is tokenised: a command
+string is matched as written, on every platform alike.
+
+Values are the answer:
+
+| value | means |
+| --- | --- |
+| `"text"` | that stdout, exit 0 |
+| `1` | that exit code, empty streams |
+| `Result(2, stderr="boom")` | code and both streams |
+| `FileNotFoundError("uv")` | the call **raises** it — the binary is missing |
+| `["v1.0", "v1.1"]` | consecutive matches answer in order; a third refuses by name |
+
+A non-zero answer takes the real failing lane: `RunFailed` unless the call
+said `nofail=True`, fail-fast sees it, a `pre_record` reviewer runs on the
+scripted draft exactly as on a live one. A call the table matches is
+answered **even when it opted out of the record** with `recorded=False` —
+a value read is exactly what a test wants to script — while unmatched
+off-record calls still execute truthfully. Unmatched steps keep the blank
+success, so a table changes nothing you did not name.
+
+Each recorded step also keeps the environment and directory the call
+would have run with, for the assertions that are about *where* a command
+would have run rather than *that* it would:
+
+<!-- example: fragment -->
+```python
+with recording() as steps:
+    build_wheel()
+assert "UV_TOOL_DIR" not in steps[0].env
+assert steps[0].cwd == Path("packages/hse-devkit")
+```
+
+`Runner.invoke` takes the same table and implies `--dry-run`, so a CLI
+drives end to end against a scripted world:
+
+<!-- example: fragment -->
+```python
+result = fm.invoke("release 1.2.0", answers={"git describe": "v1.1.0\n"})
+assert result.ok
+```
+
+toolroom's [`answers()`](https://willemkokke.github.io/toolroom/testing/)
+is the same table applied one layer down, at the bridge's own seam — the
+door to use when the code under test holds no footman at all, or when
+the assertion is about how a *handle* rendered its call. Nested inside a
+`recording()`, it wins: it intercepts before footman is involved, so its
 answers stand and the record sees nothing.
 
 Under the hood this is `Context(dry_run=True, quiet=True)` installed with
