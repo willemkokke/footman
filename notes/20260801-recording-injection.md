@@ -1,6 +1,16 @@
 # Scripted answers for recording() — output/failure injection at the run() door
 
-Status: PLAN — rebased 2026-08-21 onto footman 0.43.0 and toolroom
+Status: **LANDED** 2026-08-21 (the same day it was rebased) — built as
+designed below, plus the five calls Willem made at build time: reviewers
+run on a scripted draft; command strings are matched as a word-boundary
+prefix, never tokenised (the same rule on every platform); exception
+values are instances only; recorded steps keep the `env` and `cwd` they
+would have run with (`Result.env`/`.cwd`, `None` on a live record);
+`Runner.invoke(answers=)` rides the same injection seam `stdin=` uses and
+implies `--dry-run`. The rest of this note is the design as it stood
+when the build started.
+
+Earlier status: PLAN — rebased 2026-08-21 onto footman 0.43.0 and toolroom
 0.6.0 (`toolroom.testing.answers()`, toolroom's
 `notes/20260821-testing-seam.md`). Later the same day toolroom 0.6.1
 (the as-handed `Call` record) and footman 0.44.0 both released, so
