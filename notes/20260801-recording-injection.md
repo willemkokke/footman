@@ -5,7 +5,9 @@ Status: PLAN — rebased 2026-08-21 onto footman 0.43.0 and toolroom
 `notes/20260821-testing-seam.md`). Later the same day toolroom 0.6.1
 (the as-handed `Call` record) and footman 0.44.0 both released, so
 every dependency this note names exists; only the build itself
-remains. The original 2026-08-01 draft posed
+remains. hse reviewed the design from the consumer side (2026-08-21,
+after devkit 0.0.46 retired `FakeTool`): three of the opens below are
+now settled by that review, and the acceptance population is theirs. The original 2026-08-01 draft posed
 ten decision points; the table grammar toolroom shipped settles six of
 them, this rebase settles a seventh, and the remaining opens are listed
 with sharper edges than they had. Origin unchanged: hse's 0.29.1
@@ -93,6 +95,25 @@ with recording(answers={
 - **Naming** (10): `answers=` — the parameter named for the sister
   feature, one grammar, two doors. A consumer who learned one table
   taught themselves the other.
+- **`recorded=False` interception** (was decision 5; ruled by hse):
+  an explicit match intercepts even an off-record call; unmatched
+  off-record calls keep executing truthfully (pinned today by
+  `tests/test_context.py:2431`). This is a *requirement*, not a lean:
+  hse's `_git` seam makes every call `recorded=False, nofail=True`,
+  and nearly every double they have left stands in for that seam —
+  without interception the feature retires almost nothing. The test
+  author declaring the world beats honest execution.
+- **Precedence when both tables are active**: toolroom's `answers()`
+  wins, because it intercepts upstream at `_host.run` and footman's
+  door never sees the call — the same rule its docs already state
+  against a plain `recording()`. Written down here so nobody discovers
+  it by debugging; the build should pin it with a nested test.
+- **Exhausted sequences**: a list that has answered its last entry
+  refuses the next match by name (the prefix and the count), in the
+  manner of toolroom's unmatched probe. A sequence is a script;
+  running past its end is the test being wrong, not the world being
+  benign. hse agrees — it matches how they treat every other
+  silent-fallback case.
 
 ## Implementation facts (so the build is mechanical)
 
@@ -122,15 +143,6 @@ Gathered 2026-08-21 against 0.43.0:
 
 ## Still open
 
-- **`recorded=False` interception** (was decision 5, now
-  load-bearing). Today an off-record call *executes* under
-  `recording()` (pinned by `tests/test_context.py:2431`) — "a value
-  read is not the story". But hse's value reads are exactly the calls
-  that need answers: `uv tool list` parses, `--version` probes via
-  plain `run(recorded=False)`. Lean unchanged from the addendum: an
-  explicit match intercepts even off-record calls — the test author
-  declaring the world beats honest execution — while unmatched
-  off-record calls keep executing. The subtlest call here.
 - **Reviewers** (was decision 4). Dry-run never runs `pre_record`
   (`context.py:3022` — "nothing ran, nothing captured"). With canned
   output that premise breaks: a scripted draft is reviewable, and
@@ -138,10 +150,6 @@ Gathered 2026-08-21 against 0.43.0:
   If reviewers should fire, the review block (`:3306`) must become
   reachable from the injected path. Lean yes, but it widens the
   change.
-- **Exhausted sequences**: sticky-last vs refusal. Lean refusal that
-  names the prefix and the count, toolroom's unmatched-probe manner —
-  a sequence is a script, and running past its end is the test being
-  wrong, not the world being benign.
 - **Exception values**: instance only, or type too? Lean instance only
   (`FileNotFoundError("uv")`) — a type invites argument-less
   reconstruction guesses.
@@ -159,26 +167,25 @@ Gathered 2026-08-21 against 0.43.0:
   asks. (Meanwhile `answers()` already works around `invoke`: the
   seam swap is process-wide.)
 
-## The acceptance population (hse, audited 2026-08-21)
+## The acceptance population (hse, confirmed 2026-08-21)
 
-What each remaining double needs, and which door retires it:
+`FakeTool` is gone as of hse-devkit 0.0.46 — toolroom 0.6.1's
+as-handed `Call` record was all that migration needed. What waits in
+hse for *this* feature, in hse's own words:
 
-- `test_release_cmd.py:802/817` — `_run_cliff` retry logic, patched
-  `footman.run` MagicMock → canned `Result` answers (this feature).
-- `test_emission_contract.py:403` — `footman.run` raising
-  `FileNotFoundError` → exception-valued answers (this feature).
-- `tasks/workspace.py` `_installed_version` `--version` read →
-  canned stdout + the `recorded=False` open above (this feature).
-- `mock_run` + `side_effect` ordered lists (~120 sites,
-  `test_version.py`/`test_status.py`) → sequenced answers (this
-  feature); the migration itself is hse's call, they patch their own
-  `_git.query` one level above the bridge.
-- `FakeTool` bridge sites (orchestrate/release/template + the
-  `_FakeUv`/`_FakeGit` clones) → toolroom's `answers()`, with the
-  flag-never-handed assertions on 0.6.1's as-handed
-  `Call.args`/`Call.kwargs` (planned in toolroom's
-  `notes/20260821-call-as-handed.md`, built and released the same
-  day). Nothing blocks this migration; it needs no footman feature.
+- One private reach — `monkeypatch.setattr(toolroom._host, "run",
+  raising)` in `test_emission_contract.py` — retires onto an
+  exception value (the missing-binary case: an environment fault, not
+  an answer, and footman's `run()` owns the `except OSError` path).
+- The `_git.query` MagicMocks (`_fake_lsremote` in
+  `test_template_cmd.py` and kin) and the `mock_run` sites
+  (`test_version.py`, `test_status.py`, ~120 in all) — value reads
+  through a seam that calls with `recorded=False, nofail=True` and
+  answers from ordered `side_effect` lists. They need the
+  `recorded=False` interception and sequenced answers together; that
+  pairing is the feature's main consumer.
+- `test_release_cmd.py:802/817` — `_run_cliff` retry logic on a plain
+  `footman.run` — canned `Result` answers.
 - `env=`/`cwd=` kwargs assertions on plain `run()` → the run-policy
   capture open above; until then those stay monkeypatches, honestly.
 
