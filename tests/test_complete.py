@@ -711,6 +711,28 @@ def test_the_marker_ages_fast_and_spawns_with_the_override(tmp_path, monkeypatch
     assert spawns == [(str(tf), None)]
 
 
+def test_the_marker_names_the_stale_environment_fix(tmp_path):
+    # In a pinned project, a failed *import* is the stale-venv shape: the
+    # marker says so instead of leaving a bare ModuleNotFoundError as the
+    # whole story. Anything else keeps the plain telling.
+    from footman import _refresh
+
+    exc: BaseException = RuntimeError(
+        "plugin 'w': failed to import (ModuleNotFoundError: No module named 'yaml')"
+    )
+    exc.__cause__ = ModuleNotFoundError("No module named 'yaml'")
+    where = tmp_path / "m.json"
+    _refresh._write_marker(where, exc, project=tmp_path)
+    line = _complete._broken_line(_complete._load_manifest(str(where)))
+    assert line is not None and "run uv sync" in line
+    _refresh._write_marker(where, exc)  # no pinned project: no advice
+    line = _complete._broken_line(_complete._load_manifest(str(where)))
+    assert line is not None and "uv sync" not in line
+    _refresh._write_marker(where, RuntimeError("boom"), project=tmp_path)
+    line = _complete._broken_line(_complete._load_manifest(str(where)))
+    assert line is not None and "uv sync" not in line
+
+
 def test_stock_complete_dispatch_keys_the_brand_version(tmp_path, monkeypatch):
     import footman
     from footman import _paths

@@ -13,6 +13,7 @@ and the block is comments — reading it never imports the file.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import subprocess
@@ -200,3 +201,130 @@ def maybe_reexec(files: list[Path], argv: list[str]) -> None:
     python = child_python(files[0])
     if python is not None:
         reexec_child(python, argv)
+
+
+# --- the lock rule's primitives, shared by the run path and the children ------
+# `_app._uv_handoff` decides where a real run belongs; the completion children
+# must reach the same verdict about the same directory, or TAB builds its
+# manifest in an environment the run would never use (a globally-installed
+# runner's own env, say) and completion silently answers from the wrong world.
+
+
+def locked_project(probe: Path) -> Path | None:
+    """The nearest ancestor holding a `uv.lock` — one existence walk, no read."""
+    return next((p for p in (probe, *probe.parents) if (p / "uv.lock").is_file()), None)
+
+
+def pins_dist(root: Path, dist: str) -> bool:
+    """Whether *root*'s lockfile pins *dist* — the question that decides
+    whether an invocation belongs to that project's environment.
+
+    Reading the lock is the expensive half (a real project's `uv.lock` is
+    megabytes of TOML: ~21 ms measured here), so callers ask this only once
+    the cheap answers are exhausted.
+    """
+    try:
+        with open(root / "uv.lock", "rb") as fh:
+            lock = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    return any(p.get("name") == dist for p in lock.get("package", []))
+
+
+def inside(venv: Path) -> bool:
+    """Whether this interpreter is already running out of *venv*."""
+    with contextlib.suppress(OSError):
+        return venv.is_dir() and Path(sys.prefix).resolve().is_relative_to(
+            venv.resolve()
+        )
+    return False
+
+
+def import_caused(exc: BaseException) -> bool:
+    """Whether *exc* is, or was caused by, a failed import — the shape a
+    stale environment produces, and the only one a sync can mend."""
+    seen = 0
+    cause: BaseException | None = exc
+    while cause is not None and seen < 10:
+        if isinstance(cause, ImportError):
+            return True
+        cause = cause.__cause__
+        seen += 1
+    return False
+
+
+def project_home(cwd: Path) -> Path | None:
+    """The pinned project that owns *cwd*, or None — the children's half of
+    the lock rule's question. When this answers, the script rule stays out
+    of the way, exactly as it does on the run path."""
+    root = locked_project(cwd)
+    if root is None or not pins_dist(root, _paths.dist()):
+        return None
+    return root
+
+
+def venv_python(root: Path) -> Path:
+    """Where *root*'s project environment keeps its interpreter."""
+    if os.name == "nt":
+        return root / ".venv" / "Scripts" / "python.exe"
+    return root / ".venv" / "bin" / "python"
+
+
+def heal_project(uv: str, root: Path) -> bool:
+    """Bring *root*'s environment up to its lockfile — without the network.
+
+    A completion child runs on a keystroke's behalf, so this is strictly
+    offline: an environment already current costs one ~15 ms check, one
+    whose missing wheels are all in uv's cache is mended there and then,
+    and anything else stays as it is — the next real run's own retry syncs
+    for real. Returns True when a sync actually ran and succeeded.
+    """
+    try:
+        fresh = subprocess.run(
+            [uv, "sync", "--check", "--quiet", "--offline", "--project", str(root)],
+            capture_output=True,
+            timeout=10,
+        )
+        if fresh.returncode == 0:
+            return False
+        synced = subprocess.run(
+            [uv, "sync", "--quiet", "--offline", "--project", str(root)],
+            capture_output=True,
+            timeout=30,
+        )
+        return synced.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def project_reexec(root: Path, argv: list[str], *, heal: bool) -> None:
+    """Continue this completion child inside *root*'s own environment.
+
+    The children's spelling of `_app._uv_handoff`'s lock rule: whichever
+    runner answered the TAB, the manifest must be built by the project's
+    interpreter, from the project's packages — or completion describes a
+    world the run refuses. A foreign interpreter re-execs into the
+    project's venv; an interpreter already home stays. *heal* additionally
+    mends a stale venv offline on the way (`heal_project`) — the detached
+    refresh can afford it and asks for it unless the project opted out of
+    uv; the keystroke-facing suggest child never does. The re-exec itself
+    runs no uv at all, so the opt-out doesn't bind it.
+    """
+    if os.environ.get(_paths.env_var("UV_REEXEC")) or os.environ.get(
+        _paths.env_var("NO_UV")
+    ):
+        return
+    home = inside(root / ".venv")
+    if heal:
+        uv = find_uv()
+        if uv is not None and heal_project(uv, root) and home:
+            # Packages landed in site-packages after this interpreter first
+            # imported from it; the finders' directory caches predate them.
+            import importlib
+
+            importlib.invalidate_caches()
+    if home:
+        return
+    python = venv_python(root)
+    if python.is_file():
+        reexec_child(str(python), argv)

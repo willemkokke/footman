@@ -89,6 +89,16 @@ than paying the cold build's wait into nothing, and the note ages out in
 seconds once the file imports again. The full story is one line, so `fm
 --list` prints the same error with its traceback when you want the rest.
 
+The rebuild happens in the environment the **run** would use. In a project
+whose lockfile pins footman, the child builds with the project's own
+interpreter — whichever `fm` answered the keystroke, a globally-installed
+one included — so <kbd>Tab</kbd> describes the same tasks the run serves.
+A stale project environment (a dependency locked after the last sync) is
+mended on the way from uv's cache alone — strictly offline, a keystroke
+never downloads — and where that cannot finish, the import-failure note
+above ends with the actual fix, `run uv sync`, instead of a bare
+`ModuleNotFoundError`.
+
 **Is it safe to press <kbd>Tab</kbd> in a repository you just cloned?**
 Treat it like running the code, because the cold build above *is* an
 import of the repo's `tasks.py` — the same import a run does, in a

@@ -144,6 +144,7 @@ _tasks_file = DEFAULT_TASKS_FILE
 _prog = "fm"
 _brand_version = ""
 _builtin: tuple[str, ...] = ()
+_dist: str | None = "footman"
 
 
 class LocationError(Exception):
@@ -160,6 +161,7 @@ def configure(
     prog: str = "fm",
     brand_version: str = "",
     builtin: tuple[str, ...] = (),
+    dist: str | None = "footman",
 ) -> None:
     """Point this CLI's locations at one brand's world.
 
@@ -171,18 +173,31 @@ def configure(
     root. *prog*, *brand_version* and *builtin* key the global-mode manifest
     — the tree they determine is the same in every project-less directory.
     Detached children are handed the resolved values rather than re-deriving
-    them.
+    them. *dist* is the distribution the lock rule reasons about — the
+    package a project's `uv.lock` must pin for the invocation to belong to
+    that project's environment.
     """
     global _prefix, _cache_dir, _data_dir, _config_name, _tasks_file
-    global _prog, _brand_version, _builtin
+    global _prog, _brand_version, _builtin, _dist
     _prefix, _cache_dir, _data_dir = prefix, cache_dir, data_dir
     _config_name, _tasks_file = config_name, tasks_file
     _prog, _brand_version, _builtin = prog, brand_version, builtin
+    _dist = dist
 
 
 def builtin() -> tuple[str, ...]:
     """The brand's declared built-in entry points (empty for stock)."""
     return _builtin
+
+
+def dist() -> str:
+    """The distribution the lock rule pins on — never empty.
+
+    The run path spells the same fallback (`_brand.dist or "footman"`), so
+    a completion child and the run it stands in for can never disagree
+    about which package makes a project's lockfile authoritative.
+    """
+    return _dist or "footman"
 
 
 def child_args() -> list[str]:
@@ -202,6 +217,7 @@ def child_args() -> list[str]:
         _prog,
         _brand_version,
         ",".join(_builtin),
+        _dist or "footman",
     ]
 
 
@@ -214,6 +230,7 @@ def configure_child(
     prog: str = "",
     brand_version: str = "",
     builtin_csv: str = "",
+    dist: str = "",
 ) -> None:
     """The other side of `child_args` — empty strings mean stock defaults."""
     from pathlib import Path
@@ -227,6 +244,7 @@ def configure_child(
         prog=prog or "fm",
         brand_version=brand_version,
         builtin=tuple(n for n in builtin_csv.split(",") if n),
+        dist=dist or "footman",
     )
 
 

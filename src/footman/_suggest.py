@@ -25,15 +25,25 @@ if TYPE_CHECKING:  # runtime imports stay deferred: the TAB path spawns cheap
 
 
 def _maybe_reexec(files: list[Path]) -> None:
-    """Continue in a script file's own environment, when it already exists —
-    a completer on a tasks file that carries its own dependencies needs
-    that file's world to import at all. The rule lives in
-    `_script.maybe_reexec`, shared with the refresh child; the interpreter
-    flags come along too — `-P` on the spawn and not on the re-exec would be
-    a hole, since this replaces the process with the argv it is handed."""
+    """Continue in the environment that owns this completer — the project's
+    when the lock rule claims the directory, a script file's when it
+    carries its own dependencies. Both rules live in `_script`, shared
+    with the refresh child, and are asked in the run path's order:
+    project first, script only where no project has spoken. No healing
+    here — a keystroke is waiting, and the detached refresh owns that.
+    The interpreter flags come along too — `-P` on the spawn and not on
+    the re-exec would be a hole, since this replaces the process with the
+    argv it is handed."""
+    from pathlib import Path
+
     from footman import _script
 
-    _script.maybe_reexec(files, ["-P", "-m", "footman._suggest", *sys.argv[1:]])
+    argv = ["-P", "-m", "footman._suggest", *sys.argv[1:]]
+    root = _script.project_home(Path.cwd())
+    if root is not None:
+        _script.project_reexec(root, argv, heal=False)
+        return
+    _script.maybe_reexec(files, argv)
 
 
 def _fresh(completer: Any) -> list[str]:

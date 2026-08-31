@@ -5,6 +5,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import pytest
+
 from footman import _script
 
 BLOCK = """\
@@ -285,6 +287,9 @@ def test_the_children_reexec_the_same_interpreter_flags(monkeypatch):
     assert _prelude(spawned[-1]) == _prelude(reexeced[-1]) == ["-P", "-c"]
 
     monkeypatch.setattr(subprocess, "run", record_run)
+    # The project rule would claim this cwd (the suite runs inside footman's
+    # own pinned project); stand it down — the script rule is what's pinned.
+    monkeypatch.setattr(_script, "project_home", lambda cwd: None)
     _complete._fresh_dynamic("target", ["deploy"], ["a", ""])
     _suggest._maybe_reexec([Path("tasks.py")])
     assert (
@@ -317,3 +322,164 @@ def test_the_uv_command_lines():
         "--script",
         str(file),
     ]
+
+
+# --- the lock rule, as the children ask it ------------------------------------
+# A pinned project owns its directory: whichever runner answered the TAB, the
+# manifest must be built by the project's interpreter from the project's
+# packages, or completion describes a world the run refuses. These pin the
+# children's half of `_uv_handoff`'s verdict: who owns a directory, when a
+# child changes interpreter, and that healing stays strictly offline.
+
+_PINNING_LOCK = 'version = 1\n\n[[package]]\nname = "footman"\nversion = "1.0"\n'
+
+
+def test_project_home_wants_a_lock_that_pins_the_dist(tmp_path):
+    assert _script.project_home(tmp_path) is None  # no lock anywhere
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n\n[[package]]\nname = "requests"\nversion = "2.0"\n'
+    )
+    assert _script.project_home(tmp_path) is None  # pins someone else's world
+    (tmp_path / "uv.lock").write_text(_PINNING_LOCK)
+    assert _script.project_home(tmp_path) == tmp_path
+    nested = tmp_path / "pkg" / "deep"
+    nested.mkdir(parents=True)
+    assert _script.project_home(nested) == tmp_path  # the nearest ancestor
+
+
+def test_import_caused_walks_the_cause_chain():
+    assert _script.import_caused(ImportError("x"))
+    wrapped = RuntimeError("outer")
+    wrapped.__cause__ = ModuleNotFoundError("No module named 'yaml'")
+    assert _script.import_caused(wrapped)
+    assert not _script.import_caused(RuntimeError("boom"))
+    assert not _script.import_caused(SyntaxError("bad"))
+
+
+def _project(tmp_path, *, with_python=True):
+    (tmp_path / "uv.lock").write_text(_PINNING_LOCK)
+    python = _script.venv_python(tmp_path)
+    if with_python:
+        python.parent.mkdir(parents=True)
+        python.write_text("")
+    return tmp_path
+
+
+def _record_uv(monkeypatch, *, check_code=0, sync_code=0):
+    ran: list[list[str]] = []
+
+    class Done:
+        def __init__(self, code):
+            self.returncode = code
+
+    def fake_run(cmd, **kwargs):
+        ran.append(list(cmd))
+        return Done(check_code if "--check" in cmd else sync_code)
+
+    monkeypatch.setattr(_script.subprocess, "run", fake_run)
+    monkeypatch.setattr(_script, "find_uv", lambda: "/fake/uv")
+    return ran
+
+
+def test_a_foreign_child_reexecs_into_the_projects_venv(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    ran = _record_uv(monkeypatch)  # env already current: check answers 0
+    reexeced: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        _script, "reexec_child", lambda p, a: reexeced.append((p, list(a)))
+    )
+    _script.project_reexec(root, ["-P", "-c", "ENTRY"], heal=True)
+    assert reexeced == [(str(_script.venv_python(root)), ["-P", "-c", "ENTRY"])]
+    (check,) = ran  # fresh: the check sufficed, nothing synced
+    assert "--offline" in check and "--check" in check
+
+
+def test_healing_stays_offline_and_only_when_stale(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    ran = _record_uv(monkeypatch, check_code=1)  # stale: check says outdated
+    monkeypatch.setattr(_script, "reexec_child", lambda p, a: None)
+    _script.project_reexec(root, ["-P", "-c", "ENTRY"], heal=True)
+    check, sync = ran
+    assert "--check" in check
+    assert "--check" not in sync
+    assert "--offline" in sync  # a keystroke never downloads
+    assert "--project" in sync and str(root) in sync
+
+
+def test_heal_false_runs_no_uv_at_all(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    ran = _record_uv(monkeypatch)
+    reexeced: list[str] = []
+    monkeypatch.setattr(_script, "reexec_child", lambda p, a: reexeced.append(p))
+    _script.project_reexec(root, ["-P", "-c", "ENTRY"], heal=False)
+    assert ran == []  # the re-exec itself is uv-free, so the opt-out never binds it
+    assert reexeced == [str(_script.venv_python(root))]
+
+
+def test_a_child_already_home_stays_and_never_reexecs(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    _record_uv(monkeypatch, check_code=1, sync_code=0)
+    monkeypatch.setattr(_script, "inside", lambda venv: True)
+    monkeypatch.setattr(
+        _script, "reexec_child", lambda p, a: pytest.fail("re-exec at home")
+    )
+    _script.project_reexec(root, ["-P", "-c", "ENTRY"], heal=True)
+
+
+def test_project_reexec_honours_the_belt_and_the_optout(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    ran = _record_uv(monkeypatch)
+    monkeypatch.setattr(
+        _script, "reexec_child", lambda p, a: pytest.fail("looped through the belt")
+    )
+    monkeypatch.setenv("FOOTMAN_UV_REEXEC", "1")
+    _script.project_reexec(root, ["-P", "-c", "ENTRY"], heal=True)
+    monkeypatch.delenv("FOOTMAN_UV_REEXEC")
+    monkeypatch.setenv("FOOTMAN_NO_UV", "1")
+    _script.project_reexec(root, ["-P", "-c", "ENTRY"], heal=True)
+    assert ran == []
+
+
+def test_a_missing_venv_interpreter_carries_on_in_place(tmp_path, monkeypatch):
+    root = _project(tmp_path, with_python=False)
+    _record_uv(monkeypatch, check_code=1, sync_code=1)  # offline sync can't build it
+    monkeypatch.setattr(
+        _script, "reexec_child", lambda p, a: pytest.fail("no interpreter to exec")
+    )
+    _script.project_reexec(root, ["-P", "-c", "ENTRY"], heal=True)
+
+
+def test_the_suggest_child_prefers_the_project_lane(tmp_path, monkeypatch):
+    from footman import _suggest
+
+    lanes: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(_script, "project_home", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        _script,
+        "project_reexec",
+        lambda root, argv, heal: lanes.append(("project", list(argv))),
+    )
+    monkeypatch.setattr(
+        _script,
+        "maybe_reexec",
+        lambda files, argv: pytest.fail("the script rule spoke over the project"),
+    )
+    _suggest._maybe_reexec([Path("tasks.py")])
+    ((lane, argv),) = lanes
+    assert lane == "project"
+    assert _prelude(argv) == ["-P", "-m", "footman._suggest"]
+
+
+def test_the_refresh_child_prefers_the_project_lane(tmp_path, monkeypatch):
+    from footman import _refresh
+
+    lanes: list[list[str]] = []
+    monkeypatch.setattr(_script, "project_home", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        _script, "project_reexec", lambda root, argv, heal: lanes.append(list(argv))
+    )
+    root = _refresh._project_reexec(tmp_path, True, "ENTRY", "arg")
+    assert root == tmp_path
+    (argv,) = lanes
+    assert _prelude(argv) == ["-P", "-c"]
+    assert argv[-2:] == ["ENTRY", "arg"]
