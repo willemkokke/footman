@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **The starting environment is part of a task's work identity.** The
+  run's once-cell used to key shared work on (task, arguments, what the
+  caller supplied) alone, so a caller that wrote its environment before a
+  body call could be answered by an execution that never saw the write —
+  a wrong cache hit with no error, decided by whoever claimed the cell
+  first. The environment a callee would start from now joins the key (as
+  a digest: order-blind, case-blind where the OS is). Nothing changes in
+  the common case — every scheduled task starts from the pinned snapshot
+  and an untouched caller holds an equal copy, so `pre=[build]` plus
+  `build()` in the body is still one build — and the cell splits exactly
+  when someone wrote the environment on purpose: each request then runs
+  under the environment it actually asked for, each with its own row in
+  the report, and two callers that made the same writes still share.
+
 ### Fixed
 
 - **A stale project environment retries through `uv run` instead of

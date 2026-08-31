@@ -2271,8 +2271,9 @@ def run_bound(
     # request joins the same protocol a body call uses: claim the work, or wait
     # for whoever already holds it and report the answer as `shared`. A request
     # declared `shared=False` never joins — `ctx` carries that answer. The key
-    # is computed before `ctx` joins the arguments, so the context can never
-    # become part of the work's identity.
+    # is computed before `ctx` joins the arguments, so the context object never
+    # becomes part of the work's identity — except its environment, the one
+    # contextual input a body can observe, which joins deliberately (`_key`).
     # `as_call` means the cell layer is already holding this work's cell (it
     # claimed before delegating here) and will resolve it — claiming again from
     # the same thread would read as this task waiting on itself.
@@ -2280,7 +2281,7 @@ def run_bound(
     # resolve to the same values still name different work when one of them
     # asked for a parameter and the other merely got its default.
     work = (
-        _futures.work_of(fn, args, kwargs, ctx.given)
+        _futures.work_of(fn, args, kwargs, ctx.given, ctx.env)
         if ctx.shared and not as_call
         else None
     )
