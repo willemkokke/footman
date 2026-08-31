@@ -185,6 +185,7 @@ class Brand:
             prog=self.prog,
             brand_version=self.version,
             builtin=self.builtin,
+            dist=self.dist,
         )
 
 

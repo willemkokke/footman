@@ -41,6 +41,25 @@ def _maybe_reexec(files: list[Path], entry: str, *args: str) -> None:
     _script.maybe_reexec(files, ["-P", "-c", entry, *args])
 
 
+def _project_reexec(cwd: Path, uv_wanted: bool, entry: str, *args: str) -> Path | None:
+    """The lock rule's half of the children's world rule, asked first —
+    exactly as the run path asks it (`_app._uv_handoff`): a pinned project
+    owns this directory, so the manifest must be built by *its* interpreter
+    from *its* packages, whichever runner answered the TAB. Heals a stale
+    venv offline on the way, unless the project opted out of uv (the run's
+    own retry syncs for real). Returns the project root when one owns the
+    directory — the script rule then stays out of the way, as it does on
+    the run path — else None.
+    """
+    from footman import _script
+
+    root = _script.project_home(cwd)
+    if root is None:
+        return None
+    _script.project_reexec(root, ["-P", "-c", entry, *args], heal=uv_wanted)
+    return root
+
+
 def refresh_cwd(*where: str) -> None:
     """Rebuild the current directory's completion manifest, swallowing errors.
 
@@ -106,12 +125,16 @@ def _rebuild() -> None:
     if not files and not _paths.builtin():
         return
     # The re-executed child is a fresh interpreter, so it needs telling where
-    # the cache is exactly as the first child did.
-    _maybe_reexec(
-        files,
-        "import sys; from footman import _refresh; _refresh.refresh_cwd(*sys.argv[1:])",
-        *_paths.child_args(),
+    # the cache is exactly as the first child did. Project rule before script
+    # rule, mirroring the run path: a pinned project owns the directory.
+    one_liner = (
+        "import sys; from footman import _refresh; _refresh.refresh_cwd(*sys.argv[1:])"
     )
+    root = _project_reexec(
+        cwd, cfg.get("uv") is not False, one_liner, *_paths.child_args()
+    )
+    if root is None:
+        _maybe_reexec(files, one_liner, *_paths.child_args())
 
     base = registry.Group("root")
     if not project_files:
@@ -130,7 +153,7 @@ def _rebuild() -> None:
         try:
             reg = _discover.load_tree(files, base=base)
         except Exception as exc:
-            _write_marker(_paths.global_manifest_path(), exc)
+            _write_marker(_paths.global_manifest_path(), exc, project=root)
             return
         _manifest.sync_manifest(
             reg,
@@ -149,7 +172,7 @@ def _rebuild() -> None:
     try:
         reg = _discover.load_tree(files, base=base)
     except Exception as exc:
-        _write_marker(_paths.manifest_path(cwd), exc)
+        _write_marker(_paths.manifest_path(cwd), exc, project=root)
         return
     _manifest.sync_manifest(
         reg, cwd, completion_max_age=_config.completion_max_age(cfg), tasks_file=name
@@ -164,7 +187,7 @@ def _rebuild() -> None:
 _MARKER_MAX_AGE = 5
 
 
-def _write_marker(path: Path, exc: BaseException) -> None:
+def _write_marker(path: Path, exc: BaseException, project: Path | None = None) -> None:
     """A broken tree is an answer too.
 
     Without this, a tasks file that fails to import leaves nothing behind:
@@ -172,14 +195,20 @@ def _write_marker(path: Path, exc: BaseException) -> None:
     silence never says why. The marker rides the manifest slot — same
     schema, a `broken` line instead of a `tree` — so the hot path can say
     what the import said (exit 103) and answer instantly while it does.
+
+    *project* is the pinned project that owned the build, when one did: a
+    failed *import* there is the stale-environment shape, and the marker
+    names the fix instead of leaving a bare ModuleNotFoundError.
     """
-    from footman import _manifest
+    from footman import _manifest, _script
 
     # The message alone when it tells the story (discovery errors carry
     # file and cause already); the type name only when there is nothing
     # else to show.
     told = str(exc).strip()
     line = (told.splitlines()[0] if told else type(exc).__name__)[:200]
+    if project is not None and _script.import_caused(exc):
+        line += " — the environment may be out of date: run uv sync"
     _manifest.write_manifest(
         {
             "schema": _manifest.SCHEMA_VERSION,
@@ -207,19 +236,34 @@ def refresh_source(tasks_file: str, *where: str) -> None:
 def _rebuild_source(tasks_file: str) -> None:
     from pathlib import Path
 
-    from footman import _discover, _manifest, _paths, registry
+    from footman import _config, _discover, _manifest, _paths, registry
 
     one = Path(tasks_file).expanduser()
     if not one.is_file():
         return  # a typed-but-missing -f value: nothing to build
     cwd = Path.cwd()
-    _maybe_reexec(
-        [one],
+    one_liner = (
         "import sys; from footman import _refresh; "
-        "_refresh.refresh_source(*sys.argv[1:])",
+        "_refresh.refresh_source(*sys.argv[1:])"
+    )
+    # Project rule before script rule, exactly as the run path orders them
+    # for a `-f` invocation: the lock rule probes the cwd, not the file.
+    # The config read exists only for its `uv` key — the opt-out must bind
+    # the child as it binds the run — and a broken config must not take
+    # down a rebuild that never needed one.
+    try:
+        cfg: dict[str, object] = _config.load_config(cwd, _paths.find_repo_root(cwd))
+    except Exception:
+        cfg = {}
+    root = _project_reexec(
+        cwd,
+        cfg.get("uv") is not False,
+        one_liner,
         tasks_file,  # the entry reads it back off argv
         *_paths.child_args(),  # …and the locations behind it
     )
+    if root is None:
+        _maybe_reexec([one], one_liner, tasks_file, *_paths.child_args())
 
     # Mirror a real `-f` run (see _app._run): one file, no cascade, cached
     # under the (cwd, file) key with max_age=0 — no background refresh,
@@ -228,7 +272,7 @@ def _rebuild_source(tasks_file: str) -> None:
     try:
         reg = _discover.load_tree([one], base=base)
     except Exception as exc:
-        _write_marker(_paths.source_manifest_path(cwd, one), exc)
+        _write_marker(_paths.source_manifest_path(cwd, one), exc, project=root)
         return
     _manifest.sync_manifest(
         reg,

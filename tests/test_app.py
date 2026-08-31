@@ -1806,6 +1806,103 @@ def test_handoff_windows_waits_and_carries_the_code(uv_project, monkeypatch):
     assert excinfo.value.code == 7
 
 
+# --- the stale-environment retry ----------------------------------------------
+# "Already home" trusts that the project's venv matches its lockfile. A
+# dependency locked after the last sync breaks that trust, and the first
+# symptom is a failed import — so the run retries through `uv run` (which
+# syncs), or at least names the fix. These pin when it fires, with what argv,
+# and every edge where it must stay silent instead.
+
+
+@pytest.fixture
+def stale_project(uv_project, monkeypatch):
+    """A pinned project we are "already home" in, whose tasks fail to import
+    the way a stale venv makes them fail."""
+    (uv_project / "tasks.py").write_text(
+        "import missing_module_xyz\n", encoding="utf-8"
+    )
+    (uv_project / ".venv").mkdir()
+    monkeypatch.setattr(_app.sys, "prefix", str(uv_project / ".venv"))
+    return uv_project
+
+
+def test_a_failed_import_retries_through_uv_run(stale_project, monkeypatch):
+    calls = _capture_exec(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run(["--tree"])
+    assert calls == [
+        ["/fake/uv", "run", "--project", str(stale_project), "fm", "--tree"]
+    ]
+    import os
+
+    assert os.environ["FOOTMAN_UV_REEXEC"] == "1"  # the loop belt rides along
+
+
+def test_a_failed_plugin_import_retries_too(stale_project, monkeypatch):
+    # The #530 shape: the tasks file imports fine, a mounted module doesn't.
+    (stale_project / "helper.py").write_text("import missing_module_xyz\n")
+    (stale_project / "tasks.py").write_text(
+        "from footman.compose import include\ninclude('helper')\n"
+    )
+    calls = _capture_exec(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run(["--tree"])
+    (call,) = calls
+    assert call[:4] == ["/fake/uv", "run", "--project", str(stale_project)]
+
+
+def test_the_retry_never_fires_twice(stale_project, monkeypatch, capsys):
+    # Arriving through `uv run` means the sync already happened: the failure
+    # is real, surfaces unchanged, and carries no hint (it would be wrong).
+    calls = _capture_exec(monkeypatch)
+    monkeypatch.setenv("FOOTMAN_UV_REEXEC", "1")
+    assert _app.run(["--tree"]) == 64
+    assert calls == []
+    err = capsys.readouterr().err
+    assert "missing_module_xyz" in err
+    assert "uv sync" not in err
+
+
+def test_without_uv_the_refusal_names_the_fix(stale_project, monkeypatch, capsys):
+    calls = _capture_exec(monkeypatch)
+    monkeypatch.setattr(_app, "_find_uv", lambda: None)
+    assert _app.run(["--tree"]) == 64
+    assert calls == []
+    assert "run uv sync" in capsys.readouterr().err
+
+
+def test_opted_out_of_uv_still_gets_the_hint(stale_project, monkeypatch, capsys):
+    calls = _capture_exec(monkeypatch)
+    (stale_project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\nuv = false\n"
+    )
+    assert _app.run(["--tree"]) == 64
+    assert calls == []  # asked to stay out of uv: advise, don't act
+    assert "run uv sync" in capsys.readouterr().err
+
+
+def test_a_non_import_failure_neither_retries_nor_hints(
+    stale_project, monkeypatch, capsys
+):
+    (stale_project / "tasks.py").write_text("raise RuntimeError('boom')\n")
+    calls = _capture_exec(monkeypatch)
+    assert _app.run(["--tree"]) == 64
+    assert calls == []
+    assert "uv sync" not in capsys.readouterr().err
+
+
+def test_the_retry_never_fires_from_runner_invoke(stale_project, monkeypatch, capsys):
+    # An embedded invocation must never exec, and its refusal stays clean:
+    # the host process's environment is the host's business.
+    from footman.testing import Runner
+
+    calls = _capture_exec(monkeypatch)
+    result = Runner().invoke("--tree")
+    assert not result.ok
+    assert calls == []
+    assert "uv sync" not in result.stderr
+
+
 # --- the script handoff (PEP 723) --------------------------------------------
 # A tasks file that declares its own dependencies carries its own world: uv
 # builds it, and the invocation continues inside it. These pin the rule's

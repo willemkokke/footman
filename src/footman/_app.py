@@ -14,7 +14,6 @@ import os
 import subprocess
 import sys
 import time
-import tomllib
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -1728,34 +1727,22 @@ def _script_hint(exc: object) -> str:
 
 
 def _inside(venv: Path) -> bool:
-    """Whether this interpreter is already running out of *venv*."""
-    with contextlib.suppress(OSError):
-        return venv.is_dir() and Path(sys.prefix).resolve().is_relative_to(
-            venv.resolve()
-        )
-    return False
+    """Whether this interpreter is already running out of *venv* — the rule
+    lives in `_script`, shared with the completion children."""
+    return _script.inside(venv)
 
 
 def _locked_project(probe: Path) -> Path | None:
-    """The nearest ancestor holding a `uv.lock` — one existence walk, no read."""
-    return next((p for p in (probe, *probe.parents) if (p / "uv.lock").is_file()), None)
+    """The nearest ancestor holding a `uv.lock` — one existence walk, no read.
+    Lives in `_script`, shared with the completion children."""
+    return _script.locked_project(probe)
 
 
 def _pins_the_runner(root: Path) -> bool:
     """Whether *root*'s lockfile pins this runner — the question that decides
-    whether the invocation belongs to that project's environment.
-
-    Reading the lock is the expensive half (a real project's `uv.lock` is
-    megabytes of TOML: ~21 ms measured here), so the caller asks this only
-    once the cheap answers are exhausted.
-    """
-    try:
-        with open(root / "uv.lock", "rb") as fh:
-            lock = tomllib.load(fh)
-    except (OSError, tomllib.TOMLDecodeError):
-        return False
-    dist = _brand.dist or "footman"
-    return any(p.get("name") == dist for p in lock.get("package", []))
+    whether the invocation belongs to that project's environment. The read
+    lives in `_script`, shared with the completion children."""
+    return _script.pins_dist(root, _brand.dist or "footman")
 
 
 def _note_ignored_block(g: dict[str, object], probe: Path) -> None:
@@ -1982,6 +1969,51 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
     return None  # unreachable: _reexec replaces or exits this process
 
 
+_SYNC_HINT = " — the project's environment may be out of date: run uv sync"
+
+
+def _uv_retry(
+    argv: list[str], g: dict[str, object], cfg: dict[str, Any], exc: BaseException
+) -> str:
+    """A failed import in a pinned project may just be a stale environment.
+
+    The lock rule's "already home" answer trusts that the project's venv
+    matches its lockfile; a dependency locked after the last sync breaks
+    that trust, and the first symptom is exactly this import failure. So:
+    hand the invocation to `uv run --project` after all — it syncs, then
+    retries — and let a failure *after* that surface unchanged (the child
+    carries the loop belt, which doubles as "sync was already tried").
+
+    Re-execs and never returns when the retry applies. Otherwise returns
+    the sentence to append to the refusal: the `uv sync` hint when a
+    pinned project exists but the retry cannot run (no uv, opted out), or
+    nothing at all — a non-import failure, no pinned project, or a run
+    that already came through `uv run`.
+    """
+    if os.environ.get(_paths.env_var("UV_REEXEC")) or os.environ.get(
+        _paths.env_var("NO_UV")
+    ):
+        return ""  # uv run already synced (or was told not to): the failure is real
+    if not _script.import_caused(exc):
+        return ""  # a syntax error or a raise — no sync would mend it
+    root = _locked_project(Path.cwd())
+    if root is None or not _pins_the_runner(root):
+        return ""
+    if not _uv_wanted(g, cfg):
+        return _SYNC_HINT  # asked to stay out of uv: advise, don't act
+    uv = _find_uv()
+    if uv is None:
+        return _SYNC_HINT
+    if g.get("verbose"):
+        print(
+            f"{_brand.prog}: import failed; retrying through uv run --project {root}",
+            file=sys.stderr,
+        )
+    os.environ[_paths.env_var("UV_REEXEC")] = "1"
+    _reexec([uv, "run", "--project", str(root), _brand.prog, *argv])
+    return ""  # unreachable: _reexec replaces or exits this process
+
+
 def _run(
     argv: list[str],
     brand: Brand,
@@ -2046,7 +2078,7 @@ def _run(
         return code
 
     if not g.get("directory"):
-        return _execute(argv, g, pre_globals, after, wants_help, collect)
+        return _execute(argv, g, pre_globals, after, wants_help, collect, handoff)
 
     # -C must not permanently move the process (a `Runner.invoke` shares the
     # host pytest's cwd): chdir, run, then restore in a finally. The original
@@ -2057,7 +2089,7 @@ def _run(
     except OSError as exc:
         return _refuse(bool(g.get("json")), f"-C {g['directory']}: {exc}")
     try:
-        return _execute(argv, g, pre_globals, after, wants_help, collect)
+        return _execute(argv, g, pre_globals, after, wants_help, collect, handoff)
     finally:
         with contextlib.suppress(OSError):
             os.chdir(saved_cwd)
@@ -2070,13 +2102,15 @@ def _execute(
     after: int,
     wants_help: bool,
     collect: list[_executor.TaskResult] | None,
+    handoff: bool,
 ) -> int:
     """Discover the cascade, load + sync its manifest, then run the tree.
 
     Everything after globals/`--version`/`--install-completion`/`-C`: the
     disk-backed half that `run_group` (in-memory) deliberately skips.
     *g* and *after* are the entry point's one lenient parse, passed down —
-    argv is never re-parsed on the way in.
+    argv is never re-parsed on the way in. *handoff* rides along for the
+    stale-environment retry: an embedded `Runner.invoke` must never exec.
     """
     # "Bare" means no chain was asked for — globals-only lines (`fm --json`,
     # `fm -k`) are listing-shaped, exactly like they are when tasks exist.
@@ -2124,14 +2158,19 @@ def _execute(
         # A hook that raised is a refusal, named — nothing has run yet.
         return _refuse(json_mode, str(exc))
     except _discover.TasksImportError as exc:
+        # A stale project environment produces exactly this failure; when
+        # the lock rule owns this directory, hand the run to `uv run` (it
+        # syncs, then retries) instead of reporting a mystery — or at least
+        # name the fix. Never from an embedded Runner: no exec in a host.
+        hint = _uv_retry(argv, g, cfg, exc.original) if handoff else ""
         if isinstance(exc.original, registry.RegistrationError):
             # a user mistake, not a crash
-            return _refuse(json_mode, f"{exc.path}: {exc.original}")
+            return _refuse(json_mode, f"{exc.path}: {exc.original}{hint}")
         return _refuse(
             json_mode,
             f"failed to import {exc.path}: "
             f"{type(exc.original).__name__}: {exc.original}"
-            f"{_script_hint(exc)}",
+            f"{_script_hint(exc)}{hint}",
         )
     except Exception as exc:  # report import failures cleanly, don't crash
         return _refuse(

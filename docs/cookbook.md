@@ -545,6 +545,14 @@ disables both uv handoffs for a shell, and `uv = false` under
 `[tool.footman]` does the same per project; with either set, or with no uv
 on the PATH, the file simply runs as-is in the current environment.
 
+The project handoff also covers the environment going stale. With the
+project's venv active but out of date — a dependency locked after the last
+sync — an import fails exactly where a missing package would; rather than
+report the mystery, the run hands itself to `uv run --project`, which
+syncs and retries, and a failure after that is real and surfaces
+unchanged. Under the opt-outs (or with no uv to hand off to) the error
+instead ends with the fix: `run uv sync`.
+
 List footman itself among the dependencies: the file imports it, so the
 script environment has to contain it. That is also the one thing footman
 refuses, because the environment provably could not run the file.

@@ -7,6 +7,32 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A stale project environment retries through `uv run` instead of
+  failing the import.** With the project's venv activated but out of date
+  (a dependency locked after the last sync), a bare `fm` used to die on
+  the raw `ModuleNotFoundError` — the handoff's "already home" answer
+  trusted a venv that no longer matched its lockfile. A failed import in
+  a project whose lockfile pins the runner now hands the invocation to
+  `uv run --project`, which syncs and retries; a failure after that is
+  real and surfaces unchanged. Where the retry cannot run — no uv, or the
+  `uv = false` / `FOOTMAN_NO_UV` opt-outs — the refusal ends with the fix
+  instead: run `uv sync`. An embedded `Runner.invoke` never retries: the
+  host process's environment is the host's business.
+- **Completion children build in the project's environment.** The
+  detached refresh child and the dynamic-completer child imported your
+  tasks under whichever interpreter answered the TAB — a
+  globally-installed `fm` in a project directory built the manifest from
+  its *own* environment, where the project's plugins don't exist, and
+  completion silently described a world no `uv sync` could ever mend.
+  The children now ask the lock rule before the script rule, exactly as
+  a run does: in a pinned project they re-exec into the project's
+  `.venv`, the refresh child heals a stale venv on the way from uv's
+  cache alone (strictly offline — a keystroke never downloads), and a
+  broken-import marker in a pinned project names the fix (`run uv sync`)
+  instead of leaving a bare `ModuleNotFoundError` as the whole story.
+
 ## [0.46.0] - 2026-08-21
 
 ### Added

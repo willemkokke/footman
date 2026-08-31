@@ -811,6 +811,7 @@ def test_child_argv_carries_the_resolved_locations(tmp_path):
             "fm",
             "",
             "",
+            "footman",
         ]
         _paths.configure_child(*_paths.child_args())
         assert _paths.env_var("NO_GC") == "ACME_NO_GC"
