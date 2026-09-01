@@ -5,8 +5,8 @@ ran `build` again even if the DAG had just run it, on the caller's thread, with
 no context of its own and no `TaskResult` anywhere. That was the one execution
 path the framework couldn't see.
 
-Now a call routes through here, and per **(task, resolved arguments)** the run
-keeps a once-cell:
+Now a call routes through here, and per **(task, resolved arguments, starting
+environment)** the run keeps a once-cell:
 
 * already run → the memoised value comes back;
 * running on another thread → the caller blocks on its future;
@@ -229,14 +229,38 @@ def unshared(task: Any) -> bool:
     return ctx is not None and not ctx.shared
 
 
+def _env_digest(env: dict[str, str]) -> str:
+    """The environment half of a cell key.
+
+    Order-blind (a dict's insertion order must not split cells), case-blind
+    exactly where the OS is (`_norm`: Windows), and a digest rather than the
+    pairs themselves so cell keys stay small — equality is all a key needs.
+    """
+    import hashlib
+
+    from footman import _globals
+
+    h = hashlib.sha1(usedforsecurity=False)
+    for k, v in sorted((_globals._norm(k), v) for k, v in env.items()):
+        h.update(k.encode("utf-8", "surrogateescape"))
+        h.update(b"=")
+        h.update(v.encode("utf-8", "surrogateescape"))
+        h.update(b"\0")
+    return h.hexdigest()
+
+
 def _key(
-    task: Any, args: Any, kwargs: dict[str, Any], given: frozenset[str] = frozenset()
+    task: Any,
+    args: Any,
+    kwargs: dict[str, Any],
+    given: frozenset[str],
+    env: dict[str, str],
 ) -> Any | None:
     """The cell key for this work: the task's dedup identity, its arguments in
-    the same normal form binding produces, and what its caller actually asked
-    for — so a DAG node and a body call that resolve to the same arguments the
-    same way name one piece of work. `None` when the arguments have no frozen
-    form.
+    the same normal form binding produces, what its caller actually asked
+    for, and the environment it would start from — so a DAG node and a body
+    call that resolve to the same arguments the same way name one piece of
+    work. `None` when the arguments have no frozen form.
 
     *given* joins the key because `apply_defaults()` below erases the very
     distinction `given()` reads: `build()` and `build(profile=<the default>)`
@@ -244,6 +268,13 @@ def _key(
     different work for each. Keyed on values alone they would silently share a
     cell, and the second request would be answered by the first — no error, and
     nothing in the report to say the two were ever different.
+
+    *env* joins it for the same shape of bug with the other input a body can
+    observe: a caller that set `ctx.env` before calling would otherwise be
+    answered by an execution that never saw its variable — a wrong cache hit
+    with no error. Every DAG node starts from the pinned snapshot and an
+    untouched caller holds an equal copy, so digests diverge — splitting the
+    cell, honestly — exactly when someone wrote the environment on purpose.
     """
     from footman import _manifest
 
@@ -259,7 +290,7 @@ def _key(
     frozen = tuple((name, _freeze(value)) for name, value in bound.arguments.items())
     if any(value is _UNKEYABLE for _, value in frozen):
         return None
-    return (registry.work_key(task), frozen, given)
+    return (registry.work_key(task), frozen, given, _env_digest(env))
 
 
 def _deadlock(run: _Session, key: Any, me: int) -> list[str] | None:
@@ -373,7 +404,13 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         child.given = supplied
     else:
         args, kwargs, supplied = _executor.bind_call(task, args, kwargs)
-    key = _key(task, args, kwargs, supplied)
+    # The environment the callee would start from, as known right here: the
+    # already-born child's (post `pre_bind`, exactly what the declared path
+    # keys on), else a copy of the caller's — which is what `child()` would
+    # copy at birth. An untouched caller holds the run snapshot, so this
+    # digests equal to a DAG node's and sharing is preserved.
+    birth_env = (child if child is not None else context.current()).env
+    key = _key(task, args, kwargs, supplied, birth_env)
     if key is None:  # arguments with no frozen form: honest work every time
         return _run_now(
             task,
@@ -500,10 +537,14 @@ def _claim(run: _Session, key: Any, me: int, label: str) -> tuple[bool, _Cell]:
 
 
 def work_of(
-    task: Any, args: Any, kwargs: dict[str, Any], given: frozenset[str] = frozenset()
+    task: Any,
+    args: Any,
+    kwargs: dict[str, Any],
+    given: frozenset[str],
+    env: dict[str, str],
 ) -> Any | None:
     """This request's cell key, or `None` when it cannot have one."""
-    return _key(task, tuple(args), kwargs, given)
+    return _key(task, tuple(args), kwargs, given, env)
 
 
 def retire(key: Any) -> None:

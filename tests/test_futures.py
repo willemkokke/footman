@@ -167,6 +167,118 @@ def test_the_memo_keys_on_arguments_not_just_the_task():
     assert seen == ["web", "api", "web"]
 
 
+def test_the_memo_keys_on_the_environment_too():
+    # The other input a body can observe. A caller that wrote its env before
+    # calling must not be answered by an execution that never saw the
+    # variable — that would be a wrong cache hit with no error. The DAG ran
+    # `probe` from the pinned snapshot; the caller's write makes its request
+    # different work, honestly, and the report shows both runs.
+    import os
+
+    reg = Group("root")
+    seen: list[str | None] = []
+
+    @reg.task
+    def probe() -> str:
+        value = os.environ.get("FUTURES_TARGET")
+        seen.append(value)
+        return value or "unset"
+
+    @reg.task(pre=[probe])
+    def deploy():
+        os.environ["FUTURES_TARGET"] = "arm64"  # scoped to this task
+        assert probe() == "arm64"  # a fresh run that really saw the write
+
+    result = drive(reg, "deploy")
+    assert result.ok, result.stderr
+    assert seen == [None, "arm64"]  # the prerequisite, then the fresh run
+
+
+def test_an_untouched_environment_still_shares():
+    # Every DAG node starts from the pinned snapshot, and a caller that never
+    # wrote its env holds an equal copy — equal digests, one cell. The whole
+    # point of keying on content: the common case must stay a cache hit.
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def build() -> str:
+        runs.append("build")
+        return "dist/app"
+
+    @reg.task(pre=[build])
+    def publish():
+        assert build() == "dist/app"
+
+    result = drive(reg, "publish")
+    assert result.ok, result.stderr
+    assert runs == ["build"]  # once: the body call was answered by the memo
+
+
+def test_equal_env_content_shares_a_single_execution():
+    # Sharing is keyed by env *content*, not by lineage or claim order: two
+    # siblings that made the same write converge on one cell.
+    import os
+
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def probe() -> str:
+        runs.append(os.environ.get("FUTURES_TARGET") or "?")
+        return "ok"
+
+    @reg.task
+    def left():
+        os.environ["FUTURES_TARGET"] = "arm64"
+        probe()
+
+    @reg.task
+    def right():
+        os.environ["FUTURES_TARGET"] = "arm64"
+        probe()
+
+    result = drive(reg, "left right")
+    assert result.ok, result.stderr
+    assert runs == ["arm64"]  # one execution answered both
+
+
+def test_different_env_values_split_the_cell():
+    import os
+
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def probe() -> str:
+        runs.append(os.environ.get("FUTURES_TARGET") or "?")
+        return "ok"
+
+    @reg.task
+    def arm():
+        os.environ["FUTURES_TARGET"] = "arm64"
+        probe()
+
+    @reg.task
+    def intel():
+        os.environ["FUTURES_TARGET"] = "x86_64"
+        probe()
+
+    result = drive(reg, "arm intel")
+    assert result.ok, result.stderr
+    assert sorted(runs) == ["arm64", "x86_64"]  # each caller's run saw its own
+
+
+def test_the_env_digest_is_order_blind_and_value_sensitive():
+    from footman import _futures
+
+    a = _futures._env_digest({"A": "1", "B": "2"})
+    assert _futures._env_digest({"B": "2", "A": "1"}) == a  # insertion order
+    assert _futures._env_digest({"A": "1", "B": "3"}) != a  # a value counts
+    assert _futures._env_digest({"A": "1"}) != a  # so does presence
+    assert _futures._env_digest({}) != a
+
+
 def test_an_unshared_task_runs_on_every_call():
     reg = Group("root")
     runs: list[int] = []

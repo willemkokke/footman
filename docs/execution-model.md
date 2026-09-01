@@ -3,7 +3,8 @@
 Everything on this page follows from three decisions the rest of the docs
 already lean on. **Nothing anonymous runs**: footman schedules, records, and
 safely cancels only work it owns. **One identity rule everywhere**: the same
-task with the same arguments is the same work, however it was asked for. And
+task with the same arguments, starting from the same environment, is the same
+work, however it was asked for. And
 **a declaration is a commitment**: sharing, gates, and the guarantee of a
 record exist exactly where a declaration does. Hold those three and every
 rule below is a consequence, not a convention.
@@ -33,9 +34,9 @@ runs for every request, which is how you say "this must happen again".
 Calling a task is not a shortcut around footman: the callee gets a real task
 boundary, with its own context and working directory, its `@requires` and `confirm`
 gates, and its own entry in the report, and the run performs its work **once per
-task and arguments**, whoever asks for it. So a prerequisite you also call hands
-back what it already produced, which is how a task reads a value `pre=` cannot
-pass:
+task, arguments, and starting environment**, whoever asks for it. So a
+prerequisite you also call hands back what it already produced, which is how a
+task reads a value `pre=` cannot pass:
 
 ```python
 from footman import run, task
@@ -53,9 +54,12 @@ def publish():
 
 Whether a task was reached by declaration or by a call makes no difference to
 how often it runs, so you never have to hold that distinction in your head. The
-same rules follow from it: different arguments are different work and run;
-calling a task that is running on another thread waits for that run rather than
-starting a second; and a call that could never return (a task calling itself,
+same rules follow from it: different arguments are different work and run; a
+caller that changed its environment before calling asks for different work too,
+so the callee runs fresh instead of being answered by an execution that never
+saw the change; calling a task that is running on another thread waits for that
+run rather than starting a second; and a call that could never return (a task
+calling itself,
 or two tasks calling each other) is refused by name instead of hanging.
 
 Two calls footman refuses outright, because a call has nowhere to put them: a
