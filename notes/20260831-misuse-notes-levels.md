@@ -88,6 +88,26 @@ channel ignores print gating. `Runner` results expose the same list.
 "why is my run stuck" heartbeat, and caution won. `fork` was considered
 for a default of error and left at warning.
 
+`global-unread` took a detour the release should have waited for. The
+build shipped it at **trace**, deviating from the info in this table,
+because its old call site was deliberately `-v`-gated ("never nags an
+ordinary run"): its evidence is "never read *this run*", and a task
+that reads an option only inside a branch would nag on every run that
+skips the branch — a false positive by construction. The deviation was
+flagged in the PR and v0.47.0 released with the flag unanswered; the
+maintainer's answer landed immediately after and reframed the problem:
+the conditional read has a one-line idiomatic fix — **read a declared
+option unconditionally and branch on the value** (the read is a cheap,
+side-effect-free lookup) — and with that as the taught idiom, "never
+read this run" collapses into "never read at all" and the evidence
+becomes trustworthy. Ruled to **info** in the release after v0.47.0,
+with the idiom in the note's own text. Residuals accepted:
+caller-declares-callee-reads still notes (the hoisted read that passes
+the value down is the fix there too), and a deliberately lazy reader
+reclassifies `global-unread:<option>` per project. Process lesson,
+recorded for its own sake: an unanswered deviation flag is enough to
+hold a release for.
+
 **The whitelist workflow** the design serves (the maintainer's stated
 adoption path): run at defaults → audit each finding using its site →
 pin narrow entries for known-harmless third-party behaviour

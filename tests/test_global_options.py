@@ -333,7 +333,11 @@ def test_an_orphan_global_warns_on_the_run():
     assert "warning: --dead-switch" in result.stderr
 
 
-def test_a_declared_unread_global_is_advised_only_under_verbose():
+def test_a_declared_unread_global_is_advised_and_teaches_the_idiom():
+    # info by default: the false-positive shape (a conditional read) has a
+    # one-line idiomatic fix the note itself teaches — read the declared
+    # option unconditionally and branch on the value — so "never read this
+    # run" only ever means a genuinely stale declaration.
     reg = Group("root")
     opt = _adopt(reg, "region", str, default="eu")
 
@@ -341,11 +345,10 @@ def test_a_declared_unread_global_is_advised_only_under_verbose():
     def build():
         print("built")
 
-    quiet = Runner().invoke("build", tasks=reg)
-    assert quiet.ok and "never read it" not in quiet.stderr
-    loud = Runner().invoke("--verbose build", tasks=reg)
-    assert loud.ok, loud.stderr
-    assert "declares --region in uses= but never read it" in loud.stderr
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert "info: task build declares --region in uses=" in result.stderr
+    assert "read it unconditionally and branch on the value" in result.stderr
 
 
 def test_a_declared_and_read_global_is_not_advised():

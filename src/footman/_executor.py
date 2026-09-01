@@ -1765,16 +1765,18 @@ def _absent_global(opt: Any, cfg: Any = _MISSING) -> Any:
 def _advise_unread_uses(ctx: Context, fn: Task) -> None:
     """A task that declared `uses=[OPT]` but finished without reading
     `.value` gets an advisory — a stale declaration misleads help and
-    provenance, but quietly: the kind defaults to `trace`, so the level
-    system prints it under `-v` alone (where the old call-site gate lived)
-    while the record still rides the envelope, and a project may promote
-    it."""
+    provenance. The note teaches the idiom that makes its own evidence
+    trustworthy: read a declared option unconditionally and branch on the
+    value (the read is a cheap lookup), so "never read this run" only ever
+    means a genuinely stale declaration — and a deliberately lazy reader
+    can reclassify `global-unread:<option>` per project."""
     for opt in registry.task_uses(fn):
         if (ctx.task or "?") not in opt._reads:
             _globals._note(
                 f"global-unread:{opt.name}",
                 f"task {ctx.task or '?'} declares --{opt.name} in uses= but "
-                f"never read it this run — prune the declaration if it is "
+                f"never read it this run — read it unconditionally and "
+                f"branch on the value, or prune the declaration if it is "
                 f"stale",
             )
 
