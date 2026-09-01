@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-09-01
+
 ### Added
 
 - **Tasks that live outside every project, without a branded CLI.** The
@@ -5897,7 +5899,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/willemkokke/footman/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/willemkokke/footman/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/willemkokke/footman/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/willemkokke/footman/compare/v0.44.0...v0.45.0
