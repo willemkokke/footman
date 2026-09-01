@@ -122,7 +122,15 @@ def _rebuild() -> None:
         # rebuild exactly the tree the run serves, or a background refresh
         # strips personal tasks from the completions it answers.
         files = [user, *files]
-    if not files and not _paths.builtin():
+    # The built-in set the run would mount: the brand's, plus the user's
+    # own `builtin` key — a background rebuild that skipped the second
+    # would strip exactly the tasks that key exists to offer. A broken key
+    # is the run's to report; the child quietly builds what it can.
+    try:
+        builtin = _config.effective_builtin(_paths.builtin())
+    except Exception:
+        builtin = _paths.builtin()
+    if not files and not builtin:
         return
     # The re-executed child is a fresh interpreter, so it needs telling where
     # the cache is exactly as the first child did. Project rule before script
@@ -145,7 +153,7 @@ def _rebuild() -> None:
         from footman import compose
 
         with registry.capture() as base:
-            for entry in _paths.builtin():
+            for entry in builtin:
                 compose.plugin(entry)
         # Same sealing the app layer does, for the same reason — this child
         # rebuilds the very manifest that answers TAB outside a project.
@@ -162,7 +170,7 @@ def _rebuild() -> None:
             tasks_file=name,
             path=_paths.global_manifest_path(),
             bake_cwd=False,
-            builtin=_paths.builtin(),
+            builtin=builtin,
             project=False,
         )
         return

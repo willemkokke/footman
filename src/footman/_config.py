@@ -35,7 +35,7 @@ PYPROJECT = "pyproject.toml"
 # project), so a per-project value would be a lie waiting to confuse
 # someone. Stripped from cascade files, with a note under -v; an explicit
 # `--config` file keeps them — the user named that file on purpose.
-USER_LEVEL_KEYS = frozenset({"gc", "cascade"})
+USER_LEVEL_KEYS = frozenset({"gc", "cascade", "builtin"})
 
 # Every recognised key, as data — the source the docs table renders from, so
 # a reference page cannot describe a key set the runner doesn't have. The
@@ -110,6 +110,15 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "`false` disables both uv handoffs: re-running through the project's "
         "pinned footman, and the script environment of a tasks file carrying "
         "its own PEP 723 dependencies.",
+    ),
+    (
+        "builtin",
+        "list of entry points / `true`",
+        "unset",
+        "Mount `footman.tasks` entry points as built-in tasks — offered "
+        "outside every project, ignored inside one (the cascade wins). "
+        "`true` mounts every entry point installed with the runner. "
+        "**User-level only.**",
     ),
     (
         "docs_url",
@@ -397,6 +406,72 @@ def user_level_value(key: str) -> Any:
         return _footman_table(_paths.footman_config_file()).get(key)
     except ConfigError:
         return None  # the load_config walk warns about it; quiet here
+
+
+class BuiltinError(ConfigError):
+    """The user-level `builtin` key is not a list of names or `true`."""
+
+
+def user_builtin() -> tuple[str, ...] | None:
+    """The user's own built-in entry points, from the user-level file alone.
+
+    `builtin = ["acme.tasks"]` names them; `builtin = true` means "every
+    `footman.tasks` entry point installed alongside this runner" — which is
+    honest because installing one there (`uv tool install footman --with
+    <dist>`) is already a deliberate act, and the runner's own environment
+    is a small, intentional place. `None` means the key is absent, which is
+    not the same as an empty list (a list that mounts nothing is a choice).
+
+    User-level only, like `cascade`: what a machine offers *outside* every
+    project is the machine owner's business, and a project that wants the
+    same tasks mounts them the ordinary way, in its tasks file.
+
+    Raises `BuiltinError` for a value that is neither, because a mount
+    someone declared and footman ignored is a missing command with no
+    explanation.
+    """
+    value = user_level_value("builtin")
+    if value is None or value is False:
+        return None
+    if value is True:
+        return installed_entry_points()
+    if isinstance(value, list) and all(isinstance(v, str) for v in value):
+        return tuple(value)
+    raise BuiltinError(
+        f"builtin = {value!r} in {_paths.footman_config_file()}: name the "
+        f'entry points to mount (builtin = ["acme.tasks"]), or say '
+        f"builtin = true for every one installed with the runner"
+    )
+
+
+def installed_entry_points() -> tuple[str, ...]:
+    """Every `footman.tasks` entry point importable from here, sorted.
+
+    The `builtin = true` set. Sorted so the tree — and the manifest built
+    from it — is the same on every run whatever order the metadata is read
+    in.
+    """
+    from importlib.metadata import entry_points
+
+    from footman.compose import ENTRY_POINT_GROUP
+
+    return tuple(sorted({ep.name for ep in entry_points(group=ENTRY_POINT_GROUP)}))
+
+
+def effective_builtin(brand: tuple[str, ...]) -> tuple[str, ...]:
+    """The built-in set this invocation mounts: the brand's, then the
+    user's, in that order and without duplicates.
+
+    The brand's own declarations come first because they are the product;
+    the user's are additions to it, not replacements — a branded CLI's
+    built-ins stay built in whatever a user adds beside them.
+    """
+    user = user_builtin()
+    if user is None:
+        return brand
+    seen = list(brand)
+    seen += [name for name in user if name not in seen]
+    return tuple(seen)
 
 
 def load_config(

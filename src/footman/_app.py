@@ -49,6 +49,22 @@ _color_out: bool = False
 _docs_url: str | None = None  # the run's docs_url template, config-set
 
 
+def _builtin() -> tuple[str, ...]:
+    """This invocation's built-in set: the brand's, plus the user's own.
+
+    Every consumer of the built-in ladder asks here rather than reading
+    `_brand.builtin` — global mode, the base mount, `--plugins`, the
+    "it's built in, mount it" remedy — so a user's declarations are built
+    in wherever the brand's are, which is the whole of the feature.
+    A broken `builtin` key is refused where it can be reported (the
+    execution path); the quieter surfaces fall back to the brand's own.
+    """
+    try:
+        return _config.effective_builtin(_brand.builtin)
+    except _config.ConfigError:
+        return _brand.builtin
+
+
 def _task_docs_url(address: str) -> str | None:
     """*address*'s documentation URL under this run's template, or None."""
     return _describe.docs_url_for(_docs_url, address)
@@ -285,20 +301,28 @@ def resolve_task_files(
 
 
 def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
-    """The brand's built-in base: each `footman.tasks` entry point mounted
-    into a fresh tree, exactly as a tasks file's `plugin(...)` would mount
-    it — so a project that wants the same set mounts it the ordinary way.
+    """The built-in base: each `footman.tasks` entry point mounted into a
+    fresh tree, exactly as a tasks file's `plugin(...)` would mount it — so
+    a project that wants the same set mounts it the ordinary way.
 
     Built only when discovery found no project task files. A name that does
-    not mount is a refusal naming the brand — the brand declared it, so the
-    brand's install is what is broken — never a crash."""
+    not mount is a refusal naming *whoever declared it* — the brand for its
+    own, the user's config for theirs, since that is whose install or
+    spelling is what needs fixing — never a crash."""
     from footman import compose
 
+    declared_by_user = set(_config.user_builtin() or ())
     with registry.capture() as base:
         for name in names:
             try:
                 compose.plugin(name)
             except Exception as exc:
+                if name in declared_by_user and name not in _brand.builtin:
+                    return _refuse(
+                        json_mode,
+                        f"the builtin key in {_paths.footman_config_file()} "
+                        f"names {name!r}, which did not mount: {exc}",
+                    )
                 return _refuse(
                     json_mode,
                     f"{_brand.name} declares built-in tasks from {name!r}, "
@@ -333,7 +357,7 @@ def _builtin_remedy(unknown: str) -> str:
             out.extend(addresses(sub, f"{prefix}{name}."))
         return out
 
-    for name in _brand.builtin:
+    for name in _builtin():
         try:
             _ident, node = compose._resolve_plugin(name)
         except Exception:
@@ -381,7 +405,7 @@ def _discover_files(
     if found.files:
         return found
 
-    if _brand.builtin and not g.get("tasks_file"):
+    if _builtin() and not g.get("tasks_file"):
         # Global mode: the brand's built-ins answer where nothing else does,
         # so listings, help, and runs proceed over the mounted base. The
         # empty-tree teaching below is for a runner with no base at all.
@@ -1001,11 +1025,17 @@ def _plugins_report(reg: registry.Group) -> int:
             ),
         )
         where = landed.get(ep.name)
-        if ep.name in _brand.builtin:
-            # The brand's own surface: part of the product wherever there is
-            # no project, and an ordinary mount inside one.
+        if ep.name in _builtin():
+            # Built into this runner: part of the product wherever there is
+            # no project, and an ordinary mount inside one. Which *rung*
+            # declared it matters to the reader — the brand's own set is the
+            # product, the user's is their machine's, and only the second is
+            # theirs to edit.
             desc = described(where) if where else advertised(ep.name)
-            grouped.setdefault(dist_name, []).append((ep.name, "built in", desc))
+            state = (
+                "built in" if ep.name in _brand.builtin else "built in (your config)"
+            )
+            grouped.setdefault(dist_name, []).append((ep.name, state, desc))
         elif where:
             # One landed node speaks for itself; a family mounted piecemeal
             # speaks with its advertised voice — an arbitrary member's
@@ -2156,6 +2186,14 @@ def _execute(
     argv is never re-parsed on the way in. *handoff* rides along for the
     stale-environment retry: an embedded `Runner.invoke` must never exec.
     """
+    # Before discovery, because discovery already consults the built-in set:
+    # a `builtin` key footman cannot read would otherwise be swallowed into
+    # "no tasks file found" — the one answer that hides the mistake instead
+    # of naming it.
+    try:
+        _config.user_builtin()
+    except _config.ConfigError as exc:
+        return _refuse(bool(g.get("json")), str(exc))
     # "Bare" means no chain was asked for — globals-only lines (`fm --json`,
     # `fm -k`) are listing-shaped, exactly like they are when tasks exist.
     found = _discover_files(g, wants_help, bare=after >= len(argv))
@@ -2165,13 +2203,13 @@ def _execute(
     json_mode = bool(g.get("json"))
 
     base = registry.Group("root")
-    if _brand.builtin and not found.root and not g.get("tasks_file"):
+    if (base_set := _builtin()) and not found.root and not g.get("tasks_file"):
         # No project: the brand's built-ins are the base of the tree, and
         # the user rung (already leading `files`) overlays them — the full
         # ladder is project > user > built-in. A project ignores the base
         # outright: its tasks file mounts what it wants, so nothing is
         # privileged and nothing is lost.
-        built = _base_tree(_brand.builtin, json_mode)
+        built = _base_tree(base_set, json_mode)
         if isinstance(built, int):
             return built
         base = built
@@ -2290,7 +2328,7 @@ def _execute(
                 else _brand.tasks_file,
                 path=_paths.global_manifest_path(),
                 bake_cwd=False,
-                builtin=_brand.builtin,
+                builtin=_builtin(),
                 # No project here — the one place the question is asked, so
                 # every reader downstream just checks `needs_project`.
                 project=False,
@@ -2410,7 +2448,7 @@ def _run_tree(
         globals_, segments = _split.split_chain(tree, argv, live)
     except _split.ChainError as exc:
         message = str(exc)
-        if exc.unknown and _brand.builtin and root_dir:
+        if exc.unknown and _builtin() and root_dir:
             # Inside a project the base is ignored, so a built-in's name
             # reads as a command that vanished — teach the mount instead.
             message += _builtin_remedy(exc.unknown)

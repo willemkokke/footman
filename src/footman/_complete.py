@@ -1058,12 +1058,23 @@ def complete_cli(args: list[str]) -> int:
                     Path(stand), _paths.find_repo_root(Path(stand)), name
                 )
                 if not files:
+                    # Nothing here, nothing built in, no user tasks file —
+                    # and no global manifest a previous run left behind.
+                    # That last check is how a *user-configured* built-in
+                    # set reaches TAB under a brand that declares none of
+                    # its own: the key lives in config, which this path
+                    # must not read (a TOML parse per keystroke), but the
+                    # manifest a real run wrote is one `exists` away. A
+                    # machine with nothing configured has no such file, so
+                    # a bare directory still answers instantly.
+                    shared = _paths._global_file()
                     if (
                         not _paths.builtin()
                         and not _paths.user_tasks_file(name).is_file()
+                        and not os.path.exists(shared)
                     ):
                         return 0
-                    manifest = _paths._global_file()
+                    manifest = shared
 
     data = _load_manifest(manifest)
     if (line := _broken_line(data)) is not None:
