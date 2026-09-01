@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A user-level edit reaches completion on the next press, not ten
+  minutes later.** The completion cache refreshed on an age clock alone,
+  so editing the user config or `~/.config/footman/tasks.py` — the two
+  files you change expressly to alter what `fm` offers — could leave
+  <kbd>Tab</kbd> answering the old menu for a whole `max_age` (10 minutes
+  by default), which is exactly the window in which you are pressing it
+  to see whether the change worked. Every manifest now records what those
+  files looked like when it was built, and a press that sees a difference
+  rebuilds behind itself: two `stat` calls, made after the candidates are
+  already written, so the keystroke waits on nothing and the hot path
+  keeps its one file read. Creating either file counts as a change, not
+  only editing one. `completion.max_age = "off"` still means no
+  background rebuilds at all.
+
 ### Added
 
 - **Task names link to their docs.** A `docs_url` template under

@@ -435,6 +435,34 @@ def check_locations() -> None:
             )
 
 
+def user_stamp() -> str:
+    """A fingerprint of the user-level files a manifest was built from — the
+    user config and the user tasks file.
+
+    Every manifest depends on both (the config's `cascade` bounds the walk,
+    and the user tasks file rides every tree footman builds), yet neither can
+    join a cache *key*: the key would then have to be recomputed from a TOML
+    read on the hot path. So the manifest bakes this stamp instead, and the
+    resolver compares it — two `stat` calls, no parse, no import, and paid
+    after the candidates are already written, so the keystroke never waits
+    on it. A changed stamp means the same thing an aged manifest means:
+    serve what is cached, rebuild behind it.
+
+    An **absent** file is a value, not a gap: writing a user tasks file that
+    was not there before changes the tree exactly as editing one does, and
+    the stamp has to say so. Size rides along with the timestamp so an edit
+    inside one clock tick still registers.
+    """
+    marks: list[str] = []
+    for path in (footman_config_file(), user_tasks_file(tasks_file_name())):
+        try:
+            info = os.stat(path)
+            marks.append(f"{info.st_mtime_ns}-{info.st_size}")
+        except OSError:
+            marks.append("-")  # absent, and its arrival is a change
+    return ":".join(marks)
+
+
 def user_tasks_file(filename: str = DEFAULT_TASKS_FILE) -> Path:
     """This CLI's user-level tasks file — `<config dir>/<tasks_file>`.
 

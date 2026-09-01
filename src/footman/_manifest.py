@@ -1282,6 +1282,12 @@ def sync_manifest(
         # Additive, like `cwd`: the background refresh reads it back, so a
         # branded CLI's custom filename survives a refresh it can't attend.
         fresh["tasks_file"] = tasks_file
+    # What the user-level rungs looked like when this was built. The
+    # resolver compares it to spot a config or user-tasks edit the age
+    # clock would otherwise hide for a whole `max_age` — and it joins the
+    # write guard below, or a rebuild triggered by a stamp change would
+    # leave the old stamp in place and every later TAB would spawn again.
+    fresh["user_stamp"] = _paths.user_stamp()
     # `path` lets a caller key the cache file separately from the baked
     # `key_dir` — a `-f` run caches by (cwd, file) yet still bakes the cwd, so
     # the collector prunes it with the project like any other.
@@ -1299,6 +1305,7 @@ def sync_manifest(
         or cached.get("completion_max_age") != completion_max_age
         or cached.get("cwd") != fresh.get("cwd")
         or cached.get("tasks_file") != fresh.get("tasks_file")
+        or cached.get("user_stamp") != fresh.get("user_stamp")
     ):
         # Guarded here rather than inside `write_manifest`, whose contract is
         # "the write landed, or you hear about it" — that is what its retry

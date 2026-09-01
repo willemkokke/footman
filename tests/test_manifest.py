@@ -379,6 +379,29 @@ def test_sync_rewrites_only_on_hash_change(root, tmp_path, monkeypatch):
     assert len(writes) == 2
 
 
+def test_sync_rewrites_when_only_the_user_stamp_moved(root, tmp_path, monkeypatch):
+    # The stamp has to join the write guard, not just the payload: a rebuild
+    # triggered by a user-level edit would otherwise find the tree unchanged,
+    # write nothing, leave the OLD stamp on disk — and every later TAB would
+    # see the same mismatch and spawn another rebuild, forever.
+    import json
+
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path)
+    config = tmp_path / "user.toml"
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(config))
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    _manifest.sync_manifest(root, project)
+    path = _paths.manifest_path(project)
+    first = json.loads(path.read_text(encoding="utf-8"))["user_stamp"]
+
+    config.write_text("[tool.footman]\nsort = true\n", encoding="utf-8")
+    _manifest.sync_manifest(root, project)  # same tree, moved stamp
+    second = json.loads(path.read_text(encoding="utf-8"))["user_stamp"]
+    assert second != first  # the file was rewritten, and says so
+
+
 def test_a_schema_bump_rewrites_an_unchanged_tree(root, tmp_path, monkeypatch):
     # An upgrade bumps the schema while the tree (and so the hash) stands
     # still. The rewrite guard compared only the hash, so the old-schema

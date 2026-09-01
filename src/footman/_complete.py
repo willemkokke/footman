@@ -736,7 +736,19 @@ def _maybe_refresh(
     if not isinstance(max_age, int) or isinstance(max_age, bool) or max_age <= 0:
         return  # disabled (off, or an in-memory/`-f` manifest with no age baked)
     try:
-        if time.time() - os.stat(path).st_mtime <= max_age:
+        # Two triggers, one rebuild. The clock says "this may have drifted";
+        # the user stamp says "a user-level file it was built from has
+        # actually changed" — a config edit or a user tasks file written,
+        # which the clock alone would hide for up to a whole `max_age`, and
+        # which is exactly when someone is watching for their change to
+        # land. An older manifest (or a broken-tree marker) bakes no stamp:
+        # it simply falls back to the clock. Never overrides `max_age =
+        # off`, which is a request for no background rebuilds at all.
+        from footman import _paths
+
+        stamp = data.get("user_stamp")
+        edited = isinstance(stamp, str) and stamp != _paths.user_stamp()
+        if not edited and time.time() - os.stat(path).st_mtime <= max_age:
             return
         # Bump the mtime *before* spawning: resets the clock even if the rebuild
         # is a no-op (sync_manifest only writes on change), and storm-guards
