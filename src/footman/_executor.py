@@ -30,7 +30,16 @@ from pathlib import Path, PurePath
 from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
-from footman import _binder, _coerce, _futures, _globals, _signals, context, registry
+from footman import (
+    _binder,
+    _coerce,
+    _futures,
+    _globals,
+    _notes,
+    _signals,
+    context,
+    registry,
+)
 from footman._discover import defining_dir
 from footman._manifest import resolved_signature
 from footman._split import ChainError, Segment
@@ -69,6 +78,10 @@ class TaskResult:
     duration: float = 0.0
     output: str = ""
     steps: list[Result] = field(default_factory=list)
+    notes: list[Any] = field(default_factory=list)
+    """The notes this execution fired (`_notes.Note` records: kind, level,
+    site, text) — every level, print-gated or not. Empty for a row that
+    executed nothing (a `shared` row, a refusal)."""
     cancelled: bool = False  # failed only because fail-fast killed it mid-run
     timed_out: bool = False
     """`@task(timeout=…)` expired before this task concluded. A verdict about
@@ -1750,11 +1763,12 @@ def _absent_global(opt: Any, cfg: Any = _MISSING) -> Any:
 
 
 def _advise_unread_uses(ctx: Context, fn: Task) -> None:
-    """`-v` only: a task that declared `uses=[OPT]` but finished without
-    reading `.value` gets an advisory — a stale declaration misleads help
-    and provenance, but quietly, so it never nags an ordinary run."""
-    if not ctx.verbose:
-        return
+    """A task that declared `uses=[OPT]` but finished without reading
+    `.value` gets an advisory — a stale declaration misleads help and
+    provenance, but quietly: the kind defaults to `trace`, so the level
+    system prints it under `-v` alone (where the old call-site gate lived)
+    while the record still rides the envelope, and a project may promote
+    it."""
     for opt in registry.task_uses(fn):
         if (ctx.task or "?") not in opt._reads:
             _globals._note(
@@ -2022,11 +2036,15 @@ class ResultView:
 def _reserved_note(
     ctx: Context, plugin: str, hook: Task, kind: str = "pre_task"
 ) -> None:
-    sink = ctx.err_sink if ctx.err_sink is not None else context.real_stderr()
-    sink.write(
-        f"note: {plugin} {kind} {getattr(hook, '__name__', '?')!r} returned "
+    # Through the notes channel — level, dedup, the record — with the ctx
+    # passed explicitly: the hook machinery holds the task's context here
+    # without it necessarily being current.
+    _notes.emit(
+        f"hook-return:{plugin}",
+        f"{plugin} {kind} {getattr(hook, '__name__', '?')!r} returned "
         f"a value; a pre hook's return channel is reserved (for a pre that "
-        f"supplies the task's result) — keep per-task state on task.state\n"
+        f"supplies the task's result) — keep per-task state on task.state",
+        ctx=ctx,
     )
 
 
@@ -2453,6 +2471,16 @@ def run_bound(
     result.thread_id = threading.get_native_id()
     result.lane_waits = lane_waits
     result.sections = list(ctx.sections)
+    result.notes = list(ctx.notes)
+    if result.ok and (banned := _notes.boundary_error(ctx)) is not None:
+        # Every noted site already did the safe thing, so nothing was gained
+        # by stopping early — and the reckoning happening here, at the
+        # boundary, is what surfaces ALL of a task's banned notes in one
+        # run. A body that already failed keeps its own failure: the notes
+        # still ride the row.
+        result.ok = False
+        result.code = 1
+        result.error = banned
     reviewers = registry.task_reviewers(fn)
     if reviewers and hook_error is None:
         # The row's review window: the body concluded, the record is still a

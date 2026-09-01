@@ -25,6 +25,7 @@ from footman import (
     _discover,
     _executor,
     _manifest,
+    _notes,
     _paths,
     _progress,
     _schedule,
@@ -1416,6 +1417,19 @@ def _print_json(
             # The plan's edges into this row, by address — what a profile
             # draws dependency arrows from. Additive to schema 1.
             entry["after"] = list(r.after)
+        if r.notes:
+            # What the level system resolved for this execution — every
+            # fired note, trace included: the machine channel ignores print
+            # gating. Additive to schema 1.
+            entry["notes"] = [
+                {
+                    "kind": n.kind,
+                    "level": n.level,
+                    "site": n.site,
+                    "text": n.text,
+                }
+                for n in r.notes
+            ]
         if r.sections and r.started is not None:
             # Task-authored profiling: `at_ms` places each section relative
             # to the task's own start (negative is legal — a retroactive
@@ -2143,6 +2157,13 @@ def _execute(
             'tasks.py instead: plugin("footman.docs", into="footman") '
             "(footman.compose.plugin; see the composing docs)",
         )
+    # The note-level policy: validated loudly (an ignored policy line is a
+    # wall someone thinks is up), then installed for the run — always, so a
+    # previous embedded invocation's table never leaks into this one.
+    notes_cfg = cfg.get("notes")
+    if notes_cfg is not None and (error := _notes.validate(notes_cfg)) is not None:
+        return _refuse(json_mode, error)
+    _notes.install_policy(notes_cfg)
 
     inv = invocation.Invocation(
         cli=g,
@@ -2649,6 +2670,10 @@ def run_group(
     if g.get("version"):
         return _print_version(bool(g.get("json")))
 
+    # No config here (in-memory trees have no cascade), so the note-level
+    # policy is the defaults — installed rather than inherited, or a prior
+    # embedded invocation's table would leak into this one.
+    _notes.install_policy(None)
     tree = _manifest.build_manifest(root)["tree"]
     # An in-memory tree still gets the per-task lifecycle — its hooks live on
     # the Group's own contributions. `pre_tasks` stays a discovery-time moment

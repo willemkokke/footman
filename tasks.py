@@ -938,6 +938,7 @@ def _generate_pages() -> None:
     from footman.tasks.docs import config as taskdocs_config
     from footman.tasks.docs import errors as taskdocs_errors
     from footman.tasks.docs import globals_ as taskdocs_globals
+    from footman.tasks.docs import notes as taskdocs_notes
     from footman.tasks.docs import page as taskdocs_page
     from footman.tasks.docs import site as taskdocs_site
 
@@ -969,6 +970,9 @@ def _generate_pages() -> None:
     # The [tool.footman] key table, from the keys the runner recognises —
     # configuration.md snippet-includes it, so it can't fall behind.
     taskdocs_config(out=Path("_generated/config.md"))
+    # The note-kind table, from the runtime's own registry — notes.md
+    # snippet-includes it, so a new kind cannot ship undocumented.
+    taskdocs_notes(out=Path("_generated/notes.md"))
     # Every error and note the runtime can say, extracted from the source —
     # a reference page that regenerates each build and so can never drift.
     taskdocs_errors(out=Path("docs/_generated/errors.md"))

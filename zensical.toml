@@ -28,6 +28,7 @@ nav = [
       { "The execution model" = "execution-model.md" },
       { "Composing tasks" = "composing.md" },
       { "Hooks & plugin options" = "hooks.md" },
+      { "Notes & levels" = "notes.md" },
       { "Writing plugins" = "plugins.md" },
       { "Your tasks, documented" = "taskdocs.md" },
       { "Type-checking your tasks" = "typechecking.md" },

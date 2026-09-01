@@ -544,6 +544,11 @@ class Context:
     """Per-parent label counts, so same-labelled children get ordinals in
     request order as written (the first is bare, the second is `#2`)."""
 
+    notes: list[Any] = field(default_factory=list)
+    """The notes this task fired (`_notes.Note` records) — what the level
+    system resolved, where each came from, and what the boundary verdict
+    and the `--json` envelope read. A task's own, never inherited."""
+
     env: dict[str, str] = field(default_factory=lambda: _globals.base_env())
     """**This task's environment** — a complete one, not a diff.
 
@@ -756,6 +761,7 @@ class Context:
             env=dict(self.env),
             steps=[],
             sections=[],
+            notes=[],
             task=label,
             unit_pending=False,
         )
