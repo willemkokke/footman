@@ -80,6 +80,17 @@ it. Any real `fm` run rebuilds the manifest as part of its work, so when
 you want the new task on the menu right now, run anything — `fm --list` is
 the cheapest — and the very next <kbd>Tab</kbd> knows it.
 
+Your **user-level** files are the exception, because they are the ones you
+edit expressly to change what `fm` offers: the user config and
+`~/.config/footman/tasks.py`. Each manifest records what those looked like
+when it was built, and a press notices the difference (two `stat` calls,
+after its candidates are already on screen — the keystroke waits on
+nothing). So a change there rebuilds behind the *next* press rather than
+waiting out the clock: press once to see the old menu, again to see the
+new one. Creating either file counts as a change, exactly as editing one
+does. `completion.max_age = "off"` still means no background rebuilds at
+all — it asks for the clock and the trigger alike to stay quiet.
+
 A tasks file that **fails to import** is an answer too, not a silence:
 the rebuild leaves behind what the import said, and <kbd>Tab</kbd> shows
 it where the shell can — zsh as a message line, fish, nushell and

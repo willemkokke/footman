@@ -687,6 +687,124 @@ def test_a_broken_f_file_marks_its_own_key(tmp_path, monkeypatch, capsys):
     assert not _paths.cwd_manifest_path().is_file()
 
 
+# --- a user-level edit is a refresh trigger, not just the clock ---------------
+# The age clock alone hid a config or user-tasks edit for a whole `max_age`
+# (10 minutes by default) — exactly the window in which someone who just
+# changed their config is pressing TAB to see whether it worked.
+
+
+def _fresh_manifest(tmp_path, stamp):
+    """A manifest file written just now, baking *stamp*."""
+    import json
+
+    path = tmp_path / "m.json"
+    path.write_text(
+        json.dumps({"completion_max_age": 600, "user_stamp": stamp}),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_user_stamp_notices_arrival_edits_and_removal(tmp_path, monkeypatch):
+    config = tmp_path / "user.toml"
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(config))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(tmp_path / "cfgdir"))
+
+    absent = _paths.user_stamp()
+    config.write_text("[tool.footman]\nsort = true\n", encoding="utf-8")
+    written = _paths.user_stamp()
+    assert written != absent  # an absent file is a value: its arrival counts
+
+    config.write_text("[tool.footman]\nsort = false\n", encoding="utf-8")
+    assert _paths.user_stamp() != written  # and so does an edit of one byte
+
+    config.unlink()
+    assert _paths.user_stamp() == absent  # back where it started
+
+
+def test_a_user_tasks_file_counts_too(tmp_path, monkeypatch):
+    cfgdir = tmp_path / "cfgdir"
+    cfgdir.mkdir()
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(tmp_path / "user.toml"))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(cfgdir))
+    before = _paths.user_stamp()
+    (cfgdir / "tasks.py").write_text("from footman import task\n", encoding="utf-8")
+    assert _paths.user_stamp() != before
+
+
+def test_a_moved_stamp_refreshes_a_manifest_the_clock_calls_fresh(
+    tmp_path, monkeypatch
+):
+    from footman import _complete
+
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(tmp_path / "user.toml"))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(tmp_path / "cfgdir"))
+    path = _fresh_manifest(tmp_path, "stale-stamp")
+    spawned: list[object] = []
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda o=None, s=None: spawned.append(o)
+    )
+    import json
+
+    _complete._maybe_refresh(str(path), json.loads(path.read_text()))
+    assert spawned  # rebuilt behind the answer, minutes before the clock would
+
+
+def test_an_unchanged_stamp_leaves_a_fresh_manifest_alone(tmp_path, monkeypatch):
+    from footman import _complete
+
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(tmp_path / "user.toml"))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(tmp_path / "cfgdir"))
+    path = _fresh_manifest(tmp_path, _paths.user_stamp())
+    spawned: list[object] = []
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda o=None, s=None: spawned.append(o)
+    )
+    import json
+
+    _complete._maybe_refresh(str(path), json.loads(path.read_text()))
+    assert not spawned  # nothing changed: the warm press stays free
+
+
+def test_a_manifest_without_a_stamp_falls_back_to_the_clock(tmp_path, monkeypatch):
+    # Written by an older footman: no stamp to compare, so the age rule owns
+    # it exactly as it always did — never a forced rebuild on every press.
+    import json
+
+    from footman import _complete
+
+    path = tmp_path / "m.json"
+    path.write_text(json.dumps({"completion_max_age": 600}), encoding="utf-8")
+    spawned: list[object] = []
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda o=None, s=None: spawned.append(o)
+    )
+    _complete._maybe_refresh(str(path), json.loads(path.read_text()))
+    assert not spawned
+
+
+def test_off_still_means_no_background_rebuilds(tmp_path, monkeypatch):
+    # `completion.max_age = off` asks for no background rebuilds at all; a
+    # moved stamp is a trigger, not a licence to override that.
+    import json
+
+    from footman import _complete
+
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(tmp_path / "user.toml"))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(tmp_path / "cfgdir"))
+    path = tmp_path / "m.json"
+    path.write_text(
+        json.dumps({"completion_max_age": 0, "user_stamp": "stale-stamp"}),
+        encoding="utf-8",
+    )
+    spawned: list[object] = []
+    monkeypatch.setattr(
+        _complete, "_spawn_refresh", lambda o=None, s=None: spawned.append(o)
+    )
+    _complete._maybe_refresh(str(path), json.loads(path.read_text()))
+    assert not spawned
+
+
 def test_the_marker_ages_fast_and_spawns_with_the_override(tmp_path, monkeypatch):
     import os
 
