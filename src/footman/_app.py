@@ -46,6 +46,14 @@ from footman.app import DEFAULT_BRAND, Brand
 # stream's tty-ness, --no-color, NO_COLOR, and TERM.
 _brand: Brand = DEFAULT_BRAND
 _color_out: bool = False
+_docs_url: str | None = None  # the run's docs_url template, config-set
+
+
+def _task_docs_url(address: str) -> str | None:
+    """*address*'s documentation URL under this run's template, or None."""
+    return _describe.docs_url_for(_docs_url, address)
+
+
 _color_err: bool = False
 
 
@@ -414,10 +422,13 @@ def _print_footer() -> None:
 
 
 def _styled_name(name: str) -> str:
-    """A task address for a listing: dim group prefix, bold leaf."""
+    """A task address for a listing: dim group prefix, bold leaf — and a
+    terminal hyperlink to its docs page when the project configured a
+    `docs_url` template (zero width, so the band math never notices)."""
     prefix, _, leaf = name.rpartition(".")
     lead = _describe.dim(f"{prefix}.", _color_out) if prefix else ""
-    return f"{lead}{_describe.bold(leaf, _color_out)}"
+    styled = f"{lead}{_describe.bold(leaf, _color_out)}"
+    return _describe.link(styled, _task_docs_url(name), _color_out)
 
 
 def _styled_help(help_text: str) -> str:
@@ -496,12 +507,15 @@ def _print_tree(node: dict[str, Any], show_hidden: bool = False) -> None:
         stem = "".join("   " if up else "│  " for up in trunk[1:-1])
         leads.append(stem + ("" if depth == 0 else ("└─ " if last[i] else "├─ ")))
     band: list[tuple[str, int, str]] = []
-    for i, (_depth, _address, leaf, help_text, kind) in enumerate(rows):
+    for i, (_depth, address, leaf, help_text, kind) in enumerate(rows):
         name = (
             _describe.bold(leaf, _color_out)
             if kind == "task"
             else _describe.bold_cyan(f"{leaf}.", _color_out)
         )
+        # Groups link too: their docs pages exist under the same scheme
+        # (a directory index, or the group heading's anchor).
+        name = _describe.link(name, _task_docs_url(address), _color_out)
         cell = f"{_describe.dim(leads[i], _color_out)}{name}"
         plain = len(leads[i]) + len(leaf) + (kind != "task")  # groups carry a dot
         band.append((cell, plain, help_text))
@@ -673,6 +687,16 @@ def _print_task_help(
             on,
         )
         print(f"  {usage}")
+    _print_docs_line(".".join(path), on)
+
+
+def _print_docs_line(address: str, on: bool) -> None:
+    """The help pages' pointer at the task's own docs page — the URL as
+    visible text (a terminal without hyperlinks still shows something to
+    copy), hyperlinked where the terminal dresses up. Nothing without a
+    configured `docs_url`."""
+    if (url := _task_docs_url(address)) is not None:
+        print(f"\n{_describe.dim('docs:', on)} {_describe.link(url, url, on)}")
 
 
 def _print_group_help(
@@ -720,6 +744,7 @@ def _print_group_help(
         _split.live_choices(f"{dotted}.default", spec, choices_for)
     options = [p for p in params if p["kind"] in ("flag", "option")]
     _print_param_rows(options, "options")
+    _print_docs_line(dotted, on)
 
 
 def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
@@ -1417,6 +1442,11 @@ def _print_json(
             # The plan's edges into this row, by address — what a profile
             # draws dependency arrows from. Additive to schema 1.
             entry["after"] = list(r.after)
+        if (docs := _task_docs_url(r.task)) is not None:
+            # The same pointer the terminal links carry, for readers that
+            # cannot click — an agent's next move after a confusing row is
+            # the task's docs. Additive to schema 1.
+            entry["docs_url"] = docs
         if r.notes:
             # What the level system resolved for this execution — every
             # fired note, trace included: the machine channel ignores print
@@ -2164,6 +2194,14 @@ def _execute(
     if notes_cfg is not None and (error := _notes.validate(notes_cfg)) is not None:
         return _refuse(json_mode, error)
     _notes.install_policy(notes_cfg)
+    # The docs-link template: validated loudly (a link scheme that silently
+    # pointed nowhere would be worse than none), installed for the run —
+    # always, so a previous embedded invocation's template never leaks.
+    global _docs_url
+    docs_cfg = cfg.get("docs_url")
+    if docs_cfg is not None and (bad := _describe.docs_url_error(docs_cfg)) is not None:
+        return _refuse(json_mode, bad)
+    _docs_url = docs_cfg if isinstance(docs_cfg, str) else None
 
     inv = invocation.Invocation(
         cli=g,
@@ -2671,9 +2709,11 @@ def run_group(
         return _print_version(bool(g.get("json")))
 
     # No config here (in-memory trees have no cascade), so the note-level
-    # policy is the defaults — installed rather than inherited, or a prior
-    # embedded invocation's table would leak into this one.
+    # policy is the defaults and there is no docs-link template — installed
+    # rather than inherited, or a prior embedded invocation's would leak.
     _notes.install_policy(None)
+    global _docs_url
+    _docs_url = None
     tree = _manifest.build_manifest(root)["tree"]
     # An in-memory tree still gets the per-task lifecycle — its hooks live on
     # the Group's own contributions. `pre_tasks` stays a discovery-time moment

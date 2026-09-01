@@ -105,6 +105,57 @@ def ansi_capable(stream: Any) -> bool:
         return False
 
 
+def link(text: str, url: str | None, on: bool) -> str:
+    """*text* as a terminal hyperlink (OSC 8), when *on* and a URL exists.
+
+    Zero visible width, so band layouts that track plain lengths stay
+    untouched. Rides the same switch as colour: piped output never carries
+    it, and a terminal without OSC 8 support ignores the sequence.
+    """
+    if not on or not url:
+        return text
+    return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
+
+
+_DOCS_PLACEHOLDERS = ("path", "slug")
+
+
+def docs_url_error(template: object) -> str | None:
+    """The refusal a broken `docs_url` template earns, or None for a sound
+    one — a link scheme that silently pointed nowhere would be worse than
+    no links at all."""
+    if not isinstance(template, str) or not template.strip():
+        return (
+            "the [tool.footman] docs_url key is a URL template, e.g. "
+            '"https://docs.example.dev/tasks/{path}/" — {path} is the '
+            "slash-joined task address, {slug} the dash-joined one"
+        )
+    unknown = [
+        m for m in re.findall(r"\{([^{}]*)\}", template) if m not in _DOCS_PLACEHOLDERS
+    ]
+    if unknown:
+        return (
+            f"docs_url: unknown placeholder {{{unknown[0]}}} — use {{path}} "
+            f"(slash-joined address) or {{slug}} (dash-joined)"
+        )
+    return None
+
+
+def docs_url_for(template: str | None, address: str) -> str | None:
+    """*address*'s documentation URL under *template*, or None without one.
+
+    `{path}` walks the generated per-task pages (`docs.site`: one file per
+    task, directories per group); `{slug}` jumps to the one-page export's
+    anchors (`docs.page`: `{ #docs-build }`). Plain replacement, not
+    `format` — a URL's own braces are already refused by validation.
+    """
+    if not template or not address:
+        return None
+    return template.replace("{path}", address.replace(".", "/")).replace(
+        "{slug}", address.replace(".", "-")
+    )
+
+
 def bold(text: str, on: bool) -> str:
     return f"\033[1m{text}\033[0m" if on else text
 
