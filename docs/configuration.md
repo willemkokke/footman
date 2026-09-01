@@ -82,6 +82,39 @@ base directories on any platform, and the
 [footman-specific variables](#environment-variables) below move each
 corner on its own.
 
+## Tasks outside every project
+
+Some tasks only make sense *before* a project exists: create one, clone a
+repo, log in. A package can ship them as a `footman.tasks` entry point, and
+the user-level `builtin` key mounts them as built-in tasks — offered
+wherever no project answers, and ignored inside one, where the cascade wins
+outright.
+
+```toml
+# ~/.config/footman/config.toml
+builtin = ["acme_devkit"]   # these entry points…
+# builtin = true            # …or every one installed with the runner
+```
+
+`true` is the shorthand for "whatever I installed alongside `fm`", which is
+honest because putting a package there
+(`uv tool install footman --with acme-devkit`) is already a deliberate act.
+The key is **user-level only**: what your machine offers outside every
+project is yours, not any project's, and a project that wants the same tasks
+mounts them the ordinary way in its own tasks file. A name that will not
+mount is refused and says so; so is a value that is neither a list nor
+`true`.
+
+A package's tasks stay invisible out there until one says it belongs:
+`@task(needs_project=False)` is the opt-in, and an unmarked task refuses
+by name outside a project rather than going missing. `fm --plugins` shows
+which rung mounted what — `built in` for the runner's own, `built in (your
+config)` for yours.
+
+Editing the key reaches <kbd>Tab</kbd> on the press after next, the way
+every user-level edit does (see
+[keeping the cache current](completion.md#keeping-the-cache-current)).
+
 ## Keys
 
 Every key the runner recognises, rendered from its own list on each docs

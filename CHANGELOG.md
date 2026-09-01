@@ -7,6 +7,36 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Tasks that live outside every project, without a branded CLI.** The
+  built-in ladder — mount `footman.tasks` entry points as the base of the
+  tree wherever no project answers — was reachable only by shipping an
+  `App(builtin=…)`. A user-level `builtin` key now opens it to any
+  runner: `builtin = ["acme_devkit"]` names the entry points, and
+  `builtin = true` mounts every one installed alongside the runner, which
+  is honest because putting a package there is already a deliberate act.
+  Inside a project nothing changes — the cascade wins outright — and the
+  rest of the ladder is the one that already existed: `needs_project`
+  still governs what a package exposes out there (unmarked tasks refuse
+  by name rather than going missing), and `fm --plugins` distinguishes
+  `built in` from `built in (your config)`. User-level only, like
+  `cascade`: what a machine offers outside every project is the machine
+  owner's business, and a project that wants the same tasks mounts them
+  in its own tasks file. A name that will not mount, or a value that is
+  neither a list nor `true`, is refused by name. Closes #536.
+- **Task names link to their docs.** A `docs_url` template under
+  `[tool.footman]` turns every task and group name in `--list`, `--tree`
+  and the `--help` pages into a terminal hyperlink (OSC 8) to its own
+  documentation, and puts a `docs_url` field on each task's `--json` row
+  (additive to schema 1) for readers that cannot click. `{path}` is the
+  slash-joined task address, matching the per-task pages `docs.site`
+  writes; `{slug}` is the dash-joined one, matching the one-page export's
+  heading anchors — an unknown placeholder is refused by name. Links ride
+  the colour switch, so piped output stays plain, and each `--help` page
+  also prints the URL as visible text, so a terminal without hyperlink
+  support still shows something to copy.
+
 ### Fixed
 
 - **A user-level edit reaches completion on the next press, not ten
@@ -22,20 +52,6 @@ versions may include breaking changes.
   keeps its one file read. Creating either file counts as a change, not
   only editing one. `completion.max_age = "off"` still means no
   background rebuilds at all.
-
-### Added
-
-- **Task names link to their docs.** A `docs_url` template under
-  `[tool.footman]` turns every task and group name in `--list`, `--tree`
-  and the `--help` pages into a terminal hyperlink (OSC 8) to its own
-  documentation, and puts a `docs_url` field on each task's `--json` row
-  (additive to schema 1) for readers that cannot click. `{path}` is the
-  slash-joined task address, matching the per-task pages `docs.site`
-  writes; `{slug}` is the dash-joined one, matching the one-page export's
-  heading anchors — an unknown placeholder is refused by name. Links ride
-  the colour switch, so piped output stays plain, and each `--help` page
-  also prints the URL as visible text, so a terminal without hyperlink
-  support still shows something to copy.
 
 ### Changed
 

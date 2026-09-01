@@ -1,0 +1,291 @@
+"""The user-level `builtin` key: the ladder, outside a project and inside one."""
+
+from __future__ import annotations
+
+import json
+import sys
+import textwrap
+
+import pytest
+
+from footman import _config, _paths
+from footman.app import App
+from footman.testing import Runner
+
+# A distribution that ships a `footman.tasks` entry point, installed into the
+# runner's own environment. Faked at the entry-point layer: what matters is
+# the ladder, not importlib.metadata's plumbing.
+#
+# `login` says `needs_project=False` because the built-in rung defaults the
+# other way — a package's tasks expose nothing outside a project until one
+# says it makes sense there, which is exactly the opt-in this ladder is for.
+PROVIDER = textwrap.dedent(
+    '''
+    from footman import task
+
+    @task(needs_project=False)
+    def login():
+        """Log in to the service."""
+        print("logged in")
+
+    @task
+    def deploy():
+        """Deploy this project."""
+        print("deployed")
+    '''
+)
+
+# Stock `fm`'s own shape: a brand that declares built-ins of its own, so the
+# tests can watch the user's set land *beside* them rather than instead.
+STOCK = ("footman.new",)
+
+
+def stock_runner():
+    return Runner(App(dist="footman", builtin=STOCK))
+
+
+@pytest.fixture
+def provider(tmp_path, monkeypatch):
+    """`acme.tasks` importable, and advertised as an installed entry point."""
+    pkg = tmp_path / "site"
+    pkg.mkdir()
+    (pkg / "acme_tasks.py").write_text(PROVIDER, encoding="utf-8")
+    monkeypatch.syspath_prepend(str(pkg))
+    monkeypatch.delitem(sys.modules, "acme_tasks", raising=False)
+
+    class FakeEP:
+        name = "acme_tasks"
+        dist = None
+
+        def load(self):
+            # By name, not a static import: the module is written into a
+            # tmp dir at fixture time, so no checker could resolve it.
+            import importlib
+
+            return importlib.import_module("acme_tasks")
+
+    import importlib.metadata
+
+    from footman import compose
+
+    real = importlib.metadata.entry_points
+
+    def fake_entry_points(group=None):
+        # The real set plus ours: footman's own entry points have to stay
+        # visible, or the brand's built-ins stop mounting mid-test.
+        found = list(real(group=group)) if group else []
+        return [*found, FakeEP()] if group == compose.ENTRY_POINT_GROUP else found
+
+    monkeypatch.setattr(importlib.metadata, "entry_points", fake_entry_points)
+    return tmp_path
+
+
+@pytest.fixture
+def user_config(tmp_path, monkeypatch):
+    """A user-level config file this test owns."""
+    path = tmp_path / "user.toml"
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(path))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(tmp_path / "cfgdir"))
+    return path
+
+
+# --- resolving the key --------------------------------------------------------
+
+
+def test_the_key_is_absent_empty_or_named(user_config, provider):
+    assert _config.user_builtin() is None  # absent is not the same as empty
+    user_config.write_text("builtin = []\n", encoding="utf-8")
+    assert _config.user_builtin() == ()  # mounting nothing is a choice
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    assert _config.user_builtin() == ("acme_tasks",)
+
+
+def test_true_means_everything_installed_with_the_runner(user_config, provider):
+    user_config.write_text("builtin = true\n", encoding="utf-8")
+    every = _config.user_builtin()
+    assert every is not None
+    assert "acme_tasks" in every  # what is installed alongside the runner
+    assert every == tuple(sorted(every))  # a stable tree, whatever the read order
+
+
+def test_a_value_that_is_neither_is_refused_by_name(user_config):
+    user_config.write_text('builtin = "acme_tasks"\n', encoding="utf-8")
+    with pytest.raises(_config.BuiltinError, match=r"builtin = \["):
+        _config.user_builtin()
+    user_config.write_text("builtin = [1, 2]\n", encoding="utf-8")
+    with pytest.raises(_config.BuiltinError):
+        _config.user_builtin()
+
+
+def test_the_brands_own_set_comes_first_and_survives(user_config, provider):
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    assert _config.effective_builtin(("footman.new",)) == ("footman.new", "acme_tasks")
+    # A name the brand already declares is not mounted twice.
+    assert _config.effective_builtin(("acme_tasks",)) == ("acme_tasks",)
+    user_config.write_text("", encoding="utf-8")
+    assert _config.effective_builtin(("footman.new",)) == ("footman.new",)
+
+
+# --- the ladder, end to end ---------------------------------------------------
+
+
+@pytest.fixture
+def bare(tmp_path, monkeypatch):
+    """A directory with no project in sight."""
+    where = tmp_path / "bare"
+    where.mkdir()
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    return where
+
+
+def test_a_configured_builtin_answers_outside_a_project(user_config, provider, bare):
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    result = stock_runner().invoke("login", cwd=bare)
+    assert result.ok, result.stderr
+    assert "logged in" in result.stdout
+
+
+def test_it_lists_beside_the_brands_own(user_config, provider, bare):
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    result = stock_runner().invoke("--list", cwd=bare)
+    assert result.ok, result.stderr
+    assert "login" in result.stdout
+    assert "new" in result.stdout  # stock footman's own built-in stands
+
+
+def test_needs_project_still_refuses_outside_one(user_config, provider, bare):
+    # The rung is unchanged: a task that declares it needs a project is
+    # mounted-but-refused out here, by name, rather than missing.
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    result = stock_runner().invoke("deploy", cwd=bare)
+    assert not result.ok
+    assert "project" in result.stderr.lower()
+
+
+def test_a_project_wins_outright(user_config, provider, tmp_path):
+    # Inside a project the cascade owns the tree — the built-in ladder is
+    # what answers where nothing else does, not a set that follows you in.
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (project / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef build():\n    """Build."""\n'
+    )
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    result = stock_runner().invoke("--list", cwd=project)
+    assert result.ok, result.stderr
+    assert "build" in result.stdout
+    assert "login" not in result.stdout
+
+
+def test_a_name_that_will_not_mount_blames_the_config(user_config, provider, bare):
+    user_config.write_text('builtin = ["not_installed_anywhere"]\n', encoding="utf-8")
+    result = stock_runner().invoke("--list", cwd=bare)
+    assert not result.ok
+    assert "builtin key" in result.stderr
+    assert "not_installed_anywhere" in result.stderr
+
+
+def test_a_broken_key_is_refused_before_anything_runs(user_config, provider, bare):
+    user_config.write_text('builtin = "acme_tasks"\n', encoding="utf-8")
+    result = stock_runner().invoke("--list", cwd=bare)
+    assert not result.ok
+    assert "builtin" in result.stderr
+
+
+def test_the_key_is_user_level_only(user_config, provider, tmp_path):
+    # In a project config it is ignored, with the advisory `-v` carries —
+    # what a machine offers outside every project is the machine's business.
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\nbuiltin = ['acme_tasks']\n"
+    )
+    (project / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef build():\n    """Build."""\n'
+    )
+    result = stock_runner().invoke("-v --list", cwd=project)
+    assert result.ok, result.stderr
+    assert "user-level" in result.stderr
+    assert "login" not in result.stdout
+
+
+def test_plugins_reports_which_rung_declared_it(user_config, provider, bare):
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    result = stock_runner().invoke("--plugins", cwd=bare)
+    assert result.ok, result.stderr
+    assert "built in (your config)" in result.stdout
+
+
+def test_the_json_catalog_carries_the_configured_tasks(user_config, provider, bare):
+    user_config.write_text("builtin = true\n", encoding="utf-8")
+    result = stock_runner().invoke("--json", cwd=bare)
+    assert result.ok, result.stderr
+    catalog = json.loads(result.stdout)
+    assert "login" in catalog["tree"]["tasks"]
+
+
+def test_the_completion_child_builds_the_configured_set(user_config, provider, bare):
+    # TAB must describe the tree the run serves: the background rebuild
+    # mounts the configured set exactly as the execution path does.
+    from footman import _refresh
+
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    _paths.configure(builtin=("footman.new",))
+    monkeypatch_cwd = bare
+    import os
+
+    saved = os.getcwd()
+    os.chdir(monkeypatch_cwd)
+    try:
+        _refresh.refresh_cwd(*_paths.child_args())
+    finally:
+        os.chdir(saved)
+    built = _paths.global_manifest_path()
+    assert built.is_file()
+    tree = json.loads(built.read_text(encoding="utf-8"))["tree"]
+    assert "login" in tree["tasks"]  # the user's own
+    assert "new" in tree["tasks"]  # and the brand's, still
+
+
+@pytest.fixture
+def acme(tmp_path, monkeypatch, user_config):
+    """A branded CLI that declares no built-ins of its own — and its own
+    user-level world, since a brand reads `ACME_CONFIG`, never footman's."""
+    monkeypatch.setenv("ACME_CONFIG", str(user_config))
+    monkeypatch.setenv("ACME_CONFIG_DIR", str(tmp_path / "cfgdir"))
+    monkeypatch.setenv("ACME_CACHE_DIR", str(tmp_path / "cache"))
+    return App(prog="acme")
+
+
+def test_a_brand_with_no_builtins_of_its_own_still_gets_the_users(
+    user_config, provider, bare, acme
+):
+    # The branded half: a CLI that declares no built-ins is exactly where
+    # the key does the most work — the user's set is the whole base.
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    result = Runner(acme).invoke("login", cwd=bare)
+    assert result.ok, result.stderr
+    assert "logged in" in result.stdout
+
+
+def test_tab_reaches_a_configured_set_under_such_a_brand(
+    user_config, provider, bare, acme
+):
+    # The hot path cannot read config (a TOML parse per keystroke), and this
+    # brand declares no built-ins of its own — so the manifest a real run
+    # left behind is what tells TAB there is a global tree to serve.
+    import os
+
+    from footman._complete import complete_cli
+
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    assert Runner(acme).invoke("--list", cwd=bare).ok  # writes the global manifest
+
+    saved = os.getcwd()
+    os.chdir(bare)
+    _paths.configure(prefix="ACME", prog="acme", builtin=())
+    try:
+        assert complete_cli(["--", ""]) == 0
+    finally:
+        os.chdir(saved)
