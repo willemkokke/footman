@@ -2471,9 +2471,9 @@ def test_a_title_on_a_non_step_call_is_noted_once(capsys):
     # Not an error: `.opts()` merges along a chain, so a shared tool can carry
     # a title while a call site adds recorded=False — neither author wrote the
     # contradiction. Said once, on stderr.
-    from footman import _globals
+    from footman import _notes
 
-    _globals._noted.clear()
+    _notes.reset()
 
     def tasks(reg):
         @reg.task

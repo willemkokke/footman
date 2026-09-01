@@ -112,6 +112,15 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "its own PEP 723 dependencies.",
     ),
     (
+        "notes",
+        "table of levels",
+        "per kind",
+        "Reclassify note kinds: `[tool.footman.notes]` maps `[task/]kind` "
+        "patterns (either side `*`, most specific wins) to `trace` / `info` "
+        "/ `warning` / `error` — `error` fails the task at its boundary. "
+        "See the notes page.",
+    ),
+    (
         "completion.max_age",
         "duration / `off`",
         "`10m`",

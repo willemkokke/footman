@@ -25,7 +25,13 @@ from typing import Any
 
 from footman import _describe
 
-__all__ = ["config_table", "globals_table", "render_page", "render_site"]
+__all__ = [
+    "config_table",
+    "globals_table",
+    "notes_table",
+    "render_page",
+    "render_site",
+]
 
 
 def config_table() -> str:
@@ -56,6 +62,38 @@ def config_table() -> str:
         "| "
         + " | ".join(c.ljust(w) for c, w in zip(row[:3], widths, strict=True))
         + f" | {row[3]} |"
+        for row in rows
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def notes_table() -> str:
+    """The note kinds as a markdown pipe table.
+
+    Rendered from `_notes.KINDS`, the same registry the runtime resolves
+    levels from and the config validator refuses unknown kinds against, so
+    a docs page that regenerates this on each build can never list a kind
+    footman lacks — nor miss one, which is what lets a policy author trust
+    the page.
+    """
+    from footman import _notes
+
+    rows = []
+    for family, instance, default, help_text in _notes.KINDS:
+        kind = f"`{family}:<{instance}>`" if instance else f"`{family}`"
+        rows.append((kind, f"`{default}`", _cell(help_text)))
+    widths = [max(len(row[i]) for row in rows) for i in range(2)]
+    head = ("kind", "default")
+    lines: list[str] = [
+        "| "
+        + " | ".join(h.ljust(w) for h, w in zip(head, widths, strict=True))
+        + " | fires when |",
+        "| " + " | ".join("-" * w for w in widths) + " | ---------- |",
+    ]
+    lines += [
+        "| "
+        + " | ".join(c.ljust(w) for c, w in zip(row[:2], widths, strict=True))
+        + f" | {row[2]} |"
         for row in rows
     ]
     return "\n".join(lines) + "\n"

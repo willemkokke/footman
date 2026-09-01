@@ -1356,6 +1356,30 @@ def config(
     return [str(out)]
 
 
+@tasks.task
+def notes(
+    out: Annotated[
+        Path | None, doc("file to write the table into; omitted = stdout")
+    ] = None,
+) -> list[str] | None:
+    """Render the note kinds as a markdown table.
+
+    The rows come from the runner's own kind registry — what the level
+    system resolves against and the config validator refuses unknown kinds
+    by — so a reference page that regenerates this on each docs build can
+    neither list a kind footman lacks nor miss one it has. Without --out
+    the table is the task's stdout; with --out it is written to the file.
+    """
+    text = markdown.notes_table()
+    if out is None:
+        print(text, end="")
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"wrote {out}")
+    return [str(out)]
+
+
 @tasks.task(name="globals")
 def globals_(
     out: Annotated[

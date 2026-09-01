@@ -45,7 +45,6 @@ real_chdir = os.chdir
 _lock = threading.Lock()
 _installs = 0  # refcount: nested runs share one install
 _snapshot: dict[str, str] = {}  # the run-start environment, pinned
-_noted: set[tuple[str, str]] = set()  # (task, kind): teach-once dedup
 _environ_saved: dict[str, Any] = {}  # the wrapped class's original methods
 
 
@@ -119,15 +118,13 @@ def _merged() -> dict[str, str]:
 
 
 def _note(kind: str, text: str) -> None:
-    """Emit a teach-once, task-attributed note on the real stderr."""
-    from footman.context import current, real_stderr
+    """Fire a task-attributed note — the door every interception uses.
 
-    key = (current().task or "?", kind)
-    with _lock:
-        if key in _noted:
-            return
-        _noted.add(key)
-    real_stderr().write(f"note: {text}\n")
+    Levels, dedup, the site, the record and the policy all live in
+    `_notes.emit`; this stays as the one spelling the routers import."""
+    from footman import _notes
+
+    _notes.emit(kind, text)
 
 
 def _in_task() -> bool:
@@ -183,8 +180,11 @@ def _install_environ() -> None:
 
         ctx = current()
         ctx.env[key] = value
+        # The variable is the instance: one note per variable, so every
+        # issue surfaces in one run and a known-harmless write can be
+        # classified by name without hiding the next variable.
         _note(
-            "environ-write",
+            f"environ-write:{_norm(key)}",
             f"task {ctx.task or key} sets {key} via os.environ — footman "
             f"scoped it to this task (children see it, siblings don't). "
             f"Say it on purpose with env= / ctx.env.",
@@ -308,8 +308,10 @@ def _install_popen() -> None:
                 kw["env"] = dict(ctx.env)  # the task's own, handed over whole
                 filled.append("env")
             if filled:
+                from footman import _notes
+
                 _note(
-                    "popen-inject",
+                    f"popen-inject:{_notes.program_name(args)}",
                     f"task {ctx.task or '?'} spawns via raw subprocess — "
                     f"footman filled in {' and '.join(filled)} from the task "
                     f"context. Prefer run() for capture and reporting, or "
@@ -956,6 +958,7 @@ def named_lanes(lanes: tuple[Lane, ...], name: str = "") -> Any:
                     busy = next((w for w in wanted if w in _named_holders), None)
                     _wait_note(
                         name,
+                        busy or "exclusive",
                         f"the {busy} lane" if busy else "the exclusive drain",
                         _named_holders.get(busy or "")
                         or _serial_holder
@@ -1029,7 +1032,12 @@ def lane(
                     or (console and _console_holder is not None)
                 ):
                     stalled = True
-                    _wait_note(name, "the serial lane", _serial_holder or _excl_holder)
+                    _wait_note(
+                        name,
+                        "serial",
+                        "the serial lane",
+                        _serial_holder or _excl_holder,
+                    )
                 _serial_holder = name or "?"
             elif policy == "exclusive":
                 _excl_waiting += 1
@@ -1042,7 +1050,9 @@ def lane(
                         or (console and _console_holder is not None)
                     ):
                         stalled = True
-                        _wait_note(name, "the exclusive drain", _serial_holder)
+                        _wait_note(
+                            name, "exclusive", "the exclusive drain", _serial_holder
+                        )
                 finally:
                     _excl_waiting -= 1
                 _excl_holder = name or "?"
@@ -1060,7 +1070,8 @@ def lane(
                         if busy
                         else ("the console" if console else "the exclusive drain")
                     )
-                    _wait_note(name, what, _console_holder or _excl_holder)
+                    lane = busy or ("console" if console else "exclusive")
+                    _wait_note(name, lane, what, _console_holder or _excl_holder)
             if console and not inherited:
                 _console_holder = name or "?"
             for w in wanted:
@@ -1124,12 +1135,14 @@ def console_gate() -> Any:
     return _gate()
 
 
-def _wait_note(name: str, what: str, holder: str | None) -> None:
+def _wait_note(name: str, lane: str, what: str, holder: str | None) -> None:
     """One bounded wait step, with a one-time visibility note — a lane wait
-    must never be a silent hang."""
+    must never be a silent hang. The *lane* is the kind's instance (what
+    is being waited for); the waiting task is the dedup's other half
+    already, so it never rides the kind."""
     if not _arb_cv.wait(timeout=2.0):
         held = f" (held by {holder})" if holder else ""
-        _note(f"lane-wait:{name}", f"task {name or '?'} waiting for {what}{held}")
+        _note(f"lane-wait:{lane}", f"task {name or '?'} waiting for {what}{held}")
 
 
 def _waited(label: str, entered: float) -> list[tuple[str, float]]:
@@ -1223,7 +1236,9 @@ def install() -> None:
         _resume_gc()
         _snapshot.clear()
         _snapshot.update(os.environ)
-        _noted.clear()
+        from footman import _notes
+
+        _notes.reset()  # every note may teach once more
         _install_environ()
         _install_popen()
         _install_os_guards()

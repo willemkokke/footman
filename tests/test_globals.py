@@ -179,7 +179,11 @@ def test_delete_of_an_absent_key_is_a_key_error():
     assert isinstance(results[0].error, KeyError)
 
 
-def test_write_note_is_taught_once_per_task(capfd, monkeypatch):
+def test_write_note_is_taught_once_per_variable(capfd, monkeypatch):
+    # Per variable, deliberately: all issues surface in one run (never fix
+    # one and have the next pop up), and a known-harmless write can be
+    # classified by name without hiding the next variable. The same
+    # variable in a loop still teaches once.
     monkeypatch.delenv("A_KEY", raising=False)
     monkeypatch.delenv("B_KEY", raising=False)
 
@@ -187,11 +191,13 @@ def test_write_note_is_taught_once_per_task(capfd, monkeypatch):
         @reg.task
         def go():
             os.environ["A_KEY"] = "1"
-            os.environ["B_KEY"] = "2"  # second write: no second note
+            os.environ["A_KEY"] = "again"  # same variable: no second note
+            os.environ["B_KEY"] = "2"  # another variable: its own note
 
     assert drive(tasks, "go")[0].ok
     err = capfd.readouterr().err
-    assert err.count("scoped it to this task") == 1
+    assert err.count("scoped it to this task") == 2
+    assert "sets A_KEY" in err and "sets B_KEY" in err
 
 
 def test_setdefault_scopes_like_a_write(monkeypatch):

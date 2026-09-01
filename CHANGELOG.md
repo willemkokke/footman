@@ -7,8 +7,46 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Notes have levels, and a project can make them walls.** Every note
+  footman says about how a task treats the process — raw `subprocess`
+  spawns, `os.environ` writes, foreign `getcwd` reads and their siblings
+  — now carries a level: `trace` (recorded, printed under `-v` alone),
+  `info`, `warning`, or `error`, with the level as the stderr prefix and
+  the offending site (`file:line`, the first frame outside footman)
+  appended. A `[tool.footman.notes]` table reclassifies any kind — keys
+  are `[task/]kind` patterns, either side `*`, most specific first — so
+  a known-harmless third-party instance gets a pinned entry
+  (`"environ-write:JAVA_HOME" = "info"`) that survives raising the
+  blanket to `"*" = "error"`. An `error`-classified note fails the task
+  **at its boundary**, after the body ran to completion, listing every
+  banned note with its site — all issues in one run, never
+  fix-one-and-see-the-next — which is what makes a note enforceable in
+  CI rather than a line an agent scrolls past. An unknown kind in the
+  table is refused by name. The kinds, their defaults, and the config
+  grammar live on the new **Notes & levels** docs page, whose kind table
+  generates from the runtime's own registry.
+- **Notes ride the machine surfaces.** Every fired note — `trace`
+  included, print-gated or not — lands on its task's row in the `--json`
+  envelope as `{kind, level, site, text}` (additive to schema 1) and on
+  `TaskResult.notes` for `Runner`-driven tests.
+
 ### Changed
 
+- **Notes name their instance, and dedup follows.** A kind's tail names
+  what happened, never the task: `environ-write:<VARIABLE>` (one note
+  per variable a task sets — every issue surfaces in one run, and a
+  whitelist entry cannot hide the next variable),
+  `popen-inject:<program>` (the spawned executable's basename),
+  `lane-wait:<lane>` (`serial`, `exclusive`, `console`, or a named
+  lane — previously the waiting task's name, redundant with the note's
+  own task attribution). The plugin hook-return advisory joins the
+  channel as `hook-return:<plugin>` — levelled, dedupped and recorded
+  like every other kind, where it used to print per occurrence outside
+  the system. The unread-`uses=` advisory keeps its quiet: its kind
+  defaults to `trace`, so `-v` still owns it — but the record now rides
+  the envelope either way, and a project may promote it.
 - **The starting environment is part of a task's work identity.** The
   run's once-cell used to key shared work on (task, arguments, what the
   caller supplied) alone, so a caller that wrote its environment before a

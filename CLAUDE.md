@@ -89,6 +89,7 @@ src/footman/
   params.py       public markers: suggest, Many, nosplit, between, env, check, exists…
   context.py      run(), parallel(), Context, the stdout/stderr router
   _globals.py     process-globals routers (environ/argv/stdin) + the arbiter lanes
+  _notes.py       misuse notes: kind registry, levels, policy, records, the wall
   _executor.py    bind + run one task; lifecycle hooks; global-option binding
   _futures.py     body calls as run-scoped futures (the once-cell)
   _schedule.py    the DAG scheduler (parallel/sequential, confirm gates)

@@ -96,6 +96,13 @@ know. The remaining fields appear when they have something to say:
   reads as tasks rather than pool threads.
 - **`after`** — on a row with prerequisites, the addresses it waited for:
   the plan's edges.
+- **`notes`** — what the run had to say about how this task treated the
+  process ([Notes & levels](notes.md)):
+  `[{"kind": "popen-inject:git", "level": "warning", "site":
+  "tasks.py:50", "text": "…"}, …]`. Every fired note rides here whatever
+  its level — `trace` included, since the machine channel ignores the
+  terminal's print gating — which is what lets CI assert on notes
+  directly, beyond the exit code an `error` classification already moves.
 - **`sections`** — a task's own recorded timing (see
   [Profiling a run](profiling.md)):
   `[{"name": "resolve", "at_ms": 12.5, "duration_ms": 830.2}, …]`, each
