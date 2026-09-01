@@ -90,9 +90,11 @@ KINDS: tuple[tuple[str, str, str, str], ...] = (
     (
         "global-unread",
         "option",
-        "trace",
+        "info",
         "A task declares a global option in `uses=` but never read it this "
-        "run — prune the declaration if it is stale.",
+        "run. Read a declared option unconditionally and branch on the "
+        "*value*, so a conditional consumer never reads as stale — or prune "
+        "the declaration if it truly is.",
     ),
     (
         "lane-wait",

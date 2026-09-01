@@ -61,7 +61,7 @@ def test_resolve_walks_most_specific_first():
 def test_resolve_falls_to_the_kinds_default():
     assert _notes.resolve("any", "environ-write:X") == "info"
     assert _notes.resolve("any", "popen-inject:git") == "warning"
-    assert _notes.resolve("any", "global-unread:jobs") == "trace"
+    assert _notes.resolve("any", "global-unread:jobs") == "info"
     assert _notes.resolve("any", "lane-wait:serial") == "info"
 
 

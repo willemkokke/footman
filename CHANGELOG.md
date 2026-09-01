@@ -7,6 +7,18 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **`global-unread` speaks at `info`, and teaches the idiom.** The kind
+  shipped at `trace` on the strength of its old `-v` gate — its "never
+  read *this run*" evidence would nag a task that reads an option only
+  inside a branch. The idiomatic fix dissolves that: read a declared
+  option unconditionally and branch on the *value* (the read is a
+  cheap, side-effect-free lookup), and "never read this run" only ever
+  means a genuinely stale declaration. The default is now `info` and
+  the note's text carries the idiom; a deliberately lazy reader
+  reclassifies `global-unread:<option>` in `[tool.footman.notes]`.
+
 ## [0.47.0] - 2026-09-01
 
 ### Added
