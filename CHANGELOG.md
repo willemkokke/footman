@@ -7,6 +7,20 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Task names link to their docs.** A `docs_url` template under
+  `[tool.footman]` turns every task and group name in `--list`, `--tree`
+  and the `--help` pages into a terminal hyperlink (OSC 8) to its own
+  documentation, and puts a `docs_url` field on each task's `--json` row
+  (additive to schema 1) for readers that cannot click. `{path}` is the
+  slash-joined task address, matching the per-task pages `docs.site`
+  writes; `{slug}` is the dash-joined one, matching the one-page export's
+  heading anchors — an unknown placeholder is refused by name. Links ride
+  the colour switch, so piped output stays plain, and each `--help` page
+  also prints the URL as visible text, so a terminal without hyperlink
+  support still shows something to copy.
+
 ### Changed
 
 - **`global-unread` speaks at `info`, and teaches the idiom.** The kind

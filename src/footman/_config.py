@@ -112,6 +112,15 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "its own PEP 723 dependencies.",
     ),
     (
+        "docs_url",
+        "URL template",
+        "unset",
+        "Link task names in `--list`/`--tree`/`--help` to your generated "
+        "task docs (and put a `docs_url` field on `--json` rows): `{path}` "
+        "is the slash-joined task address, `{slug}` the dash-joined one. "
+        "Terminal links ride the colour switch; piped output stays plain.",
+    ),
+    (
         "notes",
         "table of levels",
         "per kind",
