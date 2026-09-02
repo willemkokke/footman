@@ -24,12 +24,18 @@ dependencies inline. The full rules, and the opt-out, live in the
 cookbook:
 [a tasks file that carries its own dependencies](cookbook.md#a-tasks-file-that-carries-its-own-dependencies).
 
-Any copy can do that global install for you: `fm --self-install` runs
+Any copy can do that global install for you: `fm self.install` runs
 `uv tool install --upgrade footman --with uv` — installing when nothing is
 there, moving an existing install to the latest release otherwise, and
 bundling uv either way. It always installs the latest release, even from a
-project's older pinned copy (`uv run fm --self-install`): the flag is about
+project's older pinned copy (`uv run fm self.install`): the command is about
 the `fm` on your PATH, not the one that happens to be running.
+
+`fm self.add <package>` puts a package in that same environment and, by
+default, mounts whatever built-in tasks it advertises — so a devkit's
+commands answer straight away, wherever you are. `fm self.remove` takes one
+out again, `fm self.uninstall` takes the whole thing off, and `fm self.path`
+says where footman keeps its cache, data and config.
 
 ## Write a tasks file
 

@@ -89,9 +89,11 @@ runner:
 app = App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli")
 ```
 
-With `dist` set, `acme --self-install` also knows what to put on the
+With `dist` set, `acme self.install` also knows what to put on the
 user's PATH — it runs `uv tool install --upgrade acme-cli --with uv`, the
-same install-or-update your users would otherwise type by hand. And a
+same install-or-update your users would otherwise type by hand, and the
+rest of the `self.*` group (`add`, `remove`, `uninstall`, `path`) manages
+that installation in your brand's name. And a
 tasks file carrying a
 [PEP 723](https://peps.python.org/pep-0723/) header runs in its own
 script environment under `acme` too, and must list `acme-cli` among its
