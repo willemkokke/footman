@@ -25,7 +25,7 @@ from footman.context import (
     run,
     use_context,
 )
-from footman.params import Many, Secret, ask, suggest
+from footman.params import Many, Secret, ask, between, suggest
 from footman.registry import Group
 
 
@@ -1636,6 +1636,64 @@ def test_no_input_refuses_to_prompt(monkeypatch):
         with pytest.raises(RuntimeError, match=r"no-input"):
             context.prompt("x? ")
         assert context.confirm("ok?", default=True) is True  # answer is the default
+
+
+def test_prompt_typed_coerces_and_re_asks(monkeypatch, capfd):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("abc\n7\n"))
+    with use_context(Context(task="wizard", in_task=True, interactive=True)):
+        assert context.prompt("n? ", type=int) == 7
+    assert "expects an integer" in capfd.readouterr().err  # taught, then re-asked
+
+
+def test_prompt_typed_runs_the_marker_checks(monkeypatch, capfd):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("9\n3\n"))
+    with use_context(Context(task="wizard", in_task=True, interactive=True)):
+        got = context.prompt("n? ", type=Annotated[int, between(1, 5)])
+    assert got == 3
+    assert "between 1 and 5" in capfd.readouterr().err
+
+
+def test_prompt_typed_literal_is_a_choice(monkeypatch, capfd):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("dev\nprod\n"))
+    with use_context(Context(task="wizard", in_task=True, interactive=True)):
+        got = context.prompt("env? ", type=Literal["staging", "prod"])
+    assert got == "prod"
+    assert "must be one of staging|prod" in capfd.readouterr().err
+
+
+def test_prompt_typed_empty_and_unattended_take_the_default(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n"))
+    with use_context(Context(task="wizard", in_task=True, interactive=True)):
+        assert context.prompt("port? ", type=int, default=8080) == 8080
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)  # no terminal
+    with use_context(Context(task="wizard", in_task=True, interactive=True)):
+        assert context.prompt("port? ", type=int, default=8080) == 8080
+
+
+def test_prompt_typed_refusals_are_loud_even_unattended():
+    from footman import context
+
+    # Programming errors refuse by name regardless of attendance — a default
+    # must not paper over a wrong type= in CI.
+    with use_context(Context(no_input=True)):
+        with pytest.raises(ValueError, match="secret answer is text"):
+            context.prompt("t? ", type=int, secret=True, default=1)
+        with pytest.raises(ValueError, match="takes one value"):
+            context.prompt("xs? ", type=list[str], default="d")
+        with pytest.raises(ValueError, match=r"ask\(\) decides how a parameter"):
+            context.prompt("x? ", type=Annotated[str, ask()], default="d")
 
 
 def test_assume_yes_auto_confirms():
