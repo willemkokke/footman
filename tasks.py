@@ -800,6 +800,16 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
             "project_root",
         ],
     ),
+    (
+        "Which CLI is running",
+        "For output that has to call the CLI back — a generated CI workflow, "
+        "a README line — so a branded runner emits its own name instead of "
+        "`fm`. `prog()` is the command someone types, `dist()` the package "
+        "that ships it (`None` when the brand never declared one). Inside a "
+        "task body `ctx.prog` says the same and is the better reach: it is "
+        "the invocation's own answer rather than process state.",
+        ["prog", "dist"],
+    ),
     ("Fetching", "", ["fetch", "FetchError"]),
     (
         "The task context",

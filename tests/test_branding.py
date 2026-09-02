@@ -1275,3 +1275,49 @@ def test_the_refusals_name_the_brands_own_table(monkeypatch):
     assert "[tool.acme.notes]" in (_notes.validate({"getcwd": "loud"}) or "")
     assert "[tool.acme.notes]" in (_notes.validate({"nosuchkind": "info"}) or "")
     assert "[tool.acme]" in (_describe.docs_url_error("") or "")
+
+
+# --- the brand's own words, for code that generates text ----------------------
+
+
+def test_prog_and_dist_follow_the_installed_brand():
+    """A plugin generating a CI workflow has to emit the command its reader
+    will type — a branded runner writing `fm check` tells them to run
+    something they do not have."""
+    import footman
+
+    App(prog="acme", dist="acme-cli").brand.install()
+    assert footman.prog() == "acme"
+    assert footman.dist() == "acme-cli"
+
+    DEFAULT_BRAND.install()
+    assert footman.prog() == "fm"
+    assert footman.dist() == "footman"
+
+
+def test_dist_is_none_when_the_brand_never_declared_one():
+    # `App(dist=…)` is opt-in, so "footman" would name the wrong package.
+    # The lock rule's own reading falls back on purpose; this one must not.
+    import footman
+
+    App(prog="bare").brand.install()
+    assert footman.prog() == "bare"
+    assert footman.dist() is None
+    DEFAULT_BRAND.install()
+
+
+def test_a_task_reads_the_same_name_from_its_context(tmp_path, monkeypatch):
+    # Inside a task the context is the better answer — the invocation's
+    # own, not process state — and the two must agree.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "import footman\nfrom footman import Context, task\n\n"
+        "@task\n"
+        "def whoami(ctx: Context):\n"
+        '    """Say the brand."""\n'
+        "    print(f'{ctx.prog} {footman.prog()}')\n"
+    )
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    result = Runner(App(prog="acme")).invoke("whoami", cwd=tmp_path)
+    assert result.ok, result.stderr
+    assert "acme acme" in result.stdout

@@ -38,6 +38,25 @@ Register it as a console script in your package:
 acme = "acme.cli:main"
 ```
 
+Add a `__main__.py` beside it, three lines, so `python -m acme` works too:
+
+<!-- example: fragment -->
+```python
+# acme/__main__.py
+from acme.cli import main
+
+if __name__ == "__main__":
+    main()
+```
+
+That matters more than it looks. Anything that has to *wrap* your CLI in
+another process reaches for the module form — `coverage run -m acme
+check`, a profiler, a sandbox — and `python -m footman` runs **stock
+footman**, not your brand: it would lose your built-ins, your
+`[tool.acme]` table and your `ACME_*` variables, silently, because it is
+a different runner wearing the same import. Meter your own module, or the
+console script by path (`coverage run $(command -v acme) check`).
+
 Now your tool is fully rebranded:
 
 ```console
@@ -47,6 +66,15 @@ Acme 1.4.0
 $ acme nonexistent-task
 acme: no task named 'nonexistent-task' (know: build, test, deploy)
 ```
+
+Tasks and plugins can ask which CLI is running: `footman.prog()` is the
+command someone types (`acme`), `footman.dist()` the package that ships
+it (`acme-cli`, or `None` if you never declared one). Generated output —
+a CI workflow, a README line — should use them rather than hardcoding
+`fm`, so what you emit names the command your reader actually has. Inside
+a task body, `ctx.prog` says the same thing and is the better reach:
+declare a `ctx: Context` parameter and read it, which is what footman's
+own taskdocs plugin does.
 
 ## Where the two names show up
 

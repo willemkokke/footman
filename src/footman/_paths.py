@@ -200,6 +200,18 @@ def dist() -> str:
     return _dist or "footman"
 
 
+def declared_dist() -> str | None:
+    """The distribution the brand actually declared, or `None`.
+
+    The honest twin of `dist()`. That one falls back to `"footman"`
+    because the lock rule needs *some* package to look for; a caller
+    asking "what ships this CLI?" must not be told `footman` by a brand
+    that never said — `App(dist=…)` is opt-in, and `None` is the true
+    answer when it was not taken.
+    """
+    return _dist
+
+
 def child_args() -> list[str]:
     """The configured locations as argv words for a detached child.
 
