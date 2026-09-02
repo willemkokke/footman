@@ -801,7 +801,7 @@ def _outside(build) -> dict[str, Any]:
     """A sealed built-in tree as seen from a directory with no project."""
     reg = registry.Group("root")
     build(reg)
-    registry.seal_needs_project(reg)
+    registry.seal_expose(reg)
     tree: dict[str, Any] = _manifest.build_manifest(reg, project=False)["tree"]
     return tree
 
@@ -825,9 +825,9 @@ def test_a_runnable_groups_bare_name_needs_a_project_too():
     never the bug; the group *node* had no answer to read."""
     tree = _outside(_runnable_group)
     group = tree["groups"]["lint"]
-    assert group["needs_project"] is True
-    assert group["default"]["needs_project"] is True
-    assert group["tasks"]["default"]["needs_project"] is True
+    assert group["unexposed"] is True
+    assert group["default"]["unexposed"] is True
+    assert group["tasks"]["default"]["unexposed"] is True
 
 
 def test_both_spellings_refuse_in_the_same_words():
@@ -855,16 +855,16 @@ def test_a_defaults_answer_speaks_for_the_default_not_the_subtree():
     def build(reg):
         lint = reg.group("lint")
 
-        @lint.default(needs_project=True)
+        @lint.default(expose="project_only")
         def lint_all(): ...
 
-        @lint.task(needs_project=False)
+        @lint.task(expose="always")
         def version(): ...
 
     tree = _manifest.build_manifest(_registered(build), project=False)["tree"]
     group = tree["groups"]["lint"]
-    assert group["needs_project"] is True
-    assert "needs_project" not in group["tasks"]["version"]
+    assert group["unexposed"] is True
+    assert "unexposed" not in group["tasks"]["version"]
     assert "lint.version" in {c.split("\t", 1)[0] for c in complete(tree, ["lint."])}
 
 
@@ -877,7 +877,7 @@ def _registered(build) -> registry.Group:
 def test_group_factory_matches_group_group():
     """`GroupFactory` is documented as "the static shape of `Group.group`", so
     a parameter on one and not the other makes the module-level `group(...)`
-    type-check differently from `parent.group(...)`. `needs_project` did
+    type-check differently from `parent.group(...)`. `expose` did
     exactly that: runtime fine, typed consumers blocked."""
     import inspect
 

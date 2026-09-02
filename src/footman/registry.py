@@ -469,29 +469,29 @@ _TIMEOUT = "_footman_timeout"
 _RETRIES = "_footman_retries"
 _INFINITE = "_footman_infinite"
 _SHARED = "_footman_shared"
-_NEEDS_PROJECT = "_footman_needs_project"
-"""Does this task need a project? Asked **only where there is no one**.
+_EXPOSE = "_footman_expose"
+"""**Where** a task is offered: everywhere, only in a project, only outside.
 
-A branded CLI's `builtin=` set is mounted exactly where discovery found no
-project, and most of what such a CLI ships means nothing there: `deploy`
-without a checkout is not a shorter `deploy`, it is a lie that exits 0.
+Most of what a package ships means nothing without a checkout — `deploy`
+with no project is not a shorter `deploy`, it is a lie that exits 0 — and
+some of what a runner ships means nothing *with* one: creating a project
+from inside a project is the same kind of lie the other way round.
 
-`needs_project=True` says so: outside a project the task is not listed, not
-completed, and refused *by name* when asked for — never a "no task named"
-404, because the task does exist, it just needs somewhere to stand.
+Three answers, because built-in tasks are part of the cascade and so are
+reachable from both sides. Whichever side a task does not belong on, it
+is not listed, not completed, and refused *by name* when asked for —
+never a "no task named" 404, because the task does exist, it just does
+not belong here.
 
-A boolean, not a three-way `scope=`, because the axis really is unary: both
-answers include being *inside* a project, so this can never hide anything
-from one. That is why the question only arises outside, and why the rung a
-task arrived from needs no rule of its own.
-
-Tri-state like `hidden`: `None` inherits the enclosing group, so one line
-covers a subtree and a child can still say otherwise. The two rungs differ
-only in their default, and each default is that rung's own promise — a
-package declared `builtin=` exposes nothing outside a project until a task
-says it makes sense there (`seal_scope`), while a person's own tasks file
-rides everywhere unless they say otherwise.
+`None` inherits the enclosing group, exactly as `hidden` does, so one line
+covers a subtree and a child can still say otherwise. The rungs differ
+only in their **default**, and each default is that rung's own promise: a
+package's tasks are `project_only` until one says otherwise (`seal_expose`),
+while a person's own tasks file rides everywhere.
 """
+
+EXPOSE_VALUES = ("always", "global_only", "project_only")
+"""What `expose=` accepts. `global_only` means outside a project only."""
 
 
 _HIDDEN = "_footman_hidden"
@@ -581,6 +581,42 @@ def task_name(fn: Any) -> str:
     under every checker without a suppression."""
     name: str = fn.__name__
     return name
+
+
+def _checked_expose(value: str) -> str:
+    """*value* if it is one of `EXPOSE_VALUES`, else a taught refusal.
+
+    A misspelling here would otherwise read as silence — the task would
+    inherit its group's answer and appear somewhere its author meant to
+    keep it out of, which is the failure this axis exists to prevent.
+    """
+    if value not in EXPOSE_VALUES:
+        raise RegistrationError(
+            f"expose={value!r} is not one of {', '.join(EXPOSE_VALUES)}"
+        )
+    return value
+
+
+def expose(where: str) -> Callable[[_F], _F]:
+    """Say where a task is offered: `@expose("global_only")`.
+
+    The decorator spelling of `@task(expose=…)`, for authors who prefer the
+    gates above the signature — it sets the same one answer, so stacking it
+    twice is a contradiction rather than an addition, unlike `@requires_*`.
+
+    ```python
+    @task
+    @expose("global_only")
+    def new(name: str): ...
+    ```
+    """
+    checked = _checked_expose(where)
+
+    def mark(fn: _F) -> _F:
+        setattr(fn, _EXPOSE, checked)
+        return fn
+
+    return mark
 
 
 def cli_name(name: str) -> str:
@@ -985,7 +1021,7 @@ def _apply_policy(
     serial: bool = False,
     exclusive: bool = False,
     hidden: bool | None = None,
-    needs_project: bool | None = None,
+    expose: str | None = None,
     lanes: Sequence[Any] = (),
 ) -> None:
     """Stamp a task's `_footman_*` policy attributes onto *fn*.
@@ -1009,11 +1045,11 @@ def _apply_policy(
         # so `hidden=False` on a child of a hidden group is a real override
         # rather than indistinguishable from silence.
         setattr(fn, _HIDDEN, hidden)
-    if needs_project is not None:
+    if expose is not None:
         # Tri-state for the same reason `hidden` is: unset inherits, so
-        # `needs_project=False` on a child of a project-scoped group is a real
+        # `expose="always"` on a child of a project-scoped group is a real
         # override rather than indistinguishable from silence.
-        setattr(fn, _NEEDS_PROJECT, needs_project)
+        setattr(fn, _EXPOSE, _checked_expose(expose))
     if confirm:
         setattr(fn, _CONFIRM, confirm)
     if interactive:
@@ -1313,7 +1349,7 @@ class TaskDecorator(Protocol):
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
         lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]:
@@ -1356,7 +1392,8 @@ class TaskDecorator(Protocol):
                 it runs.
             hidden: Out of `--list` and help, callable and completable
                 as ever; unset inherits the enclosing group's answer.
-            needs_project: The task refuses to run outside a project
+            expose: Where the task is offered — "always", "global_only"
+                (outside a project) or "project_only". Unset inherits the group
                 checkout, by name and with a reason.
             lanes: Named resources this task holds while it runs;
                 contends only with other claimants of the same lanes.
@@ -1380,7 +1417,7 @@ class GroupFactory(Protocol):
         name: str,
         help: str = "",
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
     ) -> Group: ...
 
 
@@ -1400,7 +1437,7 @@ class Group:
         name: str,
         help: str = "",
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
     ) -> None:
         self.name = name
         self.help = help
@@ -1409,9 +1446,9 @@ class Group:
         # child can still opt back into the listings with `hidden=False`.
         self.hidden = hidden
         # The same tri-state, for the same reason:
-        # `group("ci", needs_project=True)` answers for everything under it,
+        # `group("ci", expose="project_only")` answers for everything under it,
         # and a child can still say otherwise. `None` asks whoever encloses.
-        self.needs_project = needs_project
+        self.expose = expose
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
         # Lifecycle contributions, one bucket per hook kind (root registry
@@ -1529,7 +1566,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
         lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
@@ -1555,7 +1592,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
         lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Task | Callable[[Task], Task]:
@@ -1674,7 +1711,7 @@ class Group:
                 serial=serial,
                 exclusive=exclusive,
                 hidden=hidden,
-                needs_project=needs_project,
+                expose=expose,
                 lanes=lanes,
             )
             if uses:
@@ -1701,7 +1738,7 @@ class Group:
         name: str,
         help: str = "",
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
     ) -> Group:
         """Create and register a nested command group, returning it.
 
@@ -1709,10 +1746,10 @@ class Group:
         (`--list`, `--tree`, help — `--all` shows them) while leaving every
         address in it callable and completable — see `@task(hidden=…)`.
 
-        `needs_project=True` says the whole subtree needs one: outside a
-        project it is not listed, not completed, and refused by name. A
-        child may still say `needs_project=False` — the same tri-state
-        `hidden` has.
+        `expose="project_only"` says the whole subtree belongs to a project:
+        outside one it is not listed, not completed, and refused by name.
+        `"global_only"` says the opposite, `"always"` says both. A child may
+        still answer for itself — the same tri-state `hidden` has.
         """
         key = cli_name(name)
         if key == "default":
@@ -1737,12 +1774,12 @@ class Group:
                 adopted.help = help
             if hidden is not None:
                 adopted.hidden = hidden
-            if needs_project is not None:
-                adopted.needs_project = needs_project
+            if expose is not None:
+                adopted.expose = expose
             return adopted
         self._shadow_pulled(key)
         self._claim(key)
-        sub = Group(key, help, hidden, needs_project)
+        sub = Group(key, help, hidden, expose)
         self.groups[key] = sub
         return sub
 
@@ -2077,7 +2114,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def default(
@@ -2100,7 +2137,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
-        needs_project: bool | None = None,
+        expose: str | None = None,
     ) -> Task | Callable[[Task], Task]:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
@@ -2153,7 +2190,7 @@ class Group:
                 serial=serial,
                 exclusive=exclusive,
                 hidden=hidden,
-                needs_project=needs_project,
+                expose=expose,
             )
             self.tasks["default"] = task
             return cast("TaskFn[_P, _R_co]", task)
@@ -2343,37 +2380,36 @@ def declared_hidden(fn: Task) -> bool | None:
     return value if value is None else bool(value)
 
 
-def declared_needs_project(fn: Task) -> bool | None:
-    """*fn*'s own answer to "do I need a project?", or `None` when it never
+def declared_expose(fn: Task) -> str | None:
+    """*fn*'s own answer to "where am I offered?", or `None` when it never
     said — so the enclosing group answers for it, exactly as `hidden` does."""
-    value = getattr(fn, _NEEDS_PROJECT, None)
-    return value if value is None else bool(value)
+    value = getattr(fn, _EXPOSE, None)
+    return value if isinstance(value, str) else None
 
 
-def seal_needs_project(group: Group, default: bool = True) -> None:
-    """Give every unmarked task in *group* an explicit scope.
+def seal_expose(group: Group, default: str = "project_only") -> None:
+    """Give every unmarked task in *group* an explicit `expose`.
 
-    Called on the brand's built-in set the moment it is assembled, because
-    that is the only place the answer is known: a package declared `builtin=`
-    exposes nothing outside a project until a task says it makes sense there.
+    Called on a rung the moment it is assembled, because that is the only
+    place the answer is known: a package's tasks are `project_only` until
+    one says otherwise, while a person's own tasks file rides everywhere.
 
-    It has to happen *before* the cascade merges, not after. The user's own
-    tasks file is overlaid into this very group, and once merged nothing in
-    the tree distinguishes "the brand shipped this" from "the person wrote
-    this" by position — while their defaults are opposites: the built-in set
-    defaults to needing a project, a personal tasks file rides everywhere.
-    Sealing here means everything downstream reads one resolved value.
+    It has to happen *before* the rungs merge, not after. They are overlaid
+    into one tree, and once merged nothing distinguishes "the package
+    shipped this" from "the person wrote this" by position — while their
+    defaults differ. Sealing here means everything downstream reads one
+    resolved value.
     """
 
-    def walk(node: Group, inherited: bool | None) -> None:
-        mine = node.needs_project if node.needs_project is not None else inherited
+    def walk(node: Group, inherited: str | None) -> None:
+        mine = node.expose if node.expose is not None else inherited
         for fn in node.tasks.values():
-            if declared_needs_project(fn) is None:
-                setattr(fn, _NEEDS_PROJECT, default if mine is None else mine)
+            if declared_expose(fn) is None:
+                setattr(fn, _EXPOSE, default if mine is None else mine)
         for sub in node.groups.values():
             walk(sub, mine)
 
-    walk(group, group.needs_project)
+    walk(group, group.expose)
 
 
 def is_interactive(fn: Task) -> bool:

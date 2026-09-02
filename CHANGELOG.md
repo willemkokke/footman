@@ -7,6 +7,32 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **`needs_project` becomes `expose`, and gains the answer it was
+  missing.** The boolean could say "this needs a project" and nothing
+  else, because it was asked in only one place — the built-in set was
+  mounted exclusively where discovery found none, so both of its answers
+  included being *inside* a project. `expose` says where a task is
+  offered outright: `"always"`, `"project_only"` (the old
+  `needs_project=True`), or `"global_only"` — a task that only makes
+  sense *before* a project exists, like creating one, which nothing
+  could express before. Whichever side a task does not belong on, it is
+  unlisted, uncompleted and refused **by name** with the direction it
+  was withheld from, never a "no task named".
+
+  `@task(expose=…)` and `group(…, expose=…)` take it, and `@expose(…)`
+  is the decorator spelling for authors who keep their gates above the
+  signature. It stays tri-state like `hidden` — unset inherits the
+  enclosing group — and the **rungs keep their opposite defaults**: a
+  package's tasks are `project_only` until one says otherwise, a
+  personal tasks file rides everywhere. A value that is not one of the
+  three is refused at registration, where a typo would otherwise read as
+  silence and put a task somewhere its author meant to keep it out of.
+
+  Migration is mechanical: `needs_project=True` → `expose="project_only"`,
+  `needs_project=False` → `expose="always"`. Manifest schema 9.
+
 ### Added
 
 - **`prompt(type=…)` — the parameter type language as the prompt's

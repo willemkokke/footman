@@ -1058,7 +1058,7 @@ def test_fork_copies_every_group_field():
         "name",
         "help",
         "hidden",
-        "needs_project",
+        "expose",
         "tasks",
         "groups",
         "contributions",

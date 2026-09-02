@@ -381,7 +381,7 @@ def test_an_empty_listing_covers_tasks_hidden_by_the_project_question():
     # just as thoroughly as having no tasks at all.
     reg = Group("root")
 
-    @reg.task(needs_project=True)
+    @reg.task(expose="project_only")
     def build(): ...
 
     tree = _manifest.build_manifest(reg, project=False)["tree"]

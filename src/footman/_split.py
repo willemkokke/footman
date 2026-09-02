@@ -156,18 +156,24 @@ def _unknown_global(
     return f"unknown global option {name} (global options go before the first task)"
 
 
-def _needs_project(dotted: str) -> str:
+def _unexposed(dotted: str, tree: dict[str, Any]) -> str:
     """Why a real task refuses from here — resolved only once it has.
 
-    The generic form on purpose: footman knows the task needs a project and
-    that this directory is not one, and it does not know what a particular
-    brand would have you do about it. It names the file it looked for, which
-    is the fact that actually resolves the confusion, because the reader is
+    Which side the refusal comes from is knowable without storing it: a
+    manifest built for a project can only be withholding a `global_only`
+    task, one built outside can only be withholding a `project_only` one.
+
+    The generic form on purpose: footman knows the task does not belong
+    here, and it does not know what a particular brand would have you do
+    about it. Outside a project it names the file it looked for, which is
+    the fact that actually resolves the confusion, because the reader is
     usually a tool that started in the wrong directory rather than a person
     wondering how to make a project.
     """
     from footman import _app
 
+    if tree.get("project"):
+        return f"{dotted} runs only outside a project"
     return (
         f"{dotted} needs a project — no {_app._brand.tasks_file} found here "
         f"or in any parent of {os.getcwd()}"
@@ -977,7 +983,7 @@ def flat_addresses(tree: dict[str, Any]) -> list[str]:
 
     def walk(node: dict[str, Any], prefix: str) -> None:
         for name, spec in node["tasks"].items():
-            if spec.get("needs_project"):
+            if spec.get("unexposed"):
                 continue
             out.append(prefix + name)
         for name, sub in node["groups"].items():
@@ -1007,7 +1013,7 @@ def _children(node: dict[str, Any], prefix: str) -> str:
     names = [f"{prefix}{name}." for name in node["groups"]] + [
         f"{prefix}{name}"
         for name, spec in node["tasks"].items()
-        if not spec.get("needs_project")
+        if not spec.get("unexposed")
     ]
     return ", ".join(names) or "nothing"
 
@@ -1062,12 +1068,12 @@ def _resolve_head(
                     f"{token!r}: {dotted!r} is a task, not a group — "
                     f"nothing lives beneath it"
                 )
-            if node["tasks"][part].get("needs_project"):
+            if node["tasks"][part].get("unexposed"):
                 # Found, and refused for the true reason. "No task named" would
                 # be a lie — the task exists, it just has nowhere to stand — and
                 # whoever typed this is most often a tool in the wrong
                 # directory, which is exactly what the answer should say.
-                raise ChainError(_needs_project(".".join(path)))
+                raise ChainError(_unexposed(".".join(path), tree))
             return node["tasks"][part], path, None, i + 1
         # Unknown segment. At the very start this may be a misplaced global,
         # or a child of the runnable group that led the previous segment
@@ -1133,10 +1139,10 @@ def _resolve_head(
     # wins — every child keeps its dotted spelling), otherwise it opens a
     # fresh head on the next pass.
     if "default" in node:
-        if node["default"].get("needs_project"):
+        if node["default"].get("unexposed"):
             # The bare spelling of a task that needs one — refused for the
             # same reason and in the same words as `fm lint.default`.
-            raise ChainError(_needs_project(".".join(path)))
+            raise ChainError(_unexposed(".".join(path), tree))
         return node["default"], path, node, i + 1
 
     # A namespace group is never a segment target. Before refusing, look

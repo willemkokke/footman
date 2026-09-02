@@ -157,7 +157,7 @@ def _rebuild() -> None:
                 compose.plugin(entry)
         # Same sealing the app layer does, for the same reason — this child
         # rebuilds the very manifest that answers TAB outside a project.
-        registry.seal_needs_project(base)
+        registry.seal_expose(base)
         try:
             reg = _discover.load_tree(files, base=base)
         except Exception as exc:

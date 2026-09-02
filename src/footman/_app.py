@@ -338,7 +338,7 @@ def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
     # Before the cascade overlays the user's own tasks into this group: after
     # that, nothing tells the brand's tasks from the person's, and the two
     # have opposite defaults.
-    registry.seal_needs_project(base)
+    registry.seal_expose(base)
     return base
 
 
@@ -2330,7 +2330,7 @@ def _execute(
                 bake_cwd=False,
                 builtin=_builtin(),
                 # No project here — the one place the question is asked, so
-                # every reader downstream just checks `needs_project`.
+                # every reader downstream just checks `unexposed`.
                 project=False,
             )["tree"]
         else:
