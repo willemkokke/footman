@@ -695,8 +695,7 @@ def install(shell: str, prog: str) -> list[str]:
             "fish picks it up automatically — start a new shell and TAB away.",
         ]
 
-    suffix = {"pwsh": "ps1", "nushell": "nu"}.get(shell, shell)
-    target = _paths.data_home() / prog / f"completion.{suffix}"
+    target = hook_path(shell, prog)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(script, encoding="utf-8")
     if shell == "pwsh":
@@ -719,6 +718,26 @@ def install(shell: str, prog: str) -> list[str]:
     return lines
 
 
+def hook_path(shell: str, prog: str) -> Path:
+    """Where *shell* keeps *prog*'s completion script.
+
+    One spelling, because three copies of it is what the comment in
+    `uninstall` used to warn about: install writing one path and uninstall
+    computing another leaves the script removed and its rc line behind,
+    sourcing nothing. fish owns its own conventional directory; everyone
+    else gets `<data home>/<prog>/completion.<suffix>`.
+
+    Note this is keyed by the **command name**, not the config stem, so it
+    sits *beside* `data_dir()` rather than inside it — `~/.local/share/fm/`
+    next to `~/.local/share/footman/`. Anything clearing a runner's
+    leavings has to know that.
+    """
+    if shell == "fish":
+        return _paths.config_home() / "fish" / "completions" / f"{prog}.fish"
+    suffix = {"pwsh": "ps1", "nushell": "nu"}.get(shell, shell)
+    return _paths.data_home() / prog / f"completion.{suffix}"
+
+
 def uninstall(shell: str, prog: str) -> list[str]:
     """Remove *shell*'s completion for *prog*: the script file and the rc line.
 
@@ -729,16 +748,13 @@ def uninstall(shell: str, prog: str) -> list[str]:
     by hand is one paste.
     """
     if shell == "fish":
-        target = _paths.config_home() / "fish" / "completions" / f"{prog}.fish"
+        target = hook_path(shell, prog)
         if target.exists():
             target.unlink()
             return [f"removed {target}"]
         return [f"nothing to remove ({target} was not installed)"]
 
-    suffix = {"pwsh": "ps1", "nushell": "nu"}.get(shell, shell)
-    target = _paths.data_home() / prog / f"completion.{suffix}"
-    # bash/zsh must match install()'s spelling exactly, or uninstall would
-    # remove the script and leave its rc line behind, sourcing nothing.
+    target = hook_path(shell, prog)
     hook = {
         "pwsh": f'. "{target}"',
         "nushell": f'source "{target}"',
