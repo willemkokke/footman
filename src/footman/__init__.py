@@ -54,12 +54,14 @@ if TYPE_CHECKING:
     from footman.context import confirm as confirm
     from footman.context import cwd as cwd
     from footman.context import data_dir as data_dir
+    from footman.context import dist as dist
     from footman.context import fail as fail
     from footman.context import given as given
     from footman.context import inherited as inherited
     from footman.context import mark as mark
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
+    from footman.context import prog as prog
     from footman.context import progress as progress
     from footman.context import project_root as project_root
     from footman.context import prompt as prompt
@@ -183,6 +185,7 @@ __all__ = [
     "cwd_lane",
     "data_dir",
     "default",
+    "dist",
     "doc",
     "docstrings",
     "env",
@@ -213,6 +216,7 @@ __all__ = [
     "pre_record",
     "pre_task",
     "pre_tasks",
+    "prog",
     "progress",
     "project_root",
     "prompt",
@@ -429,6 +433,8 @@ def __getattr__(name: str) -> object:
         "data_dir",
         "config_dir",
         "config_file",
+        "prog",
+        "dist",
         "user_tasks_file",
         "project_root",
         "select",

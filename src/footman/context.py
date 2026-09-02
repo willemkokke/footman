@@ -1044,6 +1044,47 @@ def data_dir() -> Path:
     return _make(_paths.footman_data_dir(), mode=0o700)
 
 
+def prog() -> str:
+    """The command this CLI is invoked as — `fm`, or a branded CLI's own.
+
+    For output that has to *call the CLI back*: a generated CI workflow, a
+    README line, a task that writes prose naming the command someone will
+    type. A branded runner must emit its own name, or the file it writes
+    tells the reader to run a command they do not have.
+
+    ```python
+    (root / ".github/workflows/ci.yml").write_text(
+        f"      - run: {footman.prog()} check\\n"
+    )
+    ```
+
+    Inside a task body, prefer `ctx.prog` — declare a `ctx: Context`
+    parameter and read it. That is the invocation's own answer rather than
+    process state, and it is what footman's own taskdocs plugin uses. This
+    accessor exists for the code that never receives a context: a plugin
+    building its tree at mount time, a helper called from anywhere.
+    """
+    from footman import _paths
+
+    return _paths.prog()
+
+
+def dist() -> str | None:
+    """The distribution that ships this CLI, or `None` if it never said.
+
+    The name someone would `pip install` — what the uv handoffs reason
+    about, and what `self.install` puts on a PATH. `App(dist=…)` sets it;
+    stock footman answers `"footman"`.
+
+    `None` is a real answer, not a gap: declaring a distribution is opt-in
+    for a branded CLI, and saying `"footman"` for a brand that never
+    declared one would name the wrong package.
+    """
+    from footman import _paths
+
+    return _paths.declared_dist()
+
+
 def config_dir() -> Path:
     """This CLI's config directory — *your* writing, never footman's.
 

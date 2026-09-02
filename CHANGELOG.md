@@ -7,6 +7,35 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`footman.prog()` and `footman.dist()`** — which CLI is running, for
+  code that generates text calling the CLI back. A plugin emitting a CI
+  workflow or a README line has to name the command its reader will
+  actually type: a branded runner writing `fm check` sends them to a
+  command they do not have. `prog()` is that command, `dist()` the
+  package that ships it — and `dist()` answers `None` when the brand
+  never declared one, because `App(dist=…)` is opt-in and saying
+  `footman` there would name the wrong package. (The uv handoffs keep
+  their own reading, which falls back deliberately: the lock rule needs
+  *some* package to look for.)
+
+  Inside a task body `ctx.prog` remains the better reach — the
+  invocation's own answer rather than process state, and what footman's
+  own taskdocs plugin uses. These exist for the code that never receives
+  a context: a plugin building its tree at mount time, a helper called
+  from anywhere.
+
+### Documentation
+
+- **`python -m <yourpkg>` for a branded CLI.** The custom-CLI page now
+  shows the three-line `__main__.py` and says why it matters: anything
+  that has to *wrap* the CLI in another process reaches for the module
+  form — `coverage run -m acme check`, a profiler, a sandbox — and
+  `python -m footman` runs **stock footman**, silently losing a brand's
+  built-ins, `[tool.acme]` table and `ACME_*` variables, because it is a
+  different runner wearing the same import.
+
 ### Fixed
 
 - **The home page advertises the current release again.** Its "latest
