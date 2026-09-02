@@ -94,40 +94,93 @@ def user_config(tmp_path, monkeypatch):
     return path
 
 
-# --- resolving the key --------------------------------------------------------
+# --- the three sources and the four modes -------------------------------------
 
 
-def test_the_key_is_absent_empty_or_named(user_config, provider):
-    assert _config.user_builtin() is None  # absent is not the same as empty
-    user_config.write_text("builtin = []\n", encoding="utf-8")
-    assert _config.user_builtin() == ()  # mounting nothing is a choice
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+def _discovered(names):
+    """Stand in for what `fm self.*` writes into the data directory."""
+    _config.write_discovered(names)
+
+
+def test_the_user_list_is_yours_alone(user_config, provider):
+    assert _config.user_builtin() == ()  # absent means empty, not unset
+    user_config.write_text("[builtins]\nuser = []\n", encoding="utf-8")
+    assert _config.user_builtin() == ()
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     assert _config.user_builtin() == ("acme_tasks",)
 
 
-def test_true_means_everything_installed_with_the_runner(user_config, provider):
-    user_config.write_text("builtin = true\n", encoding="utf-8")
-    every = _config.user_builtin()
-    assert every is not None
-    assert "acme_tasks" in every  # what is installed alongside the runner
-    assert every == tuple(sorted(every))  # a stable tree, whatever the read order
-
-
-def test_a_value_that_is_neither_is_refused_by_name(user_config):
-    user_config.write_text('builtin = "acme_tasks"\n', encoding="utf-8")
-    with pytest.raises(_config.BuiltinError, match=r"builtin = \["):
+def test_a_user_list_that_is_not_a_list_of_names_is_refused(user_config):
+    user_config.write_text('[builtins]\nuser = "acme_tasks"\n', encoding="utf-8")
+    with pytest.raises(_config.BuiltinError, match="a list of"):
         _config.user_builtin()
-    user_config.write_text("builtin = [1, 2]\n", encoding="utf-8")
+    user_config.write_text("[builtins]\nuser = [1, 2]\n", encoding="utf-8")
     with pytest.raises(_config.BuiltinError):
         _config.user_builtin()
 
 
-def test_the_brands_own_set_comes_first_and_survives(user_config, provider):
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
-    assert _config.effective_builtin(("footman.new",)) == ("footman.new", "acme_tasks")
-    # A name the brand already declares is not mounted twice.
-    assert _config.effective_builtin(("acme_tasks",)) == ("acme_tasks",)
-    user_config.write_text("", encoding="utf-8")
+def test_the_discovered_list_lives_in_the_data_dir(user_config, tmp_path, monkeypatch):
+    # Machine-owned by *location*, so "don't hand-edit this" is true by
+    # construction rather than by comment — and the config file stays yours.
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path / "data"))
+    assert _config.discovered_builtin() == ()  # nothing discovered yet
+    _discovered(["acme_tasks"])
+    assert _config.discovered_path().parent == tmp_path / "data"
+    assert _config.discovered_builtin() == ("acme_tasks",)
+
+
+def test_an_unreadable_discovered_list_is_simply_empty(tmp_path, monkeypatch):
+    # A record footman can always rebuild, never a declaration whose loss
+    # should refuse a run.
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path / "data"))
+    _config.discovered_path().parent.mkdir(parents=True, exist_ok=True)
+    _config.discovered_path().write_text("{not json", encoding="utf-8")
+    assert _config.discovered_builtin() == ()
+
+
+def test_discovery_mode_defaults_to_auto_and_refuses_a_typo(user_config):
+    assert _config.discovery_mode() == "auto"
+    user_config.write_text('[builtins]\ndiscovery_mode = "manual"\n', encoding="utf-8")
+    assert _config.discovery_mode() == "manual"
+    user_config.write_text('[builtins]\ndiscovery_mode = "auto_"\n', encoding="utf-8")
+    with pytest.raises(_config.BuiltinError, match="one of"):
+        _config.discovery_mode()
+
+
+def test_the_modes_select_which_sources_contribute(user_config, tmp_path, monkeypatch):
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path / "data"))
+    _discovered(["discovered_pkg"])
+    brand = ("footman.new",)
+
+    def mode(name):
+        user_config.write_text(
+            f'[builtins]\ndiscovery_mode = "{name}"\nuser = ["mine"]\n',
+            encoding="utf-8",
+        )
+        return _config.effective_builtin(brand)
+
+    # The brand's own always leads; `user` is honoured in every mode.
+    assert mode("auto") == ("footman.new", "discovered_pkg", "mine")
+    assert mode("manual") == ("footman.new", "discovered_pkg", "mine")
+    assert mode("internal") == ("footman.new", "mine")
+    assert mode("none") == ("mine",)  # nothing automatic, only what I named
+
+
+def test_none_leaves_a_way_back_in(user_config, tmp_path, monkeypatch):
+    # `none` is not "off": naming the runner's own group restores it, which
+    # is what keeps the mode from locking anyone out of `fm self.*`.
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path / "data"))
+    user_config.write_text(
+        '[builtins]\ndiscovery_mode = "none"\nuser = ["footman.new"]\n',
+        encoding="utf-8",
+    )
+    assert _config.effective_builtin(("footman.new",)) == ("footman.new",)
+
+
+def test_a_name_is_never_mounted_twice(user_config, tmp_path, monkeypatch):
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path / "data"))
+    _discovered(["footman.new"])
+    user_config.write_text('[builtins]\nuser = ["footman.new"]\n', encoding="utf-8")
     assert _config.effective_builtin(("footman.new",)) == ("footman.new",)
 
 
@@ -144,14 +197,14 @@ def bare(tmp_path, monkeypatch):
 
 
 def test_a_configured_builtin_answers_outside_a_project(user_config, provider, bare):
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     result = stock_runner().invoke("login", cwd=bare)
     assert result.ok, result.stderr
     assert "logged in" in result.stdout
 
 
 def test_it_lists_beside_the_brands_own(user_config, provider, bare):
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     result = stock_runner().invoke("--list", cwd=bare)
     assert result.ok, result.stderr
     assert "login" in result.stdout
@@ -161,7 +214,7 @@ def test_it_lists_beside_the_brands_own(user_config, provider, bare):
 def test_project_only_still_refuses_outside_one(user_config, provider, bare):
     # The rung is unchanged: a task that declares it needs a project is
     # mounted-but-refused out here, by name, rather than missing.
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     result = stock_runner().invoke("deploy", cwd=bare)
     assert not result.ok
     assert "project" in result.stderr.lower()
@@ -178,7 +231,7 @@ def test_a_project_keeps_the_configured_set_beneath_it(user_config, provider, tm
     (project / "tasks.py").write_text(
         'from footman import task\n\n@task\ndef build():\n    """Build."""\n'
     )
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     result = stock_runner().invoke("--list", cwd=project)
     assert result.ok, result.stderr
     assert "build" in result.stdout  # the project's own
@@ -187,15 +240,17 @@ def test_a_project_keeps_the_configured_set_beneath_it(user_config, provider, tm
 
 
 def test_a_name_that_will_not_mount_blames_the_config(user_config, provider, bare):
-    user_config.write_text('builtin = ["not_installed_anywhere"]\n', encoding="utf-8")
+    user_config.write_text(
+        '[builtins]\nuser = ["not_installed_anywhere"]\n', encoding="utf-8"
+    )
     result = stock_runner().invoke("--list", cwd=bare)
     assert not result.ok
-    assert "builtin key" in result.stderr
+    assert "builtins.user" in result.stderr
     assert "not_installed_anywhere" in result.stderr
 
 
 def test_a_broken_key_is_refused_before_anything_runs(user_config, provider, bare):
-    user_config.write_text('builtin = "acme_tasks"\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = "acme_tasks"\n', encoding="utf-8")
     result = stock_runner().invoke("--list", cwd=bare)
     assert not result.ok
     assert "builtin" in result.stderr
@@ -207,7 +262,7 @@ def test_the_key_is_user_level_only(user_config, provider, tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
     (project / "pyproject.toml").write_text(
-        "[project]\nname='x'\n[tool.footman]\nbuiltin = ['acme_tasks']\n"
+        "[project]\nname='x'\n[tool.footman.builtins]\nuser = ['acme_tasks']\n"
     )
     (project / "tasks.py").write_text(
         'from footman import task\n\n@task\ndef build():\n    """Build."""\n'
@@ -219,14 +274,14 @@ def test_the_key_is_user_level_only(user_config, provider, tmp_path):
 
 
 def test_plugins_reports_which_rung_declared_it(user_config, provider, bare):
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     result = stock_runner().invoke("--plugins", cwd=bare)
     assert result.ok, result.stderr
     assert "built in (your config)" in result.stdout
 
 
 def test_the_json_catalog_carries_the_configured_tasks(user_config, provider, bare):
-    user_config.write_text("builtin = true\n", encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     result = stock_runner().invoke("--json", cwd=bare)
     assert result.ok, result.stderr
     catalog = json.loads(result.stdout)
@@ -238,7 +293,7 @@ def test_the_completion_child_builds_the_configured_set(user_config, provider, b
     # mounts the configured set exactly as the execution path does.
     from footman import _refresh
 
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     _paths.configure(builtin=("footman.new",))
     monkeypatch_cwd = bare
     import os
@@ -271,7 +326,7 @@ def test_a_brand_with_no_builtins_of_its_own_still_gets_the_users(
 ):
     # The branded half: a CLI that declares no built-ins is exactly where
     # the key does the most work — the user's set is the whole base.
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     result = Runner(acme).invoke("login", cwd=bare)
     assert result.ok, result.stderr
     assert "logged in" in result.stdout
@@ -287,7 +342,7 @@ def test_tab_reaches_a_configured_set_under_such_a_brand(
 
     from footman._complete import complete_cli
 
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
     assert Runner(acme).invoke("--list", cwd=bare).ok  # writes the global manifest
 
     saved = os.getcwd()
@@ -309,7 +364,7 @@ def test_global_only_keeps_a_builtin_out_of_a_project(user_config, provider, tmp
     (project / "tasks.py").write_text(
         'from footman import task\n\n@task\ndef build():\n    """Build."""\n'
     )
-    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+    user_config.write_text('[builtins]\nuser = ["acme_tasks"]\n', encoding="utf-8")
 
     inside = stock_runner().invoke("--list", cwd=project)
     assert inside.ok, inside.stderr
