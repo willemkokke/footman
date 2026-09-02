@@ -748,7 +748,11 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
         "",
         ["section", "mark", "stream", "Stream", "Section"],
     ),
-    ("Asking the person running it", "", ["prompt", "confirm", "select"]),
+    (
+        "Asking the person running it",
+        "",
+        ["prompt", "confirm", "select", "attended", "tty", "colored"],
+    ),
     (
         "The process boundary",
         "stdin binds to typed parameters, and a `Stdout[T]` return owns "

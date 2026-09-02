@@ -653,6 +653,12 @@ class Context:
     tty: bool = False
     """Output dresses for a terminal (colour, marks). Live in-place
     rewrites additionally require output to be uncaptured."""
+    terminal: bool = False
+    """The run's real stdout is a terminal (on Windows, one that interprets
+    ANSI) and output is not captured into a `--json` envelope — `tty` with
+    the colour policy left out. What the `tty()` reader answers: `NO_COLOR`
+    turns `tty` off because dressed output would be wrong, but the person
+    is still there."""
     sink: TextIO | None = None
     """Where this task's stdout goes: a capture buffer in buffered
     (parallel) mode, `None` for the real stdout (live mode)."""
@@ -1145,6 +1151,43 @@ def given(name: str) -> bool:
             f"{name!r}{hint} (it has: {listed})"
         )
     return name in ctx.given
+
+
+def attended() -> bool:
+    """Whether a prompt would reach a human: stdin is a real terminal and the
+    run was not declared unattended (`--no-input`, `--dry-run`).
+
+    The question `prompt()`/`confirm()`/`select()` already answer for
+    themselves by degrading to their defaults — `attended()` is for changing
+    the *shape* of a run instead: skip an optional wizard outright, take the
+    quiet path in CI. `--yes` deliberately does not count as unattended: it
+    auto-answers `confirm()` gates but forbids nothing.
+
+    Readable anywhere, but it licenses nothing: a mid-body prompt still
+    requires `@task(interactive=True)`, because owning the terminal under
+    parallelism is a separate question from someone being there to answer.
+    """
+    ctx = current()
+    return not (ctx.no_input or ctx.dry_run) and _stdin_is_tty()
+
+
+def tty() -> bool:
+    """Whether this run's output lands on a live terminal, colour policy
+    aside: the real stdout is a terminal (on Windows, one that interprets
+    ANSI) and output is not captured into a `--json` envelope. `NO_COLOR` and
+    `--color` do not change the answer — a person with colour turned off is
+    still watching, so gate pagers and live displays here and colour on
+    `colored()`. `False` outside a run: the scheduler stamps it per task."""
+    return current().terminal
+
+
+def colored() -> bool:
+    """Whether this task's own output should dress for colour — the same
+    `never`/`always`/`auto` cascade footman's own chrome follows:
+    `--color=never` (or `NO_COLOR`, or a dumb terminal) says no,
+    `--color=always` forces colour even into a pipe (but never into a
+    `--json` envelope), and `auto` follows the terminal."""
+    return _colored(current())
 
 
 def progress(done: int, total: int = 0) -> None:

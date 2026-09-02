@@ -73,6 +73,53 @@ def test_colored_predicate(monkeypatch):
     assert _colored(Context(force_color=True, tty=False)) is True
 
 
+# --- the attendance readers ---------------------------------------------------
+
+
+def test_attended_reader(monkeypatch):
+    from footman import context
+    from footman.context import attended
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    with use_context(Context()):
+        assert attended() is True
+    with use_context(Context(no_input=True)):
+        assert attended() is False
+    with use_context(Context(dry_run=True)):
+        assert attended() is False
+    # --yes deliberately does not count as unattended: it auto-answers
+    # confirm() gates but forbids nothing.
+    with use_context(Context(assume_yes=True)):
+        assert attended() is True
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+    with use_context(Context()):
+        assert attended() is False
+
+
+def test_tty_reader_ignores_colour_policy():
+    from footman.context import tty
+
+    assert tty() is False  # outside a run, nothing is stamped
+    # NO_COLOR undresses the output; the person is still watching.
+    with use_context(Context(terminal=True, no_color=True)):
+        assert tty() is True
+    # Forced colour puts no terminal at the end of a pipe.
+    with use_context(Context(terminal=False, force_color=True)):
+        assert tty() is False
+
+
+def test_colored_reader(monkeypatch):
+    from footman.context import colored
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    with use_context(Context(tty=True)):
+        assert colored() is True
+    with use_context(Context(tty=True, no_color=True)):
+        assert colored() is False
+    with use_context(Context(force_color=True)):
+        assert colored() is True
+
+
 def test_color_env_helper():
     from footman.context import color_env
 

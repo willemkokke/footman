@@ -425,9 +425,12 @@ def _make_ctx(
     # `ansi_capable`, not bare tty-ness: the live line repaints with escape
     # codes, and a Windows console that cannot interpret them would show
     # the cursor dance as noise rather than a status line.
-    ctx.tty = (
-        not capture and _describe.ansi_capable(real) and not _plain_output(ctx.no_color)
-    )
+    # Two stamps, one measurement: `terminal` is the fact (a capable terminal
+    # is at the end of this run's output, nothing captured), `tty` folds the
+    # colour policy in on top — `NO_COLOR` unsets how output *dresses*, not
+    # whether someone is watching, and the `tty()` reader answers the latter.
+    ctx.terminal = not capture and _describe.ansi_capable(real)
+    ctx.tty = ctx.terminal and not _plain_output(ctx.no_color)
     # `--color=always` forces colour even off a terminal, but not into a captured
     # envelope: ANSI in `--json` stdout would corrupt it, so capture wins here
     # exactly as it does for `tty` above.

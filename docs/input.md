@@ -181,6 +181,41 @@ ownership window, so nothing scribbles over a prompt.
 
 ![Animated: fm scaffold prompts for a project name, then a numbered what-kind menu picked by number](_generated/shots/interactive-cast.svg)
 
+## Know your audience: `attended()`, `tty()`, `colored()`
+
+Three readers answer "who is on the other end?", each a different question:
+
+```python
+from footman import attended, colored, tty
+
+@task(interactive=True)
+def setup(licence: str = "MIT"):
+    if attended():
+        licence = prompt("licence? ", default=licence)  # someone can answer
+    print(f"licence: {licence}")  # CI, a pipe, --no-input: the quiet path
+```
+
+`attended()` is the input side: stdin is a real terminal and the run was not
+declared unattended (`--no-input`, `--dry-run`). The prompts already degrade
+to their defaults on their own — `attended()` is for changing the *shape* of
+a run instead, like skipping an optional wizard outright. It licenses
+nothing: a mid-body prompt still needs `interactive=True`. `--yes` does not
+count as unattended — it auto-answers confirms but forbids nothing.
+
+`tty()` is the output side, colour policy aside: the run's real stdout is a
+live terminal and not a `--json` envelope. `NO_COLOR` and `--color` don't
+change the answer, because a person with colour turned off is still
+watching — gate a pager or a live display here.
+
+`colored()` is the dressing: should this task's own output use colour? It
+follows the same `never`/`always`/`auto` cascade as footman's own chrome, so
+`--color=always` says yes even into a pipe. Emitting ANSI yourself, ask this
+one, not `tty()`.
+
+All three are plain calls, honest anywhere: `sys.stdout.isatty()` inside a
+task lies (stdout is a capture buffer under parallelism), and these read the
+real streams and the run's declared intent instead.
+
 ## Read the pipe: `stdin`
 
 A piped stdin binds to typed parameters — `Stdin[str]` for the text, a
