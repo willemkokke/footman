@@ -592,7 +592,9 @@ serve you instead. The recompute is bounded and isolated, so a slow or failing
 completer degrades to no candidates, never the old values, never a hung
 keystroke. This holds for *every* completer, whether or not the task owns the
 terminal (`interactive=True`); a real run validates the value you pass against
-the same live call.
+the same live call. Pair a completer with [`ask()`](input.md) and the same
+values become a numbered menu when the flag is missing, asked up front with
+the run's other questions.
 
 A completer runs only where its values are wanted: the parameter whose value
 is being completed or validated, and the options `--help` is printing. A line

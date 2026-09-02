@@ -47,6 +47,31 @@ def release(version: Annotated[str, ask()] = "patch"): ...
 bare, as `fm release --version`, skips the question entirely, because the caller
 has already said "the declared one".
 
+The choices can be computed at run time, too: pair `ask()` with a
+[`suggest()` completer](typing.md#dynamic-completion) and its values become a
+numbered menu, asked up front like every other `ask()`:
+
+```python
+from footman import suggest
+
+def stale_branches() -> list[str]:
+    return ["old/spike", "old/wip"]
+
+@task
+def prune(branch: Annotated[str, ask(), suggest(stale_branches)]): ...
+```
+
+`fm prune --branch=old/wip` skips the question and validates against a fresh
+call; `fm prune` shows the numbered list and takes a pick. `Many[str]` makes
+it a multi-select (numbers comma-separated, `all`, `none`), and
+`suggest(fn, strict=False)` demotes the values from law to hint: they show
+beside a free-text prompt instead of becoming a menu. The same function also
+answers <kbd>Tab</kbd> completion for the flag spelling — one list, three
+surfaces. This is the up-front twin of `select()` (below): no
+`interactive=True` needed, because the question is asked with the run's
+other questions, before anything owns the terminal — reach for `select()`
+only when the options aren't computable until the task is already running.
+
 The safety is the point. Off a terminal, under `--no-input`, or in `--json`,
 a parameter **with** a default quietly takes it, and one **without** *errors
 naming the flag* instead of hanging. So `ask()` is safe to put on anything: a

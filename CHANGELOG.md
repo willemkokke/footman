@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The `ask()` + `suggest()` pairing is now on the input page.** A strict
+  completer's values become a numbered up-front menu when the flag is
+  missing (`Many[…]` multi-selects; `strict=False` demotes the values to a
+  hint beside free text) — built and tested since the completers landed,
+  but never documented, so the one interactive shape most tasks want
+  (dynamic choices without `interactive=True`) looked missing. The
+  dynamic-completion section links across.
+
 ### Added
 
 - **Three readers answer "who is on the other end?"** — plain calls, no
