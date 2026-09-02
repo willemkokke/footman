@@ -62,7 +62,9 @@ reading one as its exit code still checks — and a `with parallel() as p:`
 block *is* that list, so `p[0]` is a `Result` too (`p.results`, the values
 the queued calls returned, is heterogeneous by nature and typed to say so);
 `select()` answers a string menu with `str` and `(label, value)` pairs with
-the value's type; `prompt()`/`confirm()` return `str`/`bool`; the testing
+the value's type; `prompt()` returns `str` — or `T` when `type=` names a
+plain class, with `Literal`/`Annotated` forms falling back to `Any` —
+and `confirm()` returns `bool`; the testing
 `Runner` returns a typed `InvokeResult`. Registering a lifecycle hook
 returns the hook unchanged, type included.
 

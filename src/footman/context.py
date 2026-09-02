@@ -1968,9 +1968,53 @@ def _guard_interactive(what: str) -> Context:
     return ctx
 
 
+def _refuse_prompt_markers(peeled: Any) -> None:
+    """Markers that decide how a *parameter* gets filled have no meaning once
+    a prompt is already asking — refused by name, so a copy-pasted annotation
+    teaches instead of half-working."""
+    offers = (
+        (peeled.ask is not None, "ask()"),
+        (peeled.env is not None, "env()"),
+        (peeled.stdin is not None, "stdin"),
+        (peeled.forward, "forward"),
+        (peeled.hidden, "hidden"),
+        (peeled.default_fn is not None, "default(fn)"),
+        (peeled.completer is not None, "suggest()"),
+    )
+    named = [name for present, name in offers if present]
+    if named:
+        raise ValueError(
+            f"prompt(type=…): {', '.join(named)} decides how a parameter is "
+            f"filled, which a live prompt already settles — declare the value "
+            f"as a task parameter instead (or use select() for a menu)"
+        )
+
+
+@overload
 def prompt(
-    message: str = "", *, default: str | None = None, secret: bool = False
-) -> str:
+    message: str = ..., *, default: str | None = ..., secret: bool = ...
+) -> str: ...
+@overload
+def prompt(
+    message: str = ...,
+    *,
+    type: type[_T],
+    default: _T | None = ...,
+    secret: bool = ...,
+) -> _T: ...
+@overload
+def prompt(
+    message: str = ..., *, type: Any, default: Any = ..., secret: bool = ...
+) -> Any: ...
+
+
+def prompt(
+    message: str = "",
+    *,
+    type: Any = str,
+    default: Any = None,
+    secret: bool = False,
+) -> Any:
     """Ask the person running the task for a line of input.
 
     A bare `input()` doesn't work in a task: its prompt goes to stdout, which
@@ -1986,16 +2030,47 @@ def prompt(
     and a rehearsal is unattended by nature. For a value a
     script must supply, take it as a task parameter (a CLI flag) instead.
 
+    `type=` reuses the parameter type language as the validator: the answer
+    runs through the same coercion pipeline a flag does — `int`, `Path`, an
+    enum, `Literal[…]`, a union, or `Annotated[…]` carrying `between()` /
+    `check()` / `exists` — and a bad answer is taught and re-asked rather
+    than raised. An empty answer takes `default` (returned as given,
+    uncoerced), and an unattended run takes it the same way. One value per
+    prompt: collections, and the markers that decide how a *parameter* gets
+    filled (`ask()`, `env()`, `suggest()`, …), are refused by name — declare
+    a parameter, or reach for `select()`.
+
     `secret=True` hides the typing (getpass) *and* returns a `Secret`, so the
     answer redacts in tracebacks and structured output the same way
     `ask(secret=True)` does — hiding a value while it is typed and then
     printing it in the first traceback would be a strange kind of secret.
     A default returned unattended is wrapped too: where the value came from
-    doesn't change what it is.
+    doesn't change what it is. A secret is text by nature, so `secret=True`
+    with a non-`str` `type=` is refused — `ask(secret=True)` on a typed
+    parameter is that spelling.
     """
     from footman.params import Secret
 
+    if secret and type is not str:
+        raise ValueError(
+            "prompt(): a secret answer is text — drop type=, or declare the "
+            "value as a typed parameter with ask(secret=True)"
+        )
     ctx = _guard_interactive("prompt()")
+    peeled = None
+    if type is not str:
+        # Refuse a bad type= before the unattended branch can paper over it
+        # with the default: a wrong annotation is a programming error, and
+        # those fail the same way attended or not.
+        from footman import _coerce
+
+        peeled = _coerce.peel(type)
+        _refuse_prompt_markers(peeled)
+        if peeled.multiple or peeled.mapping:
+            raise ValueError(
+                "prompt() takes one value — for several, use "
+                "select(multiple=True) or declare a parameter (Many[…])"
+            )
     if ctx.no_input or ctx.dry_run:
         if default is not None:
             return Secret(default) if secret else default
@@ -2004,8 +2079,27 @@ def prompt(
             f"prompt(): {why}, so nothing can be asked. Pass a "
             f"default, or supply the value as a task parameter (a CLI flag)."
         )
-    answer = _prompt_core(message, default=default, secret=secret)
-    return Secret(answer) if secret else answer
+    if peeled is None:
+        answer = _prompt_core(message, default=default, secret=secret)
+        return Secret(answer) if secret else answer
+
+    from footman._executor import _coerce_extra
+
+    err = real_stderr()
+    while True:
+        # An empty answer means the default when one exists, so hand
+        # _prompt_core "" as its degrade value too: off a terminal the same
+        # default comes back through the same door.
+        raw = _prompt_core(message, default="" if default is not None else None)
+        if raw == "" and default is not None:
+            return default
+        try:
+            # ask()'s own pipeline for a token the splitter never saw:
+            # strict coercion, then choices / bounds / path / check(fn).
+            return _coerce_extra(raw, peeled, "the answer")
+        except ValueError as exc:
+            err.write(_scrub(f"  {exc}") + "\n")
+            err.flush()
 
 
 def confirm(message: str, *, default: bool = False) -> bool:

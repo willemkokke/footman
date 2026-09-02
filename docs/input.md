@@ -198,6 +198,23 @@ at run time, the case a flag can't cover. Two globals cover the rest: `--yes`
 auto-answers every confirm, and `--no-input` refuses to prompt (a required
 prompt errors instead).
 
+`prompt()` speaks the parameter type language too: pass `type=` and the answer
+runs through the same coercion pipeline a flag does, with a bad answer taught
+and re-asked rather than raised:
+
+<!-- example: fragment -->
+
+```python
+port = prompt("port? ", type=Annotated[int, between(1024, 65535)])
+```
+
+`int`, `Path`, an enum, a `Literal[…]`, a union, `check(fn)` — one type
+vocabulary, whether the value arrives as a flag, an `ask()` question, or a
+mid-task prompt. An empty answer takes `default`, and unattended runs take it
+the same way. One value per prompt: collections and the markers that decide
+how a *parameter* gets filled (`ask()`, `env()`, `suggest()`, …) are refused
+by name — declare a parameter, or use `select()`.
+
 Owning the terminal is a *lane*, not a lockdown: the interactive task runs
 on the real stdio while the parallel pool keeps working around it,
 captured — a sibling that finishes mid-prompt has its output held until

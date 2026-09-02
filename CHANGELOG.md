@@ -7,18 +7,19 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-### Documentation
-
-- **The `ask()` + `suggest()` pairing is now on the input page.** A strict
-  completer's values become a numbered up-front menu when the flag is
-  missing (`Many[…]` multi-selects; `strict=False` demotes the values to a
-  hint beside free text) — built and tested since the completers landed,
-  but never documented, so the one interactive shape most tasks want
-  (dynamic choices without `interactive=True`) looked missing. The
-  dynamic-completion section links across.
-
 ### Added
 
+- **`prompt(type=…)` — the parameter type language as the prompt's
+  validator.** The answer runs through the same coercion pipeline a flag
+  does — `int`, `Path`, an enum, `Literal[…]`, a union, or `Annotated[…]`
+  carrying `between()` / `check()` / `exists` — and a bad answer is
+  taught and re-asked, exactly as `ask()` treats a typed parameter. An
+  empty answer takes `default`, unattended runs take it the same way,
+  and the return is typed (`type=int` returns `int`). One value per
+  prompt: collections and the markers that decide how a *parameter*
+  gets filled (`ask()`, `env()`, `suggest()`, …) are refused by name —
+  declare a parameter, or use `select()`. `secret=True` stays text-only:
+  a typed secret is spelled `ask(secret=True)` on a parameter.
 - **Three readers answer "who is on the other end?"** — plain calls, no
   `ctx` parameter, honest anywhere. `attended()` is the input side: stdin
   is a real terminal and the run was not declared unattended
@@ -34,6 +35,16 @@ versions may include breaking changes.
   these read the real streams and the run's declared intent. `Context`
   additionally carries the new `terminal` stamp (`tty` minus colour
   policy), which the scheduler sets per task.
+
+### Documentation
+
+- **The `ask()` + `suggest()` pairing is now on the input page.** A strict
+  completer's values become a numbered up-front menu when the flag is
+  missing (`Many[…]` multi-selects; `strict=False` demotes the values to a
+  hint beside free text) — built and tested since the completers landed,
+  but never documented, so the one interactive shape most tasks want
+  (dynamic choices without `interactive=True`) looked missing. The
+  dynamic-completion section links across.
 
 ## [0.48.0] - 2026-09-01
 
