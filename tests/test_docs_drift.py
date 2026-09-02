@@ -646,6 +646,38 @@ def test_the_newest_changelog_entries_carry_no_relative_links():
     )
 
 
+def test_the_home_page_advertises_the_current_release():
+    """The generated latest-release block names *this* version.
+
+    The one check that reads the real CHANGELOG rather than a fixture, and
+    the reason it exists: the generator matched only an em dash between
+    version and date, the file moved to the hyphen Keep a Changelog
+    specifies, and `search` quietly found the newest heading that still
+    matched. The home page advertised a release nine versions old for two
+    months. The unit test passed throughout, because its fixture used the
+    generator's own spelling — a synthetic changelog cannot catch the
+    generator disagreeing with the real one.
+    """
+    import re
+
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    newest = re.search(r"^## \[(\d[^\]]+)\]", text, re.M)
+    assert newest is not None, "no released section in CHANGELOG.md"
+
+    import tasks as project_tasks
+
+    lifted = re.search(project_tasks._LATEST_HEADING, text, re.M)
+    assert lifted is not None, (
+        "the latest-changes generator matched no heading in CHANGELOG.md — "
+        "the home page would show nothing"
+    )
+    assert lifted.group(1) == newest.group(1), (
+        f"the home page would advertise {lifted.group(1)}, but the newest "
+        f"release is {newest.group(1)} — the generator's heading pattern no "
+        f"longer matches how releases are written"
+    )
+
+
 def test_every_boolean_config_key_has_both_cli_spellings():
     """A project setting is a *default*, never a one-way door.
 

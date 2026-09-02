@@ -365,9 +365,12 @@ def test_the_home_page_quotes_the_newest_release(tmp_path, monkeypatch):
     """Rolling the changelog for a release updates the home page by
     construction — there is no second copy to forget."""
     monkeypatch.chdir(tmp_path)
+    # The newest heading uses the hyphen Keep a Changelog specifies; the
+    # older one the em dash this file used to. Both have to parse, or the
+    # newest is skipped for an older match — which is what shipped.
     Path("CHANGELOG.md").write_text(
         "# Changelog\n\n## [Unreleased]\n\n- Pending.\n\n"
-        "## [0.23.0] — 2026-07-27\n\n### Added\n\n- The newest thing.\n\n"
+        "## [0.23.0] - 2026-07-27\n\n### Added\n\n- The newest thing.\n\n"
         "## [0.22.0] — 2026-07-01\n\n- Older.\n",
         encoding="utf-8",
     )

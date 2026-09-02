@@ -7,6 +7,26 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The home page advertises the current release again.** Its "latest
+  release" block is lifted from the newest CHANGELOG section, and the
+  pattern doing the lifting required an em dash between version and date.
+  The changelog moved to the hyphen [Keep a
+  Changelog](https://keepachangelog.com/) specifies at 0.42.0, so the
+  search skipped every heading since and matched the newest one that
+  still had an em dash: the home page has been advertising **0.41.0**,
+  nine releases back, since mid-August.
+
+  It failed in the worst available way — finding an *older* match rather
+  than none, so there was nothing missing to notice — and the unit test
+  passed throughout, because its fixture used the generator's own
+  spelling. A synthetic changelog cannot catch the generator disagreeing
+  with the real one, so the new guard reads `CHANGELOG.md` itself and
+  asserts the lifted version is the newest one. Both separators parse
+  now, which keeps the archive readable and cannot silently pick the
+  wrong entry again.
+
 ## [0.49.1] - 2026-09-02
 
 ### Fixed
