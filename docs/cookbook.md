@@ -403,29 +403,25 @@ def bundle():
 ### The task that anchors one branch on the root
 
 A task whose *contract* is invocation-relative can still reach the repo
-root for one branch of its work. The values the cwd policies resolve are
-plain data on the context: `ctx.root_dir` is what `cwd="root"` anchors on
-(the highest tasks file's directory in the cascade), `ctx.invoked_dir` is
-the `asinvoked` target, pinned at startup, both readable from any body,
-whatever the task's own cwd policy says.
+root for one branch of its work. `project_root()` is what `cwd="root"`
+anchors on — the highest tasks file's directory in the cascade — readable
+from any body, whatever the task's own cwd policy says:
 
 ```python
-from footman import Context, task, run
+from footman import project_root, task, run
 
 @task
-def audit(ctx: Context, path: str = ".", affected: bool = False):
+def audit(path: str = ".", affected: bool = False):
     "Audit a path as given, or with --affected the whole tree."
-    target = ctx.root_dir if affected else path
+    target = project_root() if affected else path
     run(f"pytest {target}", shell=False)
 ```
 
-Declare `ctx` (that name, or any first parameter annotated `Context`) and
-footman injects it; it never becomes a CLI argument. The distinction doing
-the work: the task's *cwd* is policy, resolved once per task, while where `fm`
-was invoked and where the cascade roots are *data*, carried alongside
+The distinction doing the work: the task's *cwd* is policy, resolved once
+per task, while where the cascade roots is *data*, carried alongside
 whichever policy won. No `git rev-parse` required, and no VCS assumed:
 the root is the cascade's, which is why it exists even in a repo git has
-never seen.
+never seen. Outside a project it answers `None`.
 
 ### The legacy task that owns the process
 

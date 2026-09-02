@@ -99,21 +99,46 @@ TLS store Python can't see. The full worked example is in the
 
 ## No `ctx` needed
 
-`run()` and `passthrough()` read the current task's context implicitly, so a
-task body stays boilerplate-free. Declare a first `ctx: Context` parameter only
-if you want the object. footman keeps it out of the CLI mapping:
+Everything a task ordinarily reaches for is a free function that finds the
+running task by itself, so a body stays boilerplate-free:
 
 ```python
-from footman import Context, task
+from footman import passthrough, task
 from toolroom import pytest
 
 @task
-def test(ctx: Context):
-    pytest(*ctx.passthrough)                # fm test -- -k mytest -x
+def test():
+    pytest(*passthrough())                  # fm test -- -k mytest -x
 ```
 
-`passthrough()` and `ctx.passthrough` are the same list two ways: the free
-function reads the current context, so most tasks never declare `ctx` at all.
+`run()`, `cwd()`, `project_root()`, `given()`, `passthrough()`, `prog()`,
+`tty()`, `attended()`, `colored()`, `cache_dir()`, `data_dir()` — each
+reads the current context for you. **Declaring `ctx` is the rare case**,
+and it buys exactly one thing the free functions do not offer: the shape
+of the *invocation itself*, which is not something most tasks should
+branch on.
+
+```python
+from footman import Context, task, run
+
+@task
+def publish(ctx: Context):
+    if ctx.dry_run:                         # fm --dry-run publish
+        print("would upload the built artifacts")
+        return
+    run("./upload dist/*")
+```
+
+`ctx.dry_run`, `ctx.verbose`, `ctx.quiet`, `ctx.jobs`, `ctx.sequential`
+and `ctx.invoked_dir` are the run-mode facts with no free function, and
+the rest of the object is footman's own machinery — the record being
+built, the output routing, the resolved form of what your own `@task(…)`
+already declared. If you are reading those, you are working on footman
+rather than with it.
+
+Declare it as a first parameter annotated `Context` (the name `ctx` is
+conventional, not required) and footman injects it; it never becomes a
+CLI argument.
 
 One boundary to know: threads you spawn yourself don't inherit the task's
 context. See

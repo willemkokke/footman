@@ -28,6 +28,18 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **`ctx` is documented as the rare case it now is.** With `prog()` and
+  `project_root()` public, every fact a task ordinarily reaches for has a
+  free function that finds the running task by itself — `run()`, `cwd()`,
+  `given()`, `passthrough()`, `tty()`, `attended()`, `colored()`,
+  `cache_dir()`, `data_dir()`. Declaring a `ctx: Context` parameter buys
+  exactly one thing they do not offer: the shape of the *invocation*
+  (`dry_run`, `verbose`, `quiet`, `jobs`, `sequential`, `invoked_dir`),
+  which most tasks should not branch on. The rest of the object is
+  footman's own machinery. The tools page says so and demonstrates the
+  one real case; the cookbook's `--affected` recipe, which declared `ctx`
+  only to read `ctx.root_dir`, now calls `project_root()` and declares
+  nothing.
 - **`python -m <yourpkg>` for a branded CLI.** The custom-CLI page now
   shows the three-line `__main__.py` and says why it matters: anything
   that has to *wrap* the CLI in another process reaches for the module
