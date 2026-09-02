@@ -468,6 +468,12 @@ def _assert_cast_captured(svg: Path, needles: list[str]) -> None:
         raise RuntimeError(f"{svg.name} dropped {missing} — cast timing regressed?")
 
 
+# The release heading the home page's latest block is lifted from. Named so
+# the drift test pins *this* reading rather than a copy of it — a copy is
+# how the two drifted apart for nine releases.
+_LATEST_HEADING = r"^## \[(\d[^\]]+)\] [-—] (.+?)$"
+
+
 def _write_latest_changes() -> None:
     """Extract the newest release's section from CHANGELOG.md into a
     collapsed admonition the home page includes — version, date, and the
@@ -477,7 +483,14 @@ def _write_latest_changes() -> None:
     from pathlib import Path
 
     text = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    head = re.search(r"^## \[(\d[^\]]+)\] — (.+?)$", text, re.M)
+    # Either separator: Keep a Changelog spells the heading with a hyphen
+    # and this file used an em dash for its first forty-odd releases. The
+    # em-dash-only reading did not fail loudly when the convention changed
+    # — `search` simply found the newest heading that still matched, so the
+    # home page advertised a release from nine versions back and nothing
+    # said so. Accepting both keeps the archive parsable and cannot silently
+    # pick the wrong entry again.
+    head = re.search(_LATEST_HEADING, text, re.M)
     if head is None:  # a fresh fork with only [Unreleased]: skip quietly
         body_block = ""
     else:
