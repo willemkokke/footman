@@ -94,28 +94,54 @@ name. What each one offers *where* is the task's own answer
 
 ```toml
 # ~/.config/footman/config.toml
-builtin = ["acme_devkit"]   # these entry points…
-# builtin = true            # …or every one installed with the runner
+[builtins]
+user = ["acme_devkit"]      # entry points you name yourself
 ```
 
-`true` is the shorthand for "whatever I installed alongside `fm`", which is
-honest because putting a package there
-(`uv tool install footman --with acme-devkit`) is already a deliberate act.
-The key is **user-level only**: which packages your runner carries is your
-machine's business, not any project's, and a project that wants a set placed
-somewhere of its own mounts it the ordinary way in its tasks file. A name
-that will not mount is refused and says so; so is a value that is neither a
-list nor `true`.
+There are **three sources**, and they mount in this order: the runner's own
+set (declared in its code — the product), then whatever `fm self.*`
+discovered when you last added a package, then the names you wrote in
+`builtins.user`. Duplicates are dropped, so a name the runner already
+declares is never mounted twice.
+
+The discovered list is machine-written and lives in footman's **data
+directory**, not here — so this file stays yours alone and nothing footman
+writes can trample a comment you left. `builtins.user` is the opposite: only
+you write it, footman only reads it, and a name in it that is not installed
+is refused rather than skipped.
+
+`builtins.discovery_mode` says which of the three contribute:
+
+| mode | the runner's own | discovered | `user` |
+| ---- | ---------------- | ---------- | ------ |
+| `auto` (default) | yes | yes, kept current by `fm self.*` | yes |
+| `manual` | yes | yes, left exactly as it is | yes |
+| `internal` | yes | ignored | yes |
+| `none` | no | no | yes |
+
+`none` is not an off switch — it means *nothing automatic, only exactly what
+I named*. It drops the runner's own commands too, including `fm self.*`, so
+if you want them back name them:
+
+```toml
+[builtins]
+discovery_mode = "none"
+user = ["footman.self"]
+```
+
+The whole table is **user-level only**: which packages your runner carries
+is your machine's business, not any project's, and a project that wants a
+set placed somewhere of its own mounts it the ordinary way in its tasks
+file.
 
 A package's tasks belong to a project unless one says otherwise:
 `@task(expose="always")` says a task works anywhere,
 `@task(expose="global_only")` says it only makes sense *before* a project
 exists, and an unmarked task refuses by name where it does not belong
-rather than going missing. `fm --plugins` shows
-which rung mounted what — `built in` for the runner's own, `built in (your
-config)` for yours.
+rather than going missing. `fm --plugins` shows which source mounted what
+— `built in` for the runner's own, `built in (your config)` for the rest.
 
-Editing the key reaches <kbd>Tab</kbd> on the press after next, the way
+Editing the table reaches <kbd>Tab</kbd> on the press after next, the way
 every user-level edit does (see
 [keeping the cache current](completion.md#keeping-the-cache-current)).
 

@@ -9,6 +9,38 @@ versions may include breaking changes.
 
 ### Changed
 
+- **`builtin` becomes the `[builtins]` table, and `builtin = true` is
+  gone.** The single key made footman and you write the same list: the
+  moment a tool wrote a name into it, neither side could tell its entries
+  from yours. There are now three sources, mounted in that order and
+  deduplicated — the runner's own set (declared in code, so it can never
+  go stale against an upgrade), the list discovery wrote, and
+  `builtins.user`, which only you write and footman only reads.
+  `builtins.discovery_mode` says which contribute: `auto` (the default),
+  `manual`, `internal`, or `none`. `builtins.user` is honoured in every
+  one of them, so `none` is not an off switch — it means *nothing
+  automatic, only exactly what I named*, and naming `footman.self` brings
+  the runner's own commands back.
+
+  **The discovered list lives in the data directory**, not in your config
+  file, so "do not hand-edit this" is true by construction: footman
+  replaces one small file it owns rather than rewriting a table inside a
+  file you also write — which, with no TOML writer in the standard
+  library, would have meant losing your comments.
+
+  `builtin = true` shipped in 0.48.0 and goes out again here. It resolved
+  its list on **every invocation**, and the enumeration it needed costs
+  ~20 ms of a ~75 ms run, forever, for a set that changes when you install
+  something. That work now happens once, in `fm self.*`, which writes the
+  result down. It also swept in the runner's *own* entry points — on a
+  stock install it would have mounted footman's docs, env-file and profile
+  providers, two of which exist to contribute global options rather than
+  task trees.
+
+  Migration: `builtin = ["x"]` → `[builtins]` with `user = ["x"]`;
+  `builtin = true` → let `fm self.add` write the list, or name the
+  packages under `user`.
+
 - **Built-in tasks are part of the cascade.** They used to be mounted
   only where discovery found no project, so the moment a tasks file
   turned up they were not there at all — a runner's own commands

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +35,7 @@ PYPROJECT = "pyproject.toml"
 # project), so a per-project value would be a lie waiting to confuse
 # someone. Stripped from cascade files, with a note under -v; an explicit
 # `--config` file keeps them — the user named that file on purpose.
-USER_LEVEL_KEYS = frozenset({"gc", "cascade", "builtin"})
+USER_LEVEL_KEYS = frozenset({"gc", "cascade", "builtins"})
 
 # Every recognised key, as data — the source the docs table renders from, so
 # a reference page cannot describe a key set the runner doesn't have. The
@@ -112,13 +112,21 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "its own PEP 723 dependencies.",
     ),
     (
-        "builtin",
-        "list of entry points / `true`",
-        "unset",
-        "Mount `footman.tasks` entry points as built-in tasks — offered "
-        "outside every project, ignored inside one (the cascade wins). "
-        "`true` mounts every entry point installed with the runner. "
-        "**User-level only.**",
+        "builtins.discovery_mode",
+        "`auto` / `manual` / `internal` / `none`",
+        "`auto`",
+        "How the built-in set is assembled: `auto` lets `fm self.*` keep the "
+        "discovered list current, `manual` leaves that list to you, "
+        "`internal` ignores it, `none` drops the runner's own set too. "
+        "`builtins.user` is honoured in every mode. **User-level only.**",
+    ),
+    (
+        "builtins.user",
+        "list of entry points",
+        "empty",
+        "`footman.tasks` entry points *you* name, mounted as built-in tasks "
+        "— the cascade's outermost rung. Nothing else writes this list, and "
+        "a name that is not installed is refused. **User-level only.**",
     ),
     (
         "docs_url",
@@ -412,35 +420,98 @@ class BuiltinError(ConfigError):
     """The user-level `builtin` key is not a list of names or `true`."""
 
 
-def user_builtin() -> tuple[str, ...] | None:
-    """The user's own built-in entry points, from the user-level file alone.
+DISCOVERY_MODES = ("auto", "manual", "internal", "none")
+"""How the built-in set is assembled. One axis, plus a master switch.
 
-    `builtin = ["acme.tasks"]` names them; `builtin = true` means "every
-    `footman.tasks` entry point installed alongside this runner" — which is
-    honest because installing one there (`uv tool install footman --with
-    <dist>`) is already a deliberate act, and the runner's own environment
-    is a small, intentional place. `None` means the key is absent, which is
-    not the same as an empty list (a list that mounts nothing is a choice).
+| mode       | the brand's own | the discovered list | your own list |
+| ---------- | --------------- | ------------------- | ------------- |
+| `auto`     | yes             | yes, rewritten      | yes           |
+| `manual`   | yes             | yes, left alone     | yes           |
+| `internal` | yes             | ignored             | yes           |
+| `none`     | no              | no                  | yes           |
 
-    User-level only, like `cascade`: what a machine offers *outside* every
-    project is the machine owner's business, and a project that wants the
-    same tasks mounts them the ordinary way, in its tasks file.
+`builtins.user` is honoured in every mode, so `none` does not mean "off"
+— it means **nothing automatic, only exactly what I named**, which is a
+more useful thing to be able to say and leaves a way back in:
+`user = ["footman.self"]` restores the runner's own commands.
+"""
 
-    Raises `BuiltinError` for a value that is neither, because a mount
-    someone declared and footman ignored is a missing command with no
-    explanation.
+
+def _builtins_table() -> dict[str, Any]:
+    """The user-level `[builtins]` table, or an empty one."""
+    table = user_level_value("builtins")
+    return table if isinstance(table, dict) else {}
+
+
+def discovery_mode() -> str:
+    """How this machine assembles its built-in set — `auto` by default.
+
+    User-level only, like `cascade`: which packages a runner carries is
+    the machine owner's business, not any project's.
     """
-    value = user_level_value("builtin")
-    if value is None or value is False:
-        return None
-    if value is True:
-        return installed_entry_points()
+    value = _builtins_table().get("discovery_mode", "auto")
+    if not isinstance(value, str) or value not in DISCOVERY_MODES:
+        raise BuiltinError(
+            f"builtins.discovery_mode = {value!r} in "
+            f"{_paths.footman_config_file()}: one of "
+            f"{', '.join(DISCOVERY_MODES)}"
+        )
+    return value
+
+
+def user_builtin() -> tuple[str, ...]:
+    """The entry points *you* named — `[builtins] user = [...]`.
+
+    Honoured in every mode, because it is the one list nothing else
+    writes: it says what you asked for, and footman never edits it.
+    """
+    value = _builtins_table().get("user", [])
     if isinstance(value, list) and all(isinstance(v, str) for v in value):
         return tuple(value)
     raise BuiltinError(
-        f"builtin = {value!r} in {_paths.footman_config_file()}: name the "
-        f'entry points to mount (builtin = ["acme.tasks"]), or say '
-        f"builtin = true for every one installed with the runner"
+        f"builtins.user in {_paths.footman_config_file()}: a list of "
+        f'entry-point names (user = ["acme_devkit"]), not {value!r}'
+    )
+
+
+def discovered_builtin() -> tuple[str, ...]:
+    """The entry points discovery found — machine-written, never by hand.
+
+    Kept in the data directory rather than the config file so that "do not
+    edit this" is true by construction rather than by comment: the config
+    file stays yours alone, and footman replaces one small file it owns
+    instead of rewriting a table inside a file you also write.
+
+    Missing, unreadable or malformed all mean the same thing — nothing
+    discovered yet — because this is a record footman can always rebuild
+    (`fm self.add`), never a declaration whose loss should refuse a run.
+    """
+    import json
+
+    try:
+        raw = json.loads(discovered_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ()
+    names = raw.get("builtin") if isinstance(raw, dict) else None
+    if not isinstance(names, list):
+        return ()
+    return tuple(n for n in names if isinstance(n, str))
+
+
+def discovered_path() -> Path:
+    """Where the discovered list lives: this brand's data directory."""
+    return _paths.footman_data_dir() / "builtins.json"
+
+
+def write_discovered(names: Sequence[str]) -> None:
+    """Replace the discovered list. The only writer is `fm self.*`."""
+    import json
+
+    path = discovered_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"schema": 1, "builtin": sorted(set(names))}, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -459,19 +530,20 @@ def installed_entry_points() -> tuple[str, ...]:
 
 
 def effective_builtin(brand: tuple[str, ...]) -> tuple[str, ...]:
-    """The built-in set this invocation mounts: the brand's, then the
-    user's, in that order and without duplicates.
+    """The built-in set this invocation mounts, in mounting order.
 
-    The brand's own declarations come first because they are the product;
-    the user's are additions to it, not replacements — a branded CLI's
-    built-ins stay built in whatever a user adds beside them.
+    Three sources, and `builtins.discovery_mode` says which contribute:
+    the brand's own declarations (the product — first, because everything
+    else is an addition to it, never a replacement), then whatever
+    discovery found, then the names you wrote yourself. Duplicates are
+    dropped, so a name the brand already declares is never mounted twice.
     """
-    user = user_builtin()
-    if user is None:
-        return brand
-    seen = list(brand)
-    seen += [name for name in user if name not in seen]
-    return tuple(seen)
+    mode = discovery_mode()
+    names = [] if mode == "none" else list(brand)
+    if mode in ("auto", "manual"):
+        names += [n for n in discovered_builtin() if n not in names]
+    names += [n for n in user_builtin() if n not in names]
+    return tuple(names)
 
 
 def load_config(

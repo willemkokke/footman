@@ -311,7 +311,7 @@ def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
     spelling is what needs fixing — never a crash."""
     from footman import compose
 
-    declared_by_user = set(_config.user_builtin() or ())
+    declared_by_user = set(_config.user_builtin())
     with registry.capture() as base:
         for name in names:
             try:
@@ -320,8 +320,18 @@ def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
                 if name in declared_by_user and name not in _brand.builtin:
                     return _refuse(
                         json_mode,
-                        f"the builtin key in {_paths.footman_config_file()} "
+                        f"builtins.user in {_paths.footman_config_file()} "
                         f"names {name!r}, which did not mount: {exc}",
+                    )
+                if name not in _brand.builtin:
+                    # Discovery put it there, and discovery can be wrong
+                    # about a package that has since been removed by hand.
+                    # Name the way back rather than the brand's install.
+                    return _refuse(
+                        json_mode,
+                        f"a discovered built-in, {name!r}, did not mount: "
+                        f"{exc} — run {_brand.prog} self.add to bring the "
+                        f"discovered list back in step with what is installed",
                     )
                 return _refuse(
                     json_mode,
@@ -2150,11 +2160,12 @@ def _execute(
     argv is never re-parsed on the way in. *handoff* rides along for the
     stale-environment retry: an embedded `Runner.invoke` must never exec.
     """
-    # Before discovery, because discovery already consults the built-in set:
-    # a `builtin` key footman cannot read would otherwise be swallowed into
-    # "no tasks file found" — the one answer that hides the mistake instead
-    # of naming it.
+    # Before discovery, because discovery already consults the built-in
+    # set: a `[builtins]` table footman cannot read would otherwise be
+    # swallowed into "no tasks file found" — the one answer that hides the
+    # mistake instead of naming it.
     try:
+        _config.discovery_mode()
         _config.user_builtin()
     except _config.ConfigError as exc:
         return _refuse(bool(g.get("json")), str(exc))
