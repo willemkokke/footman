@@ -258,18 +258,19 @@ app = App(name="Acme", prog="acme", dist="acme-cli",
 The names are `footman.tasks` entry points: strings, never live objects,
 because the background refresh child rebuilds completion manifests in a bare
 process where a name travels and an object cannot. The ladder is
-**project > user > built-in**: with no project task files the built-ins are
-the base of the tree and the user tasks file overlays them; the moment a
-project's cascade finds a tasks file, the base is not there at all. Nothing
-is privileged and nothing is lost, since the set is an ordinary entry point, so a
-project that wants those tasks mounts them like any other:
-`plugin("acme.global")`, with `into=`/`only=`/`exclude=` as usual. Naming a
-built-in inside a project teaches exactly that mount, and `--plugins`
-reports the set as `built in`.
+**project > user > built-in**, and it holds wherever you stand: the built-in
+set is the cascade's outermost rung, the user tasks file sits over it, and a
+project's own files sit over both. Everything nearer shadows what is further
+out by name, so a project that wants a name a built-in also uses simply
+takes it. Nothing is privileged: the set is an ordinary entry point, so a
+project can also mount it deliberately — `plugin("acme.global")`, with
+`into=`/`only=`/`exclude=` as usual — to place it somewhere of its own
+choosing. `--plugins` reports the set as `built in`.
 
-**A built-in task needs a project unless it says otherwise.** That is the
-default because most of what a CLI ships does: `deploy` without a checkout
-is not a shorter `deploy`, it is a task that exits 0 having done nothing.
+**A built-in task belongs to a project unless it says otherwise.** That is
+the default because most of what a CLI ships does: `deploy` without a
+checkout is not a shorter `deploy`, it is a task that exits 0 having done
+nothing.
 A listing shows the noise, but the real damage is the confident fiction.
 Declare the exceptions:
 

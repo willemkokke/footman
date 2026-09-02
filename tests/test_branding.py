@@ -526,27 +526,32 @@ def test_no_builtin_and_no_files_keeps_todays_refusal(tmp_path, monkeypatch):
     assert "no tasks file found" in result.stderr.lower()
 
 
-def test_a_project_ignores_the_builtin_base(tmp_path, monkeypatch):
-    # Nothing is privileged: inside a project, the tasks file mounts what
-    # it wants and the base is simply not there.
+def test_a_project_keeps_the_builtin_base_beneath_it(tmp_path, monkeypatch):
+    # The base is the cascade's outermost rung, so a built-in is reachable
+    # from inside a project too — it no longer vanishes at the doorstep,
+    # which is what forced `plugin(...)` into every project that wanted one.
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
     out = acme.invoke("--list").stdout
-    assert "ship" in out and "docs" not in out
+    assert "ship" in out  # the project's own
+    assert "docs" in out  # and the built-in, beneath it
 
 
-def test_an_unknown_builtin_teaches_the_mount(tmp_path, monkeypatch):
-    _project(tmp_path)
+def test_a_project_name_shadows_a_builtin_of_the_same_name(tmp_path, monkeypatch):
+    # Nothing is privileged: the base is a rung, and everything nearer wins
+    # by name exactly as the cascade already resolves its own rungs.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef new():\n    "Ours, not theirs."\n'
+    )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
-    result = acme.invoke("docs.page")
-    assert result.exit_code == EX_USAGE
-    assert "no task named 'docs.page'" in result.stderr
-    assert "built into acme via 'footman.docs'" in result.stderr
-    assert "plugin('footman.docs')" in result.stderr
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
+    result = acme.invoke("--help new")
+    assert result.ok, result.stderr
+    assert "Ours, not theirs." in result.stdout
 
 
 def test_the_user_rung_overlays_the_builtins(tmp_path, monkeypatch):
@@ -759,10 +764,11 @@ def test_the_scaffold_plants_nothing_outside_ascii(tmp_path, monkeypatch):
     assert (empty / "tasks.py").read_bytes().isascii()
 
 
-def test_new_mounted_in_a_project_refuses_to_overwrite(tmp_path, monkeypatch):
-    # Inside a project the built-in is absent by design; the ordinary mount
-    # offers it — and then a directory that already has its file is refused,
-    # not clobbered.
+def test_new_says_it_belongs_outside_a_project(tmp_path, monkeypatch):
+    # `new` writes a starter tasks file, which is what you do *before* a
+    # project exists — so it says `global_only` rather than relying on not
+    # being mounted here. Explicitly mounting it does not change where it
+    # makes sense: the answer is the task's own, not the rung's.
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
         'from footman import plugin\n\nplugin("footman.new")\n'
@@ -771,7 +777,23 @@ def test_new_mounted_in_a_project_refuses_to_overwrite(tmp_path, monkeypatch):
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     result = Runner(App(name="acme", prog="acme")).invoke("new")
     assert not result.ok
-    assert "already exists" in result.stderr
+    assert "runs only outside a project" in result.stderr
+
+
+def test_new_steps_aside_once_it_has_done_its_job(tmp_path, monkeypatch):
+    # Where it belongs, it writes the file — and writing it is what makes
+    # this a project, so the second call is refused by the scope rule
+    # rather than by the overwrite guard. `global_only` reads its own
+    # success. (The guard stays as a belt; nothing reaches past it now.)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
+    first = acme.invoke("new")
+    assert first.ok, first.stderr
+    assert (tmp_path / "tasks.py").is_file()
+    again = acme.invoke("new")
+    assert not again.ok
+    assert "runs only outside a project" in again.stderr
 
 
 def test_a_user_tasks_cwd_root_means_the_project_it_landed_in(tmp_path, monkeypatch):
@@ -1163,3 +1185,18 @@ def test_sealing_claims_only_what_never_answered():
     assert registry.declared_expose(unmarked) == "project_only"
     assert registry.declared_expose(spoke) == "always"
     assert registry.declared_expose(under_a_group) == "global_only"
+
+
+def test_dash_f_still_means_no_base(tmp_path, monkeypatch):
+    """`-f` is total control: one file, no cascade — and so no built-ins
+    either, which is the same promise it always made."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "only.py").write_text(
+        'from footman import task\n\n@task\ndef solo():\n    "Just me."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
+    out = acme.invoke("-f=only.py --list").stdout
+    assert "solo" in out
+    assert "new" not in out

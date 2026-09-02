@@ -9,6 +9,38 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Built-in tasks are part of the cascade.** They used to be mounted
+  only where discovery found no project, so the moment a tasks file
+  turned up they were not there at all — a runner's own commands
+  vanished at the doorstep of every project, and reaching one meant
+  `plugin("…")` in that project's tasks file. The built-in set is now
+  the cascade's **outermost rung**: under the user tasks file, under the
+  project's own, reachable wherever you stand, with everything nearer
+  shadowing it by name exactly as the cascade already resolves its own
+  rungs. A project that wants a set placed somewhere of its own still
+  mounts it deliberately, and `-f` still means total control — one file,
+  no cascade, no base.
+
+  `expose` is what makes this safe in both directions, and why it had to
+  land first: a package's tasks are `project_only` until one opts out, so
+  nothing appears outside a project that did not say it belonged there,
+  and `global_only` keeps a task that only makes sense *before* a project
+  out of every project. The "it's built in, mount it" remedy is gone —
+  there is nothing left to teach, because the task is simply there.
+
+  Measured on footman's own repo: `fm --list` 80 ms before, 76 ms after —
+  the extra rung is noise, because a built-in provider imports like any
+  other tasks file.
+- **`fm new` says `global_only`.** Writing a starter tasks file is what
+  you do *before* a project exists, and it used to rely on simply not
+  being mounted inside one — which stopped being true the moment
+  built-ins joined the cascade. It now says so itself, so the answer
+  travels with the task rather than with the rung: inside a project it is
+  unlisted and refused by name, even where a tasks file mounted it
+  deliberately. It also reads its own success — the file it writes is
+  what makes the directory a project, so a second `fm new` steps aside
+  instead of reaching the overwrite guard.
+
 - **`needs_project` becomes `expose`, and gains the answer it was
   missing.** The boolean could say "this needs a project" and nothing
   else, because it was asked in only one place — the built-in set was

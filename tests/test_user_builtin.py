@@ -32,6 +32,11 @@ PROVIDER = textwrap.dedent(
     def deploy():
         """Deploy this project."""
         print("deployed")
+
+    @task(expose="global_only")
+    def bootstrap():
+        """Start a project. Meaningless once you have one."""
+        print("bootstrapped")
     '''
 )
 
@@ -162,9 +167,11 @@ def test_project_only_still_refuses_outside_one(user_config, provider, bare):
     assert "project" in result.stderr.lower()
 
 
-def test_a_project_wins_outright(user_config, provider, tmp_path):
-    # Inside a project the cascade owns the tree — the built-in ladder is
-    # what answers where nothing else does, not a set that follows you in.
+def test_a_project_keeps_the_configured_set_beneath_it(user_config, provider, tmp_path):
+    # The built-in set is the cascade's outermost rung, so it follows you
+    # into a project — and `expose` decides what that offers there. `login`
+    # said `always`, so it stands; `deploy` never spoke, so the rung's own
+    # promise (`project_only`) applies and it belongs here too.
     project = tmp_path / "proj"
     project.mkdir()
     (project / "pyproject.toml").write_text("[project]\nname='x'\n")
@@ -174,8 +181,9 @@ def test_a_project_wins_outright(user_config, provider, tmp_path):
     user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
     result = stock_runner().invoke("--list", cwd=project)
     assert result.ok, result.stderr
-    assert "build" in result.stdout
-    assert "login" not in result.stdout
+    assert "build" in result.stdout  # the project's own
+    assert "login" in result.stdout  # and the configured built-in
+    assert "deploy" in result.stdout  # which needed a project all along
 
 
 def test_a_name_that_will_not_mount_blames_the_config(user_config, provider, bare):
@@ -289,3 +297,29 @@ def test_tab_reaches_a_configured_set_under_such_a_brand(
         assert complete_cli(["--", ""]) == 0
     finally:
         os.chdir(saved)
+
+
+def test_global_only_keeps_a_builtin_out_of_a_project(user_config, provider, tmp_path):
+    """What makes joining the cascade safe. A built-in that only makes sense
+    before a project exists says so — the rung no longer decides that for it
+    by accident of where it was mounted."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (project / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef build():\n    """Build."""\n'
+    )
+    user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")
+
+    inside = stock_runner().invoke("--list", cwd=project)
+    assert inside.ok, inside.stderr
+    assert "bootstrap" not in inside.stdout
+    refused = stock_runner().invoke("bootstrap", cwd=project)
+    assert not refused.ok
+    assert "runs only outside a project" in refused.stderr
+
+    bare_dir = tmp_path / "elsewhere"
+    bare_dir.mkdir()
+    outside = stock_runner().invoke("bootstrap", cwd=bare_dir)
+    assert outside.ok, outside.stderr
+    assert "bootstrapped" in outside.stdout
