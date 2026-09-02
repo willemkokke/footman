@@ -111,6 +111,8 @@ def span(inv, task):
 | `env("VAR")`                 | fall back to an environment variable (CLI > env > default) |
 | `default(fn)`                | compute the default when the task runs, not at import |
 | `given("name")`              | did the caller supply this parameter, or did footman fill it in? |
+| `attended()`                 | would a prompt reach a human? — stdin is a terminal and no `--no-input`/`--dry-run` |
+| `tty()`, `colored()`         | is a live terminal watching the output? / should output dress for colour? |
 | `check(fn)`                  | custom post-coercion validator (`ValueError` rejects) |
 | `doc("…")`                   | one-line parameter help — shown in `--help`, completion, the catalog |
 | `footman.testing`            | `Runner`/`Result` + `recording()` — see [Testing](testing.md) |

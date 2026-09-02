@@ -7,6 +7,24 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Three readers answer "who is on the other end?"** — plain calls, no
+  `ctx` parameter, honest anywhere. `attended()` is the input side: stdin
+  is a real terminal and the run was not declared unattended
+  (`--no-input`, `--dry-run` — `--yes` deliberately does not count, since
+  it auto-answers confirms but forbids nothing), so a task can skip an
+  optional wizard outright rather than prompt-with-defaults through it.
+  `tty()` is the output side with the colour policy left out: a live
+  terminal is watching (`NO_COLOR` undresses output, it does not empty
+  the chair), the right gate for pagers and live displays. `colored()`
+  is the dressing: the same `never`/`always`/`auto` cascade footman's own
+  chrome follows, `--color=always` included. A bare `sys.stdout.isatty()`
+  inside a task lies (stdout is a capture buffer under parallelism);
+  these read the real streams and the run's declared intent. `Context`
+  additionally carries the new `terminal` stamp (`tty` minus colour
+  policy), which the scheduler sets per task.
+
 ## [0.48.0] - 2026-09-01
 
 ### Added

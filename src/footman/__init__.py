@@ -45,8 +45,10 @@ if TYPE_CHECKING:
     from footman.context import Section as Section
     from footman.context import Stream as Stream
     from footman.context import TimedOut as TimedOut
+    from footman.context import attended as attended
     from footman.context import cache_dir as cache_dir
     from footman.context import chdir as chdir
+    from footman.context import colored as colored
     from footman.context import confirm as confirm
     from footman.context import cwd as cwd
     from footman.context import data_dir as data_dir
@@ -63,6 +65,7 @@ if TYPE_CHECKING:
     from footman.context import select as select
     from footman.context import stream as stream
     from footman.context import track as track
+    from footman.context import tty as tty
     from footman.context import use_context as use_context
     from footman.invocation import Invocation as Invocation
     from footman.params import Arg as Arg
@@ -159,11 +162,13 @@ __all__ = [
     "TimedOut",
     "__version__",
     "ask",
+    "attended",
     "between",
     "cache_dir",
     "capture",
     "chdir",
     "check",
+    "colored",
     "config_section",
     "confirm",
     "console_lane",
@@ -217,6 +222,7 @@ __all__ = [
     "suggest",
     "task",
     "track",
+    "tty",
     "use_context",
     "wrap_bind",
     "wrap_task",
@@ -405,6 +411,9 @@ def __getattr__(name: str) -> object:
         "chdir",
         "confirm",
         "cache_dir",
+        "attended",
+        "tty",
+        "colored",
         "cwd",
         "data_dir",
         "select",

@@ -54,6 +54,26 @@ def test_force_color_survives_a_terminal_but_not_capture(monkeypatch):
     assert captured.force_color is False
 
 
+def test_terminal_stamp_ignores_colour_policy(monkeypatch):
+    # `terminal` is the fact (a capable terminal is watching, nothing
+    # captured); `tty` folds the colour policy in on top. NO_COLOR splits
+    # the two, and capture takes both down.
+    monkeypatch.setenv("NO_COLOR", "1")
+
+    class _Tty(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    seg = Segment(task="t", path=["t"])
+    live = _schedule._make_ctx(seg, None, sequential=True, capture=False, real=_Tty())
+    assert live.terminal is True
+    assert live.tty is False
+    captured = _schedule._make_ctx(
+        seg, None, sequential=True, capture=True, real=_Tty()
+    )
+    assert captured.terminal is False
+
+
 def test_chain_runs_concurrently_by_default():
     barrier = threading.Barrier(2, timeout=3)
     reached = []
