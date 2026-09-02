@@ -274,7 +274,7 @@ A listing shows the noise, but the real damage is the confident fiction.
 Declare the exceptions:
 
 ```python
-@task(needs_project=False)
+@task(expose="always")
 def whoami():
     """Who am I logged in as? Answerable from anywhere."""
 ```
@@ -292,14 +292,14 @@ That message is aimed at what usually types it: a tool that started in the
 wrong directory. It says where footman looked, which is the fact that
 resolves the confusion.
 
-`group("ci", needs_project=True)` answers for a whole subtree, and a child
-may still say `needs_project=False`, the tri-state `hidden` has. The
-question is only ever asked *outside* a project: both answers include being
-inside one, so this can never hide anything from a project.
+`group("ci", expose="project_only")` answers for a whole subtree, and a
+child may still answer for itself, the tri-state `hidden` has. The third
+answer, `expose="global_only"`, says the opposite — a task that only makes
+sense *before* a project exists, like creating one.
 
 The **user rung defaults the other way**: a personal task rides everywhere
-unless it says `needs_project=True`, because that is what a personal tasks
-file is for. Each rung's default is its own promise: a package declared
+unless it says `expose="project_only"`, because that is what a personal
+tasks file is for. Each rung's default is its own promise: a package declared
 `builtin=` exposes nothing until a task opts in; a file someone wrote for
 themselves is theirs everywhere until they opt out.
 

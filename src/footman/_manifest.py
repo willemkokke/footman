@@ -41,7 +41,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 _warned: set[str] = set()
 
@@ -1005,21 +1005,26 @@ def _task_node(
 
 
 def _scoped(
-    node: dict[str, Any], fn: Any, inherited: bool | None, project: bool
+    node: dict[str, Any], fn: Any, inherited: str | None, project: bool
 ) -> dict[str, Any]:
-    """Stamp `needs_project` on a task that does not belong here.
+    """Stamp `unexposed` on a task that does not belong here.
 
     Resolved at build time, where the mode is known, so every reader
     downstream — listing, help, completion, the address resolver — asks one
-    flat question instead of each re-deriving "am I in a project". Inside a
-    project nothing is ever stamped: both scopes include being in one, which
-    is why the question only arises outside.
+    flat question instead of each re-deriving "am I in a project". The three
+    `expose` answers collapse to that one flag against the mode, and the
+    flag alone is enough to phrase the refusal: a task kept out *of* a
+    project can only be `global_only`, one kept out *outside* one can only
+    be `project_only`.
     """
-    if project:
+    # Unsealed means unclaimed: a person's own tasks file and a project's
+    # own cascade ride everywhere. `project_only` is imposed by `seal_expose`
+    # on the rung that promises it, never assumed here.
+    where = registry.declared_expose(fn) or inherited or "always"
+    if where == "always":
         return node
-    own = registry.declared_needs_project(fn)
-    if own if own is not None else bool(inherited):
-        node["needs_project"] = True
+    if (where == "project_only") is not project:
+        node["unexposed"] = True
     return node
 
 
@@ -1037,7 +1042,7 @@ def _node(
     hidden: bool = False,
     *,
     bake: bool = False,
-    needs_project: bool | None = None,
+    expose: str | None = None,
     project: bool = True,
 ) -> dict[str, Any]:
     # `hidden` is resolved here, where the tree structure is: a node that never
@@ -1051,7 +1056,7 @@ def _node(
     mine = hidden if own is None else own
     # The same inheritance for scope, one line down: a group's answer covers
     # its subtree, a child overrides it, and silence asks whoever encloses it.
-    here = g.needs_project if g.needs_project is not None else needs_project
+    here = g.expose if g.expose is not None else expose
     node: dict[str, Any] = {
         "help": g.help,
         "tasks": {
@@ -1066,7 +1071,7 @@ def _node(
             for name, fn in g.tasks.items()
         },
         "groups": {
-            name: _node(sub, memo, mine, bake=bake, needs_project=here, project=project)
+            name: _node(sub, memo, mine, bake=bake, expose=here, project=project)
             for name, sub in g.groups.items()
         },
     }
@@ -1095,8 +1100,8 @@ def _node(
         # than taught to each of the listing, completion and dispatch paths.
         # `hidden` already resolves this way a few lines up; this is the same
         # rule, and without it `fm lint` ran while `fm lint.default` refused.
-        if node["default"].get("needs_project"):
-            node["needs_project"] = True
+        if node["default"].get("unexposed"):
+            node["unexposed"] = True
     return node
 
 
@@ -1117,7 +1122,7 @@ def build_manifest(
 
     *project* says whether this manifest describes a directory that has one.
     It is the only place the question is asked: tasks that need a project are
-    stamped `needs_project` here, so listing, help, completion and the address
+    stamped `unexposed` here, so listing, help, completion and the address
     resolver each read one flat flag rather than re-deriving the mode.
 
     *completion_max_age* (seconds, or `None` to disable) is baked in so the
@@ -1138,6 +1143,11 @@ def build_manifest(
         _global_spec(opt, memo, bake=bake_completers) for opt in _unique_globals(root)
     ]
     tree["global_help"] = _core_global_help()
+    # Which side this tree was built for. Every `unexposed` stamp under it
+    # was resolved against this one answer, so a reader that has to *phrase*
+    # the refusal can say which way the task was withheld without the stamp
+    # having to carry a reason of its own.
+    tree["project"] = project
     return {
         "schema": SCHEMA_VERSION,
         "hash": tree_hash(tree),

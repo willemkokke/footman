@@ -106,7 +106,7 @@ mount is refused and says so; so is a value that is neither a list nor
 `true`.
 
 A package's tasks stay invisible out there until one says it belongs:
-`@task(needs_project=False)` is the opt-in, and an unmarked task refuses
+`@task(expose="always")` is the opt-in, and an unmarked task refuses
 by name outside a project rather than going missing. `fm --plugins` shows
 which rung mounted what — `built in` for the runner's own, `built in (your
 config)` for yours.

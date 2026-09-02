@@ -91,7 +91,7 @@ _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fr
 # A cache written by a different footman gets rebuilt, never walked: the first
 # TAB after an upgrade serves correct candidates instead of a traceback.
 # `test_completion_schema_mirrors_manifest` keeps the two from drifting.
-_SCHEMA = 8
+_SCHEMA = 9
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 # Seconds to wait for a first-time cwd manifest build. A cold build measures
 # ~100-150 ms — footman's own fat tasks.py included — so this is roughly
@@ -279,16 +279,16 @@ def _has_any(node: dict[str, Any]) -> bool:
     thing — you are already typing a name, and a machine-facing address is
     exactly the one worth being spelled for you.
 
-    `needs_project` is a different question and does count: the manifest was
+    `unexposed` is a different question and does count: the manifest was
     built where there is no project, so a task marked here cannot run from
     here, and completing to it would spell out a name that only refuses. So
     the groups TAB skips are the empty ones and the ones with nothing
     runnable left. Dict reads over the manifest a TAB already loaded: the hot
     path imports no framework.
     """
-    if node.get("default") is not None and not node["default"].get("needs_project"):
+    if node.get("default") is not None and not node["default"].get("unexposed"):
         return True
-    if any(not spec.get("needs_project") for spec in node["tasks"].values()):
+    if any(not spec.get("unexposed") for spec in node["tasks"].values()):
         return True
     return any(_has_any(sub) for sub in node["groups"].values())
 
@@ -395,7 +395,7 @@ def _leaf_fallback(tree: dict[str, Any], partial: str) -> list[str]:
 
     def walk(node: dict[str, Any], prefix: str) -> None:
         for name, spec in node["tasks"].items():
-            if spec.get("needs_project"):
+            if spec.get("unexposed"):
                 continue  # nothing here can run it; completing to it teases
             if prefix and name.startswith(partial):
                 out.append(_cand(f"{prefix}{name}", spec.get("help", "")))
@@ -483,14 +483,14 @@ def _address_candidates(tree: dict[str, Any], partial: str) -> list[str]:
             for child, spec in sub["tasks"].items():
                 if child == "default":
                     continue  # the bare row above IS this action
-                if spec.get("needs_project"):
+                if spec.get("unexposed"):
                     continue
                 out.append(_cand(f"{prefix}{name}.{child}", spec.get("help", "")))
         else:
             out.append(_cand(f"{prefix}{name}.", sub["help"]))
     for name in tasks:
         spec = node["tasks"][name]
-        if spec.get("needs_project"):
+        if spec.get("unexposed"):
             continue
         out.append(_cand(f"{prefix}{name}", spec.get("help", "")))
     if not out and not bases and leaf:

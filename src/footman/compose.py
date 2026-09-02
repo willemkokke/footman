@@ -209,7 +209,7 @@ def _fork(tree: Group) -> Group:
     purpose: DEFINING_DIR is re-stamped on each load, so sharing them is safe
     and keeps `recording()`/identity checks meaningful.
     """
-    fork = Group(tree.name, tree.help, tree.hidden, tree.needs_project)
+    fork = Group(tree.name, tree.help, tree.hidden, tree.expose)
     fork.tasks.update(tree.tasks)  # share fns, but into a fresh dict
     for name, sub in tree.groups.items():
         fork.groups[name] = _fork(sub)  # recurse: fresh subgroup objects

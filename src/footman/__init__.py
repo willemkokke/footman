@@ -101,6 +101,7 @@ if TYPE_CHECKING:
     from footman.registry import TaskView as TaskView
     from footman.registry import capture as capture
     from footman.registry import config_section as config_section
+    from footman.registry import expose as expose
     from footman.registry import group as group
     from footman.registry import post_task as post_task
     from footman.registry import post_tasks as post_tasks
@@ -180,6 +181,7 @@ __all__ = [
     "docstrings",
     "env",
     "exists",
+    "expose",
     "fail",
     "fetch",
     "forward",
@@ -327,6 +329,7 @@ def __getattr__(name: str) -> object:
         "wrap_bind",
         "Tasks",
         "TaskView",
+        "expose",
         "requires",
         "requires_dep",
         "requires_env",

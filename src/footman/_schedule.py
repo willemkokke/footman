@@ -1003,7 +1003,7 @@ def _run_attempts(node: _Node, ctx: Any) -> _executor.TaskResult:
 
     What is NOT re-run: `pre=` (prerequisites are their own nodes and already
     ran), and every gate that guards an attempt rather than performing it —
-    availability, `needs_project`, and above all the confirm prompt, which
+    availability, `expose`, and above all the confirm prompt, which
     resolved before this is called. A retry that re-prompts a human is a bug
     read as broken rather than as an oversight.
 

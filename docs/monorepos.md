@@ -82,7 +82,7 @@ Some personal tasks only make sense in a checkout. Say so, and footman keeps
 them out of the way everywhere else:
 
 ```python
-@task(needs_project=True)
+@task(expose="project_only")
 def sync_upstream():
     """Rebase onto upstream/main."""
     run(["git", "fetch", "upstream"])

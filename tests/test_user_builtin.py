@@ -16,14 +16,14 @@ from footman.testing import Runner
 # runner's own environment. Faked at the entry-point layer: what matters is
 # the ladder, not importlib.metadata's plumbing.
 #
-# `login` says `needs_project=False` because the built-in rung defaults the
+# `login` says `expose="always"` because the built-in rung defaults the
 # other way — a package's tasks expose nothing outside a project until one
 # says it makes sense there, which is exactly the opt-in this ladder is for.
 PROVIDER = textwrap.dedent(
     '''
     from footman import task
 
-    @task(needs_project=False)
+    @task(expose="always")
     def login():
         """Log in to the service."""
         print("logged in")
@@ -153,7 +153,7 @@ def test_it_lists_beside_the_brands_own(user_config, provider, bare):
     assert "new" in result.stdout  # stock footman's own built-in stands
 
 
-def test_needs_project_still_refuses_outside_one(user_config, provider, bare):
+def test_project_only_still_refuses_outside_one(user_config, provider, bare):
     # The rung is unchanged: a task that declares it needs a project is
     # mounted-but-refused out here, by name, rather than missing.
     user_config.write_text('builtin = ["acme_tasks"]\n', encoding="utf-8")

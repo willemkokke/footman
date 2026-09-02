@@ -55,13 +55,13 @@ def notify(): ...
 @task(hidden=True)          # out of the listings, callable and completed as ever
 def ci_entry(): ...
 
-@task(needs_project=True)   # outside a project: unlisted, uncompleted, refused by name
+@task(expose="project_only")  # outside a project: unlisted, uncompleted, refused
 def deploy(): ...
 
 fmt.opts(atomic=True)       # override a task's policy for one use (pre=/post=/body call)
 
 release = group("release", help="Cut a release")
-ci = group("ci", needs_project=True)   # the whole subtree needs a project
+ci = group("ci", expose="project_only")   # the whole subtree needs a project
 
 @release.task
 def wheel(): ...
@@ -121,6 +121,7 @@ def span(inv, task):
 | `progress(done, total)`, `track(iterable)` | report a task's own progress; the bar fills from it |
 | `fetch(url, …)`              | download into footman's cache — revalidating, verifying, recorded as a step |
 | `@requires_dep`/`_tool`/`_env`, `@requires` | disable-but-list a task that can't run here |
+| `@expose("always"/"global_only"/"project_only")` | where a task is offered — the decorator spelling of `@task(expose=…)` |
 
 ## Configuration
 

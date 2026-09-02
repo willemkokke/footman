@@ -559,11 +559,11 @@ def listed(node: dict[str, Any], *, show_hidden: bool = False) -> bool:
     Two things take one out, and they are different in kind. `hidden` is a
     task nobody is meant to *read about*: it stays callable, still completes,
     shows up under `--json` marked, and `--all` reveals it — because a machine
-    is exactly who calls it. `needs_project` is a task that does not belong
+    is exactly who calls it. `unexposed` is a task that does not belong
     *here at all*: nothing outside a project can run it, so listing it would
     be an offer footman cannot honour, and `--all` does not bring it back.
     """
-    if node.get("needs_project"):
+    if node.get("unexposed"):
         return False
     return show_hidden or not node.get("hidden")
 

@@ -10,6 +10,8 @@ import os
 import stat
 from pathlib import Path
 
+import pytest
+
 from footman import App, Brand, __version__, _paths, registry
 from footman._executor import EX_USAGE
 from footman.app import DEFAULT_BRAND
@@ -504,7 +506,7 @@ def test_the_user_rung_claims_no_root(tmp_path, monkeypatch):
 def test_builtin_tasks_answer_where_nothing_else_does(tmp_path, monkeypatch):
     # Global mode: no project, no user file — the brand's built-ins are the
     # tree. `footman.new` is a real installed entry point that declares
-    # `needs_project=False`, so this is the whole path: resolve, mount, list.
+    # `expose="always"`, so this is the whole path: resolve, mount, list.
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.chdir(empty)
@@ -916,7 +918,7 @@ def test_a_branded_run_does_not_decide_what_the_next_one_teaches(tmp_path):
     assert "--env-file comes from footman.env_files" in result.stderr
 
 
-# --- needs_project: what survives outside a project ---------------------------
+# --- expose: what survives outside a project ----------------------------------
 #
 # The bug this exists for is not a noisy listing. A project task invoked
 # without a project *succeeded and lied* — `files` printing nothing as though
@@ -929,7 +931,7 @@ PERSONAL = (
     "@task\n"
     "def scratch():\n"
     '    "Rides everywhere."\n\n'
-    "@task(needs_project=True)\n"
+    '@task(expose="project_only")\n'
     "def sync_repo():\n"
     '    "Needs a checkout."\n'
 )
@@ -1032,11 +1034,11 @@ def test_a_group_answers_for_its_subtree(tmp_path, monkeypatch):
     same tri-state `hidden` has."""
     body = (
         "from footman import group, task\n\n"
-        'ci = group("ci", needs_project=True)\n\n'
+        'ci = group("ci", expose="project_only")\n\n'
         "@ci.task\n"
         "def lint():\n"
         '    "Lint."\n\n'
-        "@ci.task(needs_project=False)\n"
+        '@ci.task(expose="always")\n'
         "def version():\n"
         '    "Print the version."\n'
     )
@@ -1056,7 +1058,7 @@ def test_completion_never_spells_out_what_cannot_run(tmp_path, monkeypatch):
 
     reg = registry.Group("root")
 
-    @reg.task(needs_project=True)
+    @reg.task(expose="project_only")
     def deploy(): ...
 
     @reg.task
@@ -1065,3 +1067,99 @@ def test_completion_never_spells_out_what_cannot_run(tmp_path, monkeypatch):
     tree = build_manifest(reg, project=False)["tree"]
     offered = {c.split("\t", 1)[0] for c in complete(tree, [""])}
     assert offered == {"scratch"}
+
+
+# --- expose: the third answer, and the axis's own rules ------------------------
+
+
+def test_global_only_is_withheld_inside_a_project():
+    """The answer the boolean could not express. `new` means nothing inside a
+    checkout, and until now nothing could say so — the axis only ever asked
+    about being *outside* one."""
+    from footman._manifest import build_manifest
+
+    reg = registry.Group("root")
+
+    @reg.task(expose="global_only")
+    def new(): ...
+
+    @reg.task(expose="project_only")
+    def deploy(): ...
+
+    @reg.task(expose="always")
+    def whoami(): ...
+
+    inside = build_manifest(reg, project=True)["tree"]["tasks"]
+    assert inside["new"]["unexposed"] is True  # withheld the other way
+    assert "unexposed" not in inside["deploy"]
+    assert "unexposed" not in inside["whoami"]
+
+    outside = build_manifest(reg, project=False)["tree"]["tasks"]
+    assert "unexposed" not in outside["new"]
+    assert outside["deploy"]["unexposed"] is True
+    assert "unexposed" not in outside["whoami"]
+
+
+def test_a_global_only_task_refuses_by_name_inside_a_project(tmp_path, monkeypatch):
+    # Refused for the true reason, in the direction the refusal actually
+    # came from — never a "no task named", because the task does exist.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n"
+        '@task(expose="global_only")\n'
+        "def bootstrap():\n"
+        '    """Set up a new project."""\n',
+        encoding="utf-8",
+    )
+    result = Runner().invoke("bootstrap", cwd=tmp_path)
+    assert not result.ok
+    assert "bootstrap runs only outside a project" in result.stderr
+    assert "no task named" not in result.stderr
+    assert "bootstrap" not in Runner().invoke("--list", cwd=tmp_path).stdout
+
+
+def test_expose_refuses_a_value_that_is_not_one_of_the_three():
+    reg = registry.Group("root")
+    with pytest.raises(registry.RegistrationError, match="expose='projectonly'"):
+
+        @reg.task(expose="projectonly")
+        def typo(): ...
+
+    with pytest.raises(registry.RegistrationError, match="always"):
+        registry.expose("nowhere")
+
+
+def test_the_decorator_and_the_parameter_say_the_same_thing():
+    reg = registry.Group("root")
+
+    @reg.task
+    @registry.expose("global_only")
+    def decorated(): ...
+
+    @reg.task(expose="global_only")
+    def parameterised(): ...
+
+    assert registry.declared_expose(decorated) == "global_only"
+    assert registry.declared_expose(parameterised) == "global_only"
+
+
+def test_sealing_claims_only_what_never_answered():
+    # The rung's promise applies to silence, never over a declaration —
+    # and a group's answer covers its subtree the way `hidden` does.
+    reg = registry.Group("root")
+
+    @reg.task
+    def unmarked(): ...
+
+    @reg.task(expose="always")
+    def spoke(): ...
+
+    inner = reg.group("inner", expose="global_only")
+
+    @inner.task
+    def under_a_group(): ...
+
+    registry.seal_expose(reg)  # the built-in rung's promise
+    assert registry.declared_expose(unmarked) == "project_only"
+    assert registry.declared_expose(spoke) == "always"
+    assert registry.declared_expose(under_a_group) == "global_only"
