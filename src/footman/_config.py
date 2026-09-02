@@ -66,7 +66,7 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "color",
         "`always` / `never` / `auto`",
         "`auto`",
-        "When to emit ANSI colour, for footman's own output and the tools it "
+        "When to emit ANSI colour, for {config}'s own output and the tools it "
         "spawns. `--color`/`--no-color` override it.",
     ),
     (
@@ -75,7 +75,7 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "`taskfile`",
         "Where tasks run by default: `taskfile` (the directory of the file "
         "that defined the task), `root` (the cascade's top), `asinvoked` "
-        "(where you typed the command), `unmanaged` (footman holds no "
+        "(where you typed the command), `unmanaged` ({config} holds no "
         "opinion), or an absolute path. A relative suffix belongs on a "
         "task's `rel=`.",
     ),
@@ -108,14 +108,14 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "`true` / `false`",
         "`true`",
         "`false` disables both uv handoffs: re-running through the project's "
-        "pinned footman, and the script environment of a tasks file carrying "
+        "pinned {config}, and the script environment of a tasks file carrying "
         "its own PEP 723 dependencies.",
     ),
     (
         "builtins.discovery_mode",
         "`auto` / `manual` / `internal` / `none`",
         "`auto`",
-        "How the built-in set is assembled: `auto` lets `fm self.*` keep the "
+        "How the built-in set is assembled: `auto` lets `{prog} self.*` keep "
         "discovered list current, `manual` leaves that list to you, "
         "`internal` ignores it, `none` drops the runner's own set too. "
         "`builtins.user` is honoured in every mode. **User-level only.**",
@@ -141,7 +141,7 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "notes",
         "table of levels",
         "per kind",
-        "Reclassify note kinds: `[tool.footman.notes]` maps `[task/]kind` "
+        "Reclassify note kinds: `[tool.{config}.notes]` maps `[task/]kind` "
         "patterns (either side `*`, most specific wins) to `trace` / `info` "
         "/ `warning` / `error` — `error` fails the task at its boundary. "
         "See the notes page.",
@@ -179,7 +179,7 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "`repo`",
         "How far discovery ranges for task files *and* config: this directory "
         "only, the repository, or across repositories. **User-level only**; "
-        "`FOOTMAN_CASCADE` overrides it per invocation.",
+        "`{env}_CASCADE` overrides it per invocation.",
     ),
 )
 

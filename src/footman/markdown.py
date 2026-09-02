@@ -26,6 +26,7 @@ from typing import Any
 from footman import _describe
 
 __all__ = [
+    "branded",
     "config_table",
     "globals_table",
     "notes_table",
@@ -34,18 +35,50 @@ __all__ = [
 ]
 
 
-def config_table() -> str:
-    """The `[tool.footman]` keys as a markdown pipe table.
+def branded(text: str, *, prog: str = "", config: str = "", env: str = "") -> str:
+    """Fill the brand placeholders in generated help text.
+
+    `{prog}` is the command someone types, `{config}` the `pyproject.toml`
+    table and standalone filename this runner reads, `{env}` its
+    environment-variable prefix. Empty arguments resolve from the
+    configured brand, so the ordinary call needs none of them.
+
+    This exists because a branded CLI documenting *footman's* table name
+    is not a cosmetic slip: a runner reads `[tool.<its own stem>]` and
+    nothing else, so telling an `acme` user to write `[tool.footman]`
+    documents a table `acme` never opens — settings that silently do
+    nothing. Entry-point names (`footman.tasks`, `footman.builtin`) are
+    identifiers every brand's providers advertise under, so they carry no
+    placeholder and must stay literal.
+    """
+    from footman import _paths
+
+    return (
+        text.replace("{prog}", prog or _paths.prog())
+        .replace("{config}", config or _paths.config_table())
+        .replace("{env}", env or _paths.env_prefix())
+    )
+
+
+def config_table(*, prog: str = "", config: str = "", env: str = "") -> str:
+    """This runner's config keys as a markdown pipe table.
 
     Rendered from `_config.KEYS`, the same list the runner recognises, so a
     docs page that regenerates this on each build can never describe a key
-    set footman doesn't have — nor miss one, which is how `cwd` stayed
-    undocumented for four releases.
+    set the runner doesn't have — nor miss one, which is how `cwd` stayed
+    undocumented for four releases. The brand's own words fill the
+    placeholders (`branded`), so a branded CLI's table names the table it
+    actually reads.
     """
     from footman import _config
 
     rows = [
-        (f"`{name}`", values, default, _cell(help_text))
+        (
+            f"`{name}`",
+            values,
+            default,
+            _cell(branded(help_text, prog=prog, config=config, env=env)),
+        )
         for name, values, default, help_text in _config.KEYS
     ]
     widths = [max(len(row[i]) for row in rows) for i in range(3)]
@@ -67,7 +100,7 @@ def config_table() -> str:
     return "\n".join(lines) + "\n"
 
 
-def notes_table() -> str:
+def notes_table(*, prog: str = "", config: str = "") -> str:
     """The note kinds as a markdown pipe table.
 
     Rendered from `_notes.KINDS`, the same registry the runtime resolves
@@ -81,7 +114,9 @@ def notes_table() -> str:
     rows = []
     for family, instance, default, help_text in _notes.KINDS:
         kind = f"`{family}:<{instance}>`" if instance else f"`{family}`"
-        rows.append((kind, f"`{default}`", _cell(help_text)))
+        rows.append(
+            (kind, f"`{default}`", _cell(branded(help_text, prog=prog, config=config)))
+        )
     widths = [max(len(row[i]) for row in rows) for i in range(2)]
     head = ("kind", "default")
     lines: list[str] = [

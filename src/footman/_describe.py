@@ -124,9 +124,12 @@ def docs_url_error(template: object) -> str | None:
     """The refusal a broken `docs_url` template earns, or None for a sound
     one — a link scheme that silently pointed nowhere would be worse than
     no links at all."""
+    from footman import _paths
+
     if not isinstance(template, str) or not template.strip():
         return (
-            "the [tool.footman] docs_url key is a URL template, e.g. "
+            f"the [tool.{_paths.config_table()}] docs_url key is a URL "
+            "template, e.g. "
             '"https://docs.example.dev/tasks/{path}/" — {path} is the '
             "slash-joined task address, {slug} the dash-joined one"
         )

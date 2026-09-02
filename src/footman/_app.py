@@ -2153,7 +2153,8 @@ def _execute(
         # `[tool.footman.plugins.<section>]` holds a provider's own settings.
         return _refuse(
             json_mode,
-            "the [tool.footman] plugins key was removed — mount plugins from "
+            f"the [tool.{_paths.config_table()}] plugins key was removed — "
+            "mount plugins from "
             'tasks.py instead: plugin("footman.docs", into="footman") '
             "(footman.compose.plugin; see the composing docs)",
         )
