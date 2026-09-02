@@ -248,6 +248,15 @@ def configure_child(
     )
 
 
+def prog() -> str:
+    """The command this CLI is invoked as — `fm`, or the brand's own.
+
+    Beside `config_table()` and `env_prefix()`: the three words generated
+    help text has to speak in the reader's brand rather than footman's.
+    """
+    return _prog
+
+
 def env_prefix() -> str:
     """The configured environment-variable prefix."""
     return _prefix

@@ -1200,3 +1200,78 @@ def test_dash_f_still_means_no_base(tmp_path, monkeypatch):
     out = acme.invoke("-f=only.py --list").stdout
     assert "solo" in out
     assert "new" not in out
+
+
+# --- generated help text speaks the reader's brand ----------------------------
+#
+# Not cosmetics: a runner reads `[tool.<its own stem>]` and nothing else, so
+# a branded CLI whose docs say `[tool.footman]` documents a table that runner
+# never opens — settings someone writes that silently do nothing.
+
+# Entry-point names are identifiers every brand's providers advertise under,
+# including a branded CLI's own. They are not footman-the-product appearing
+# where a brand belongs, and substituting them would break real mounts.
+_BRAND_NEUTRAL = ("footman.tasks", "footman.builtin", "footman.new", "footman.self")
+
+
+def _unbranded(text: str) -> list[str]:
+    """Lines still naming footman after the identifiers are set aside."""
+    stripped = text
+    for identifier in _BRAND_NEUTRAL:
+        stripped = stripped.replace(identifier, "«ep»")
+    return [
+        line
+        for line in stripped.splitlines()
+        if "footman" in line or "FOOTMAN" in line or "`fm " in line
+    ]
+
+
+def _as_acme(monkeypatch):
+    from footman import _paths
+
+    monkeypatch.setattr(_paths, "_prog", "acme", raising=False)
+    monkeypatch.setattr(_paths, "_config_name", "acme", raising=False)
+    monkeypatch.setattr(_paths, "_prefix", "ACME", raising=False)
+
+
+def test_the_config_table_speaks_the_brand(monkeypatch):
+    from footman import markdown
+
+    _as_acme(monkeypatch)
+    table = markdown.config_table()
+    assert "[tool.acme.notes]" in table  # the table this runner actually reads
+    assert "`acme self.*`" in table  # the command someone types
+    assert "ACME_CASCADE" in table  # the variable that exists for them
+    assert "acme holds no opinion" in table  # and the product's own name
+    assert not _unbranded(table), _unbranded(table)
+
+
+def test_the_notes_table_speaks_the_brand(monkeypatch):
+    from footman import markdown
+
+    _as_acme(monkeypatch)
+    table = markdown.notes_table()
+    assert "acme scoped the write" in table
+    assert not _unbranded(table), _unbranded(table)
+
+
+def test_stock_footman_still_says_footman():
+    # The substitution is per brand, not a rename: stock's own words are
+    # right for stock, and `footman` is exactly the longer name it pins
+    # against the two-letter command for prose like this.
+    from footman import markdown
+
+    table = markdown.config_table()
+    assert "[tool.footman.notes]" in table
+    assert "footman holds no opinion" in table
+    assert "FOOTMAN_CASCADE" in table
+
+
+def test_the_refusals_name_the_brands_own_table(monkeypatch):
+    from footman import _describe, _notes
+
+    _as_acme(monkeypatch)
+    assert "[tool.acme]" in (_notes.validate("not a table") or "")
+    assert "[tool.acme.notes]" in (_notes.validate({"getcwd": "loud"}) or "")
+    assert "[tool.acme.notes]" in (_notes.validate({"nosuchkind": "info"}) or "")
+    assert "[tool.acme]" in (_describe.docs_url_error("") or "")

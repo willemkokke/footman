@@ -45,7 +45,7 @@ KINDS: tuple[tuple[str, str, str, str], ...] = (
         "environ-write",
         "variable",
         "info",
-        "A task sets a variable via `os.environ`. footman scoped the write "
+        "A task sets a variable via `os.environ`. {config} scoped the write "
         "to the task (children see it, siblings don't); say it on purpose "
         "with `env=` or `ctx.env`.",
     ),
@@ -53,7 +53,7 @@ KINDS: tuple[tuple[str, str, str, str], ...] = (
         "popen-inject",
         "program",
         "warning",
-        "A task spawns via raw `subprocess` and footman filled in `cwd`/"
+        "A task spawns via raw `subprocess` and {config} filled in `cwd`/"
         "`env` from the task context. Prefer `run()` for capture and "
         "reporting, or pass `cwd=`/`env=` to make it deliberate.",
     ),
@@ -159,15 +159,21 @@ def validate(table: object) -> str | None:
     checked). Values are levels. Anything else is refused by name — an
     ignored policy line is a wall someone thinks is up.
     """
+    from footman import _paths
+
+    # This runner's table, not footman's: a branded CLI reads
+    # `[tool.<its own stem>]` and nothing else, so naming footman's here
+    # would send someone to configure a table their runner never opens.
+    stem = _paths.config_table()
     if not isinstance(table, dict):
         return (
-            "the [tool.footman] notes key is a table of levels — "
-            '[tool.footman.notes] with entries like "popen-inject" = "error"'
+            f"the [tool.{stem}] notes key is a table of levels — "
+            f'[tool.{stem}.notes] with entries like "popen-inject" = "error"'
         )
     for key, value in table.items():
         if not isinstance(value, str) or value not in LEVELS:
             return (
-                f"[tool.footman.notes] {key} = {value!r}: the level is one "
+                f"[tool.{stem}.notes] {key} = {value!r}: the level is one "
                 f"of {', '.join(LEVELS)}"
             )
         _, kind_pat = _split_key(str(key))
@@ -175,7 +181,7 @@ def validate(table: object) -> str | None:
         if family != "*" and family not in _FAMILIES:
             known = ", ".join(sorted(_FAMILIES))
             return (
-                f"[tool.footman.notes] {key}: unknown note kind "
+                f"[tool.{stem}.notes] {key}: unknown note kind "
                 f"{family!r} — the kinds are {known} (see the notes docs "
                 f"page), '*' for all"
             )
@@ -313,9 +319,11 @@ def boundary_error(ctx: Context) -> BannedNotes | None:
     )
     count = len(banned)
     plural = "note" if count == 1 else "notes"
+    from footman import _paths
+
     return BannedNotes(
         f"{count} banned {plural}: {listed} — fix the site, or classify a "
-        f"known-harmless instance in [tool.footman.notes]"
+        f"known-harmless instance in [tool.{_paths.config_table()}.notes]"
     )
 
 

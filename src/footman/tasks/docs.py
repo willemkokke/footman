@@ -1338,15 +1338,18 @@ def config(
     out: Annotated[
         Path | None, doc("file to write the table into; omitted = stdout")
     ] = None,
+    prog: Annotated[str, _invoking_cli, doc("command name in the table")] = "",
 ) -> list[str] | None:
-    """Render the `[tool.footman]` keys as a markdown table.
+    """Render this runner's config keys as a markdown table.
 
     The rows come from the runner's own list of recognised keys, so a
     reference page that regenerates this on each docs build can neither
-    describe a key footman lacks nor miss one it has. Without --out the
-    table is the task's stdout; with --out it is written to the file.
+    describe a key the runner lacks nor miss one it has — and it names the
+    table *this* runner reads (`[tool.acme]` under a branded CLI), because
+    a runner opens its own table and no other. Without --out the table is
+    the task's stdout; with --out it is written to the file.
     """
-    text = markdown.config_table()
+    text = markdown.config_table(prog=prog)
     if out is None:
         print(text, end="")
         return None
@@ -1361,6 +1364,7 @@ def notes(
     out: Annotated[
         Path | None, doc("file to write the table into; omitted = stdout")
     ] = None,
+    prog: Annotated[str, _invoking_cli, doc("command name in the table")] = "",
 ) -> list[str] | None:
     """Render the note kinds as a markdown table.
 
@@ -1370,7 +1374,7 @@ def notes(
     neither list a kind footman lacks nor miss one it has. Without --out
     the table is the task's stdout; with --out it is written to the file.
     """
-    text = markdown.notes_table()
+    text = markdown.notes_table(prog=prog)
     if out is None:
         print(text, end="")
         return None

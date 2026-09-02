@@ -7,6 +7,34 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A branded CLI's generated help no longer documents footman's config
+  table.** `acme docs.config` rendered the notes key as
+  `[tool.footman.notes]`, and twelve other strings named footman's
+  product name, command or environment prefix in a runner that is not
+  footman. This was never cosmetic: a runner reads
+  `[tool.<its own stem>]` and nothing else, so telling an `acme` user to
+  write `[tool.footman.notes]` documents a table `acme` never opens —
+  settings someone writes that silently do nothing, which is the failure
+  mode footman refuses everywhere else.
+
+  The config and notes tables now fill `{prog}`, `{config}` and `{env}`
+  from the invoking brand, exactly as the globals table has always filled
+  `{prog}`; the runtime refusals (`plugins`, `docs_url`, the notes and
+  `[builtins]` validators, the banned-notes boundary failure) interpolate
+  the brand directly. Stock footman's own output is unchanged, because
+  the substitution is per brand rather than a rename — and prose takes
+  the *product* word (`footman`, the longer name pinned against the
+  two-letter command) while only real command lines take `fm`.
+
+  Entry-point names — `footman.tasks`, `footman.builtin`, `footman.new`,
+  `footman.self` — stay literal: they are identifiers every brand's own
+  providers advertise under, and substituting them would break real
+  mounts. A branding test renders both tables under a brand and fails on
+  any bare `footman`/`fm` with those identifiers set aside, so the next
+  key someone adds cannot quietly reintroduce this.
+
 ## [0.49.0] - 2026-09-02
 
 ### Added
