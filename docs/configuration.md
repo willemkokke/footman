@@ -71,8 +71,36 @@ directories, each honouring its `XDG_*` variable:
 | Directory | Default | What lives there |
 | --------- | ------- | ---------------- |
 | Cache | `~/.cache/footman/` (`XDG_CACHE_HOME`) | Derived data, safe to delete: completion manifests, timing history, `fetch()` downloads. The cache collector sweeps this directory and nothing else. |
-| Data | `~/.local/share/` (`XDG_DATA_HOME`) | Durable files that survive every cache sweep — the installed completion hooks live at `fm/completion.*` in here. |
+| Data | `~/.local/share/footman/` (`XDG_DATA_HOME`) | Durable machine-local state that survives every cache sweep. |
 | Config | `~/.config/footman/` (`XDG_CONFIG_HOME`) | Your own writing: the user-level `config.toml` and the user-level tasks file, which travel together. |
+
+The **completion hooks are the one thing outside all three**: they live at
+`<data home>/<command>/completion.*` — `~/.local/share/fm/completion.zsh`,
+not `~/.local/share/footman/` — because they are keyed by the command you
+type rather than the config name. `fm --uninstall-completion` and
+`fm self.uninstall` both remove them.
+
+### What footman reserves
+
+A plugin is welcome in these directories — `footman.data_dir()` is there so
+you do not have to invent a home of your own — so here is exactly what the
+runner claims, and what is therefore yours:
+
+| Directory | footman writes | free for you |
+| --------- | -------------- | ------------ |
+| `cache_dir()` | `<key>.json` and `<key>.times.json` (completion manifests and timing history), `global-<key>.json`, `gc.stamp`, and the `fetch/` folder | any other name — but the collector sweeps this directory by age, so nothing you would mind losing |
+| `data_dir()` | `builtins.json` | any other name |
+| `config_dir()` | nothing — footman only ever *reads* `config.toml` and the tasks file here | your own files, though footman will not read them |
+
+The safe convention is **one subfolder named after your distribution** —
+`data_dir() / "acme-devkit" / …` — which cannot collide with a future
+reserved name, since anything footman adds will be a file or folder named
+for what it does.
+
+Two things to know before you settle in. `cache_dir()` is swept by age, so
+it is for things you can rebuild and nothing else. And `fm self.uninstall`
+removes the cache and data directories **whole**, plugin state included —
+the price of living in the runner's home rather than your own.
 
 The spellings are the same on every operating system — the convention uv,
 ruff, and git's own XDG support follow — so on Windows everything lives

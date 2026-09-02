@@ -246,3 +246,50 @@ def test_path_reports_through_json(tmp_path, monkeypatch):
     envelope = json.loads(result.stdout)
     (item,) = [i for i in envelope["items"] if i.get("task") == "self.path"]
     assert "cache" in item["returned"]
+
+
+def test_uninstall_removes_the_completion_hooks(
+    tool_env, spawned, monkeypatch, tmp_path
+):
+    """The hooks are not under `data_dir()` — they sit beside it, keyed by
+    the command name rather than the config stem. Clearing the data
+    directory left them behind with their rc lines still sourcing a script
+    that was gone, which every new shell then complained about."""
+    from footman import _paths, _shellcomp
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    hook = _shellcomp.hook_path("zsh", _paths.prog())
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("# a hook\n", encoding="utf-8")
+    assert not str(hook).startswith(str(_paths.footman_data_dir()))  # beside, not in
+
+    removed: list[tuple[str, str]] = []
+
+    def fake_uninstall(shell: str, prog: str) -> list[str]:
+        removed.append((shell, prog))
+        return [f"removed {shell}"]
+
+    monkeypatch.setattr(_shellcomp, "uninstall", fake_uninstall)
+    self_.uninstall()
+    assert removed == [("zsh", _paths.prog())]  # only the shell that had one
+
+
+def test_uninstall_leaves_untouched_shells_alone(
+    tool_env, spawned, monkeypatch, tmp_path
+):
+    # A script on disk is the evidence an rc line was written; without one,
+    # nothing edits that shell's rc.
+    from footman import _shellcomp
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    touched: list[str] = []
+
+    def fake_uninstall(shell: str, prog: str) -> list[str]:
+        touched.append(shell)
+        return []
+
+    monkeypatch.setattr(_shellcomp, "uninstall", fake_uninstall)
+    self_.uninstall()
+    assert touched == []

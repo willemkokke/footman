@@ -234,13 +234,20 @@ def uninstall(
 ) -> None:
     """Take this CLI off your PATH, and clear what it left behind.
 
-    uv removes the tool environment; footman removes its own leavings — the
-    cache, the data directory (completion hooks, the discovered built-in
-    list). **Your config is kept** unless you ask for `--purge`: it is your
+    uv removes the tool environment; this removes what the runner placed
+    outside it — the completion hooks (the script *and* its line in your
+    shell's rc, or the rc would go on sourcing a file that is gone), the
+    cache, and the data directory.
+
+    **Your config is kept** unless you ask for `--purge`: it is your
     writing, and deleting it silently would be the one unforgivable step of
-    an uninstall.
+    an uninstall. The data directory is shared, though — a plugin keeping
+    state under `data_dir()` loses it here, which is the price of living in
+    the runner's home instead of inventing one.
     """
     run([_uv(), "tool", "uninstall", _dist()], nofail=True)
+    for line in _remove_hooks():
+        print(line)
     gone = []
     for folder in (_paths.footman_cache_dir(), _paths.footman_data_dir()):
         if folder.is_dir():
@@ -253,6 +260,30 @@ def uninstall(
         print(f"removed {where}")
     if not purge:
         print(f"kept {_paths.footman_config_dir()} (--purge removes it too)")
+
+
+def _remove_hooks() -> list[str]:
+    """Uninstall every shell completion hook this runner installed.
+
+    The hooks do **not** live under `data_dir()` — they sit *beside* it, at
+    `<data home>/<prog>/completion.*`, keyed by the command name rather than
+    the config stem (`~/.local/share/fm/` next to `~/.local/share/footman/`).
+    Clearing the data directory therefore left them in place, and their rc
+    lines with them, sourcing a script that no longer existed — which every
+    new shell then complained about.
+
+    Only shells that actually have a script are touched: the script is the
+    evidence an rc line was written, so nothing edits the rc of a shell this
+    runner never installed into.
+    """
+    from footman import _shellcomp
+
+    prog = _paths.prog()
+    said: list[str] = []
+    for shell in _shellcomp.SHELLS:
+        if _shellcomp.hook_path(shell, prog).is_file():
+            said += _shellcomp.uninstall(shell, prog)
+    return said
 
 
 # --- where things are ---------------------------------------------------------

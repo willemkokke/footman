@@ -9,6 +9,19 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **`fm self.uninstall` really removes the completion hooks now.** It
+  claimed to, and did not: the hooks live at
+  `<data home>/<command>/completion.*` — keyed by the command you type —
+  while uninstall cleared `data_dir()`, which is keyed by the config name.
+  `~/.local/share/fm/completion.zsh` survived beside
+  `~/.local/share/footman/`, and its line in your shell's rc survived with
+  it, sourcing a script that was gone: an error on every new shell. It
+  now uninstalls each hook properly, script and rc line together, and only
+  for shells that actually have one — a script on disk is the evidence an
+  rc line was written, so no shell's rc is edited on spec.
+  The path is spelled once now (`_shellcomp.hook_path`) rather than three
+  times, which retires the comment warning that install and uninstall had
+  to be kept in step by hand.
 - **A branded CLI's generated help no longer documents footman's config
   table.** `acme docs.config` rendered the notes key as
   `[tool.footman.notes]`, and twelve other strings named footman's
@@ -18,7 +31,6 @@ versions may include breaking changes.
   write `[tool.footman.notes]` documents a table `acme` never opens —
   settings someone writes that silently do nothing, which is the failure
   mode footman refuses everywhere else.
-
   The config and notes tables now fill `{prog}`, `{config}` and `{env}`
   from the invoking brand, exactly as the globals table has always filled
   `{prog}`; the runtime refusals (`plugins`, `docs_url`, the notes and
@@ -27,13 +39,27 @@ versions may include breaking changes.
   the substitution is per brand rather than a rename — and prose takes
   the *product* word (`footman`, the longer name pinned against the
   two-letter command) while only real command lines take `fm`.
-
   Entry-point names — `footman.tasks`, `footman.builtin`, `footman.new`,
   `footman.self` — stay literal: they are identifiers every brand's own
   providers advertise under, and substituting them would break real
   mounts. A branding test renders both tables under a brand and fails on
   any bare `footman`/`fm` with those identifiers set aside, so the next
   key someone adds cannot quietly reintroduce this.
+
+### Documentation
+
+- **What footman reserves inside its own directories is written down.**
+  `data_dir()` and `config_dir()` are public, so a plugin should keep its
+  state in the runner's home rather than inventing one — but until now the
+  only way to know which names were already taken was to read the source.
+  The configuration page lists them per directory, names the convention
+  that cannot collide (one subfolder called after your distribution), and
+  states the two things worth knowing before settling in: the cache is
+  swept by age, and `self.uninstall` removes the cache and data
+  directories whole, plugin state included. It also corrects the data row,
+  which pointed at the data *home* rather than the data directory, and
+  says plainly that the completion hooks are the one thing living outside
+  all three.
 
 ## [0.49.0] - 2026-09-02
 
