@@ -1044,6 +1044,48 @@ def data_dir() -> Path:
     return _make(_paths.footman_data_dir(), mode=0o700)
 
 
+def config_dir() -> Path:
+    """This CLI's config directory — *your* writing, never footman's.
+
+    The user-level config file and the user-level tasks file live here and
+    travel together. Unlike `cache_dir()` and `data_dir()` this one is
+    **not** created on demand: an empty config directory says something
+    different from a missing one, and inventing it would be footman
+    writing where only you should.
+    """
+    from footman import _paths
+
+    return _paths.footman_config_dir()
+
+
+def config_file() -> Path:
+    """The user-level config file — `~/.config/<brand>/config.toml` by
+    default. May not exist; a runner with no config is the ordinary case."""
+    from footman import _paths
+
+    return _paths.footman_config_file()
+
+
+def user_tasks_file() -> Path:
+    """The user-level tasks file: the cascade's outermost writable rung,
+    riding every project. May not exist."""
+    from footman import _paths
+
+    return _paths.user_tasks_file(_paths.tasks_file_name())
+
+
+def project_root() -> Path | None:
+    """The top of this invocation's task cascade, or `None` outside a
+    project.
+
+    The same answer `--json` reports and the `root` cwd policy resolves
+    against — never a guess from the current directory, which may be
+    anywhere beneath it.
+    """
+    root = current().root_dir
+    return Path(root) if root else None
+
+
 def _make(path: Path, mode: int | None = None) -> Path:
     """Return *path*, having made sure it exists.
 

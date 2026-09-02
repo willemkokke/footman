@@ -767,12 +767,25 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
     ),
     (
         "Where a task keeps things",
-        "Two folders, both created on access. `cache_dir()` is derived data "
-        "the collector sweeps by age; `data_dir()` is durable and "
-        "machine-local — credentials, tokens, generated assets — and is never "
-        "collected. Where each one lands is the CLI's business, not the "
-        "task's; see [Custom CLIs](custom-cli.md#two-folders-of-your-own).",
-        ["cache_dir", "data_dir"],
+        "Two folders footman writes, both created on access. `cache_dir()` "
+        "is derived data the collector sweeps by age; `data_dir()` is "
+        "durable and machine-local — credentials, tokens, generated assets "
+        "— and is never collected. The rest are places footman *reads*, "
+        "created by nobody but you: `config_dir()` and `config_file()` are "
+        "your user-level settings, `user_tasks_file()` the personal rung "
+        "riding every project, and `project_root()` the top of this "
+        "invocation's cascade (`None` outside a project). `fm self.path` "
+        "is the same set from the command line. Where each one lands is the "
+        "CLI's business, not the task's; see "
+        "[Custom CLIs](custom-cli.md#two-folders-of-your-own).",
+        [
+            "cache_dir",
+            "data_dir",
+            "config_dir",
+            "config_file",
+            "user_tasks_file",
+            "project_root",
+        ],
     ),
     ("Fetching", "", ["fetch", "FetchError"]),
     (

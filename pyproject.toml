@@ -67,6 +67,7 @@ footman = "footman.pytest_plugin"
 "footman.docs" = "footman.tasks.docs:tasks"
 "footman.env_files" = "footman.env_files"
 "footman.new" = "footman.tasks.new"
+"footman.self" = "footman.tasks.self_:tasks"
 "footman.profile" = "footman.profile"
 
 [tool.footman]

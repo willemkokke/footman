@@ -49,6 +49,8 @@ if TYPE_CHECKING:
     from footman.context import cache_dir as cache_dir
     from footman.context import chdir as chdir
     from footman.context import colored as colored
+    from footman.context import config_dir as config_dir
+    from footman.context import config_file as config_file
     from footman.context import confirm as confirm
     from footman.context import cwd as cwd
     from footman.context import data_dir as data_dir
@@ -59,6 +61,7 @@ if TYPE_CHECKING:
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
     from footman.context import progress as progress
+    from footman.context import project_root as project_root
     from footman.context import prompt as prompt
     from footman.context import run as run
     from footman.context import section as section
@@ -67,6 +70,7 @@ if TYPE_CHECKING:
     from footman.context import track as track
     from footman.context import tty as tty
     from footman.context import use_context as use_context
+    from footman.context import user_tasks_file as user_tasks_file
     from footman.invocation import Invocation as Invocation
     from footman.params import Arg as Arg
     from footman.params import Exists as Exists
@@ -121,7 +125,7 @@ if TYPE_CHECKING:
 
 __version__ = "0.48.0"
 
-BUILTIN = ("footman.new",)
+BUILTIN = ("footman.new", "footman.self")
 """Stock footman's built-in task providers — what a project-less `fm` offers.
 
 Named here, beside `main()`, because BOTH doors need it: the `App` the
@@ -170,6 +174,8 @@ __all__ = [
     "chdir",
     "check",
     "colored",
+    "config_dir",
+    "config_file",
     "config_section",
     "confirm",
     "console_lane",
@@ -208,6 +214,7 @@ __all__ = [
     "pre_task",
     "pre_tasks",
     "progress",
+    "project_root",
     "prompt",
     "recording",
     "requires",
@@ -226,6 +233,7 @@ __all__ = [
     "track",
     "tty",
     "use_context",
+    "user_tasks_file",
     "wrap_bind",
     "wrap_task",
 ]
@@ -419,6 +427,10 @@ def __getattr__(name: str) -> object:
         "colored",
         "cwd",
         "data_dir",
+        "config_dir",
+        "config_file",
+        "user_tasks_file",
+        "project_root",
         "select",
         "track",
         "RunFailed",

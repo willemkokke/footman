@@ -7,98 +7,42 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-### Changed
-
-- **`builtin` becomes the `[builtins]` table, and `builtin = true` is
-  gone.** The single key made footman and you write the same list: the
-  moment a tool wrote a name into it, neither side could tell its entries
-  from yours. There are now three sources, mounted in that order and
-  deduplicated — the runner's own set (declared in code, so it can never
-  go stale against an upgrade), the list discovery wrote, and
-  `builtins.user`, which only you write and footman only reads.
-  `builtins.discovery_mode` says which contribute: `auto` (the default),
-  `manual`, `internal`, or `none`. `builtins.user` is honoured in every
-  one of them, so `none` is not an off switch — it means *nothing
-  automatic, only exactly what I named*, and naming `footman.self` brings
-  the runner's own commands back.
-
-  **The discovered list lives in the data directory**, not in your config
-  file, so "do not hand-edit this" is true by construction: footman
-  replaces one small file it owns rather than rewriting a table inside a
-  file you also write — which, with no TOML writer in the standard
-  library, would have meant losing your comments.
-
-  `builtin = true` shipped in 0.48.0 and goes out again here. It resolved
-  its list on **every invocation**, and the enumeration it needed costs
-  ~20 ms of a ~75 ms run, forever, for a set that changes when you install
-  something. That work now happens once, in `fm self.*`, which writes the
-  result down. It also swept in the runner's *own* entry points — on a
-  stock install it would have mounted footman's docs, env-file and profile
-  providers, two of which exist to contribute global options rather than
-  task trees.
-
-  Migration: `builtin = ["x"]` → `[builtins]` with `user = ["x"]`;
-  `builtin = true` → let `fm self.add` write the list, or name the
-  packages under `user`.
-
-- **Built-in tasks are part of the cascade.** They used to be mounted
-  only where discovery found no project, so the moment a tasks file
-  turned up they were not there at all — a runner's own commands
-  vanished at the doorstep of every project, and reaching one meant
-  `plugin("…")` in that project's tasks file. The built-in set is now
-  the cascade's **outermost rung**: under the user tasks file, under the
-  project's own, reachable wherever you stand, with everything nearer
-  shadowing it by name exactly as the cascade already resolves its own
-  rungs. A project that wants a set placed somewhere of its own still
-  mounts it deliberately, and `-f` still means total control — one file,
-  no cascade, no base.
-
-  `expose` is what makes this safe in both directions, and why it had to
-  land first: a package's tasks are `project_only` until one opts out, so
-  nothing appears outside a project that did not say it belonged there,
-  and `global_only` keeps a task that only makes sense *before* a project
-  out of every project. The "it's built in, mount it" remedy is gone —
-  there is nothing left to teach, because the task is simply there.
-
-  Measured on footman's own repo: `fm --list` 80 ms before, 76 ms after —
-  the extra rung is noise, because a built-in provider imports like any
-  other tasks file.
-- **`fm new` says `global_only`.** Writing a starter tasks file is what
-  you do *before* a project exists, and it used to rely on simply not
-  being mounted inside one — which stopped being true the moment
-  built-ins joined the cascade. It now says so itself, so the answer
-  travels with the task rather than with the rung: inside a project it is
-  unlisted and refused by name, even where a tasks file mounted it
-  deliberately. It also reads its own success — the file it writes is
-  what makes the directory a project, so a second `fm new` steps aside
-  instead of reaching the overwrite guard.
-
-- **`needs_project` becomes `expose`, and gains the answer it was
-  missing.** The boolean could say "this needs a project" and nothing
-  else, because it was asked in only one place — the built-in set was
-  mounted exclusively where discovery found none, so both of its answers
-  included being *inside* a project. `expose` says where a task is
-  offered outright: `"always"`, `"project_only"` (the old
-  `needs_project=True`), or `"global_only"` — a task that only makes
-  sense *before* a project exists, like creating one, which nothing
-  could express before. Whichever side a task does not belong on, it is
-  unlisted, uncompleted and refused **by name** with the direction it
-  was withheld from, never a "no task named".
-
-  `@task(expose=…)` and `group(…, expose=…)` take it, and `@expose(…)`
-  is the decorator spelling for authors who keep their gates above the
-  signature. It stays tri-state like `hidden` — unset inherits the
-  enclosing group — and the **rungs keep their opposite defaults**: a
-  package's tasks are `project_only` until one says otherwise, a
-  personal tasks file rides everywhere. A value that is not one of the
-  three is refused at registration, where a typo would otherwise read as
-  silence and put a task somewhere its author meant to keep it out of.
-
-  Migration is mechanical: `needs_project=True` → `expose="project_only"`,
-  `needs_project=False` → `expose="always"`. Manifest schema 9.
-
 ### Added
 
+- **`fm self.*` — the runner manages its own installation.** Four verbs
+  and a question, replacing the `--self-install` flag: `self.install`
+  puts the CLI on your PATH or brings it up to date, `self.add <pkg>…`
+  installs packages beside it (and, under the default discovery mode,
+  records the built-in tasks they advertise, so their commands answer
+  straight away), `self.remove <pkg>…` drops them, `self.uninstall`
+  takes the whole thing off, and `self.path` says where the runner keeps
+  things. Once there was more than one verb, a set of global flags was
+  the wrong container: these are commands, with their own options, help,
+  completion and `--json`.
+  **`add` and `remove` are additive**, which the flag never could be: uv
+  rewrites a tool environment from the requirements it is *given*, so an
+  upgrade that forgot your extras would silently drop them. Both read
+  uv's own receipt first and hand the whole set back, and `remove`
+  completes from exactly what is there to drop — never the runner's own
+  distribution or the bundled `uv`, and a name that was never added is
+  refused rather than passed to uv. `self.uninstall` clears footman's
+  leavings (cache, data, completion hooks) but **keeps your config**
+  unless you ask for `--purge`.
+  `self.path` prints one bare line when named (`DIR=$(fm self.path
+  data)`), every location when not, and returns the whole mapping under
+  `--json` so a script that wants three of them makes one call.
+- **Four more places a task can ask about.** `config_dir()`,
+  `config_file()`, `user_tasks_file()` and `project_root()` join
+  `cache_dir()` and `data_dir()` in the public API — `fm self.path` is
+  the same set from the command line, and a task never has to shell out
+  to learn where its own config lives.
+- **The `footman.builtin` entry-point group.** A package advertises there
+  to say "I am meant to be mounted as a built-in", not merely mountable.
+  Discovery reads it at `self.*` time; whether a candidate is actually
+  mounted stays the machine owner's call through
+  `builtins.discovery_mode`, so a package cannot mount itself simply by
+  being installed — which matters because in a project environment every
+  dependency shares one metadata space.
 - **`prompt(type=…)` — the parameter type language as the prompt's
   validator.** The answer runs through the same coercion pipeline a flag
   does — `int`, `Path`, an enum, `Literal[…]`, a union, or `Annotated[…]`
@@ -125,6 +69,95 @@ versions may include breaking changes.
   these read the real streams and the run's declared intent. `Context`
   additionally carries the new `terminal` stamp (`tty` minus colour
   policy), which the scheduler sets per task.
+
+### Removed
+
+- **`--self-install`.** It is `fm self.install` now: one spelling, and
+  the options the flag was about to grow have a proper home. Being a
+  task rather than a global is also why built-ins had to join the
+  cascade — a self-management command that vanished the moment you
+  stepped into a project would be useless exactly where you reach for it.
+
+### Changed
+
+- **`builtin` becomes the `[builtins]` table, and `builtin = true` is
+  gone.** The single key made footman and you write the same list: the
+  moment a tool wrote a name into it, neither side could tell its entries
+  from yours. There are now three sources, mounted in that order and
+  deduplicated — the runner's own set (declared in code, so it can never
+  go stale against an upgrade), the list discovery wrote, and
+  `builtins.user`, which only you write and footman only reads.
+  `builtins.discovery_mode` says which contribute: `auto` (the default),
+  `manual`, `internal`, or `none`. `builtins.user` is honoured in every
+  one of them, so `none` is not an off switch — it means *nothing
+  automatic, only exactly what I named*, and naming `footman.self` brings
+  the runner's own commands back.
+  **The discovered list lives in the data directory**, not in your config
+  file, so "do not hand-edit this" is true by construction: footman
+  replaces one small file it owns rather than rewriting a table inside a
+  file you also write — which, with no TOML writer in the standard
+  library, would have meant losing your comments.
+  `builtin = true` shipped in 0.48.0 and goes out again here. It resolved
+  its list on **every invocation**, and the enumeration it needed costs
+  ~20 ms of a ~75 ms run, forever, for a set that changes when you install
+  something. That work now happens once, in `fm self.*`, which writes the
+  result down. It also swept in the runner's *own* entry points — on a
+  stock install it would have mounted footman's docs, env-file and profile
+  providers, two of which exist to contribute global options rather than
+  task trees.
+  Migration: `builtin = ["x"]` → `[builtins]` with `user = ["x"]`;
+  `builtin = true` → let `fm self.add` write the list, or name the
+  packages under `user`.
+- **Built-in tasks are part of the cascade.** They used to be mounted
+  only where discovery found no project, so the moment a tasks file
+  turned up they were not there at all — a runner's own commands
+  vanished at the doorstep of every project, and reaching one meant
+  `plugin("…")` in that project's tasks file. The built-in set is now
+  the cascade's **outermost rung**: under the user tasks file, under the
+  project's own, reachable wherever you stand, with everything nearer
+  shadowing it by name exactly as the cascade already resolves its own
+  rungs. A project that wants a set placed somewhere of its own still
+  mounts it deliberately, and `-f` still means total control — one file,
+  no cascade, no base.
+  `expose` is what makes this safe in both directions, and why it had to
+  land first: a package's tasks are `project_only` until one opts out, so
+  nothing appears outside a project that did not say it belonged there,
+  and `global_only` keeps a task that only makes sense *before* a project
+  out of every project. The "it's built in, mount it" remedy is gone —
+  there is nothing left to teach, because the task is simply there.
+  Measured on footman's own repo: `fm --list` 80 ms before, 76 ms after —
+  the extra rung is noise, because a built-in provider imports like any
+  other tasks file.
+- **`fm new` says `global_only`.** Writing a starter tasks file is what
+  you do *before* a project exists, and it used to rely on simply not
+  being mounted inside one — which stopped being true the moment
+  built-ins joined the cascade. It now says so itself, so the answer
+  travels with the task rather than with the rung: inside a project it is
+  unlisted and refused by name, even where a tasks file mounted it
+  deliberately. It also reads its own success — the file it writes is
+  what makes the directory a project, so a second `fm new` steps aside
+  instead of reaching the overwrite guard.
+- **`needs_project` becomes `expose`, and gains the answer it was
+  missing.** The boolean could say "this needs a project" and nothing
+  else, because it was asked in only one place — the built-in set was
+  mounted exclusively where discovery found none, so both of its answers
+  included being *inside* a project. `expose` says where a task is
+  offered outright: `"always"`, `"project_only"` (the old
+  `needs_project=True`), or `"global_only"` — a task that only makes
+  sense *before* a project exists, like creating one, which nothing
+  could express before. Whichever side a task does not belong on, it is
+  unlisted, uncompleted and refused **by name** with the direction it
+  was withheld from, never a "no task named".
+  `@task(expose=…)` and `group(…, expose=…)` take it, and `@expose(…)`
+  is the decorator spelling for authors who keep their gates above the
+  signature. It stays tri-state like `hidden` — unset inherits the
+  enclosing group — and the **rungs keep their opposite defaults**: a
+  package's tasks are `project_only` until one says otherwise, a
+  personal tasks file rides everywhere. A value that is not one of the
+  three is refused at registration, where a typo would otherwise read as
+  silence and put a task somewhere its author meant to keep it out of.
+  Migration is mechanical: `needs_project=True` → `expose="project_only"`,
+  `needs_project=False` → `expose="always"`. Manifest schema 9.
 
 ### Documentation
 

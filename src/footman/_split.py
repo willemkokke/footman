@@ -448,10 +448,6 @@ CORE_OPTIONS: tuple[_CoreOption, ...] = (
         default="",
         help="remove the completion hook",
     ),
-    _CoreOption(
-        "self-install",
-        help="install this CLI on your PATH with uv, or bring it up to date",
-    ),
 )
 
 GlobalDefault = str | Callable[[], object] | None
