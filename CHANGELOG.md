@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-09-02
+
 ### Added
 
 - **`fm self.*` — the runner manages its own installation.** Four verbs
@@ -6061,7 +6063,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.48.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/willemkokke/footman/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/willemkokke/footman/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/willemkokke/footman/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/willemkokke/footman/compare/v0.45.0...v0.46.0

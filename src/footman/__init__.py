@@ -123,7 +123,7 @@ if TYPE_CHECKING:
     from footman.testing import Runner as Runner
     from footman.testing import recording as recording
 
-__version__ = "0.48.0"
+__version__ = "0.49.0"
 
 BUILTIN = ("footman.new", "footman.self")
 """Stock footman's built-in task providers — what a project-less `fm` offers.
