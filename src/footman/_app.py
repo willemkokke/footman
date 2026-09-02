@@ -342,42 +342,6 @@ def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
     return base
 
 
-def _builtin_remedy(unknown: str) -> str:
-    """The fix, when an unknown task is one of the brand's built-ins: the
-    built-ins exist only outside a project, and the ordinary mount brings
-    the set into this one — a real remedy precisely because the set is an
-    ordinary entry point. Empty when the name is nobody's."""
-    from footman import compose
-
-    def addresses(node: object, prefix: str) -> list[str]:
-        if not isinstance(node, registry.Group):
-            return [prefix.rstrip(".")] if prefix else []
-        out: list[str] = [f"{prefix}{name}" for name in node.tasks]
-        for name, sub in node.groups.items():
-            out.extend(addresses(sub, f"{prefix}{name}."))
-        return out
-
-    for name in _builtin():
-        try:
-            _ident, node = compose._resolve_plugin(name)
-        except Exception:
-            continue  # an unmountable entry teaches at mount time, not here
-        if isinstance(node, registry.Group):
-            # An anonymous container mounts its children at the top level;
-            # a named group lands under its own name — the same landing
-            # rule `plugin()` applies, so the remedy speaks real addresses.
-            start = "" if node.name == "root" else f"{node.name}."
-            known = addresses(node, start)
-        else:
-            known = [name.rsplit(".", 1)[-1]]
-        if unknown in known:
-            return (
-                f" — {unknown!r} is built into {_brand.prog} via {name!r}; "
-                f"mount it in this project's tasks file: plugin({name!r})"
-            )
-    return ""
-
-
 def _discover_files(
     g: dict[str, object], wants_help: bool, bare: bool
 ) -> Discovery | int:
@@ -2203,12 +2167,19 @@ def _execute(
     json_mode = bool(g.get("json"))
 
     base = registry.Group("root")
-    if (base_set := _builtin()) and not found.root and not g.get("tasks_file"):
-        # No project: the brand's built-ins are the base of the tree, and
-        # the user rung (already leading `files`) overlays them — the full
-        # ladder is project > user > built-in. A project ignores the base
-        # outright: its tasks file mounts what it wants, so nothing is
-        # privileged and nothing is lost.
+    if (base_set := _builtin()) and not g.get("tasks_file"):
+        # The built-in set is the cascade's outermost rung — under the user
+        # rung, under the project's own files — so the full ladder is
+        # project > user > built-in wherever you stand. Everything nearer
+        # shadows it by name, exactly as the cascade already resolves its
+        # own rungs, which is what lets a project own a name a built-in
+        # also uses without either of them being special.
+        #
+        # `expose` is what keeps this honest in both directions: a package's
+        # tasks are `project_only` until one opts out, so joining the
+        # cascade offers nothing outside a project that did not say it
+        # belonged there. (`-f` still means total control: one file, no
+        # cascade, no base.)
         built = _base_tree(base_set, json_mode)
         if isinstance(built, int):
             return built
@@ -2447,12 +2418,7 @@ def _run_tree(
     try:
         globals_, segments = _split.split_chain(tree, argv, live)
     except _split.ChainError as exc:
-        message = str(exc)
-        if exc.unknown and _builtin() and root_dir:
-            # Inside a project the base is ignored, so a built-in's name
-            # reads as a command that vanished — teach the mount instead.
-            message += _builtin_remedy(exc.unknown)
-        return _refuse(json_mode, message)
+        return _refuse(json_mode, str(exc))
     except _manifest.CompleterError as exc:
         # A strict completer raised while the line was being validated. It
         # used to surface from the manifest build, before any line was read;

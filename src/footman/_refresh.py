@@ -144,20 +144,24 @@ def _rebuild() -> None:
     if root is None:
         _maybe_reexec(files, one_liner, *_paths.child_args())
 
+    # The built-in set is the cascade's outermost rung wherever this child
+    # stands — project or not — because that is what the run mounts, and a
+    # background rebuild that mounted less would answer TAB with a tree the
+    # runner does not serve.
     base = registry.Group("root")
-    if not project_files:
-        # Global mode: mount the brand's built-ins as the base — exactly as
-        # the run does — with the user rung over them, and write the shared
-        # global manifest. Keyed by the brand rather than the cwd, so this
-        # one build warms every project-less directory.
+    if builtin:
         from footman import compose
 
         with registry.capture() as base:
             for entry in builtin:
                 compose.plugin(entry)
         # Same sealing the app layer does, for the same reason — this child
-        # rebuilds the very manifest that answers TAB outside a project.
+        # rebuilds the very manifest that answers TAB.
         registry.seal_expose(base)
+
+    if not project_files:
+        # Global mode: the shared global manifest, keyed by the brand rather
+        # than the cwd, so one build warms every project-less directory.
         try:
             reg = _discover.load_tree(files, base=base)
         except Exception as exc:
