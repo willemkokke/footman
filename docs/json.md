@@ -472,7 +472,7 @@ $ fm --json --version
 {
   "schema": 1,
   "name": "footman",
-  "version": "0.49.0"
+  "version": "0.49.1"
 }
 ```
 

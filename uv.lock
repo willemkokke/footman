@@ -333,7 +333,7 @@ wheels = [
 
 [[package]]
 name = "footman"
-version = "0.49.0"
+version = "0.49.1"
 source = { editable = "." }
 
 [package.optional-dependencies]
