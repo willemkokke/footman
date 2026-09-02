@@ -46,7 +46,7 @@ wording is found. Match on exit codes, never on prose.
 So: **pin the minor.**
 
 ```toml
-footman~=0.49.0
+footman~=0.50.0
 ```
 
 ## The rule at 1.0

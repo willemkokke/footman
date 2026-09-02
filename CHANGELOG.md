@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-02
+
 ### Added
 
 - **`footman.prog()` and `footman.dist()`** — which CLI is running, for
@@ -6180,7 +6182,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.49.1...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/willemkokke/footman/compare/v0.49.1...v0.50.0
 [0.49.1]: https://github.com/willemkokke/footman/compare/v0.49.0...v0.49.1
 [0.49.0]: https://github.com/willemkokke/footman/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/willemkokke/footman/compare/v0.47.0...v0.48.0
