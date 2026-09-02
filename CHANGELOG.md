@@ -31,6 +31,15 @@ versions may include breaking changes.
   Measured on footman's own repo: `fm --list` 80 ms before, 76 ms after —
   the extra rung is noise, because a built-in provider imports like any
   other tasks file.
+- **`fm new` says `global_only`.** Writing a starter tasks file is what
+  you do *before* a project exists, and it used to rely on simply not
+  being mounted inside one — which stopped being true the moment
+  built-ins joined the cascade. It now says so itself, so the answer
+  travels with the task rather than with the rung: inside a project it is
+  unlisted and refused by name, even where a tasks file mounted it
+  deliberately. It also reads its own success — the file it writes is
+  what makes the directory a project, so a second `fm new` steps aside
+  instead of reaching the overwrite guard.
 
 - **`needs_project` becomes `expose`, and gains the answer it was
   missing.** The boolean could say "this needs a project" and nothing

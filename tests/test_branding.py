@@ -764,10 +764,11 @@ def test_the_scaffold_plants_nothing_outside_ascii(tmp_path, monkeypatch):
     assert (empty / "tasks.py").read_bytes().isascii()
 
 
-def test_new_mounted_in_a_project_refuses_to_overwrite(tmp_path, monkeypatch):
-    # Inside a project the built-in is absent by design; the ordinary mount
-    # offers it — and then a directory that already has its file is refused,
-    # not clobbered.
+def test_new_says_it_belongs_outside_a_project(tmp_path, monkeypatch):
+    # `new` writes a starter tasks file, which is what you do *before* a
+    # project exists — so it says `global_only` rather than relying on not
+    # being mounted here. Explicitly mounting it does not change where it
+    # makes sense: the answer is the task's own, not the rung's.
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
         'from footman import plugin\n\nplugin("footman.new")\n'
@@ -776,7 +777,23 @@ def test_new_mounted_in_a_project_refuses_to_overwrite(tmp_path, monkeypatch):
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     result = Runner(App(name="acme", prog="acme")).invoke("new")
     assert not result.ok
-    assert "already exists" in result.stderr
+    assert "runs only outside a project" in result.stderr
+
+
+def test_new_steps_aside_once_it_has_done_its_job(tmp_path, monkeypatch):
+    # Where it belongs, it writes the file — and writing it is what makes
+    # this a project, so the second call is refused by the scope rule
+    # rather than by the overwrite guard. `global_only` reads its own
+    # success. (The guard stays as a belt; nothing reaches past it now.)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
+    first = acme.invoke("new")
+    assert first.ok, first.stderr
+    assert (tmp_path / "tasks.py").is_file()
+    again = acme.invoke("new")
+    assert not again.ok
+    assert "runs only outside a project" in again.stderr
 
 
 def test_a_user_tasks_cwd_root_means_the_project_it_landed_in(tmp_path, monkeypatch):
