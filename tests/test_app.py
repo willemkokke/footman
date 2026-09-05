@@ -442,6 +442,51 @@ def test_missing_tasks_file(tmp_path, monkeypatch, capsys):
     assert "no tasks file found" in capsys.readouterr().err
 
 
+def test_a_wrong_case_tasks_file_is_named_not_ignored(tmp_path, monkeypatch, capsys):
+    # The walk declines to load `Tasks.py` — it opens here and vanishes on
+    # the first Linux box. Declining quietly is the other half of the bug:
+    # "no tasks file found" reads as a lie to someone looking straight at
+    # the file, with nothing to say the spelling is what's wrong.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "Tasks.py").write_text("")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "Tasks.py" in err  # the spelling that is actually on disk
+    assert "Rename it to tasks.py" in err  # and what to do about it
+    # Nothing to create — that tail would send someone the wrong way.
+    assert "create one" not in err
+
+
+def test_a_wrong_case_tasks_file_is_named_in_the_soft_states(
+    tmp_path, monkeypatch, capsys
+):
+    # The listing and help states are warm empties, not errors — but they
+    # are exactly where someone goes to ask "why is my file not showing up".
+    (tmp_path / "Tasks.py").write_text("")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--list"]) == 0
+    assert "Tasks.py" in capsys.readouterr().out
+    assert _app.run(["--help"]) == 0
+    assert "Tasks.py" in capsys.readouterr().out
+
+
+def test_a_correctly_spelled_tasks_file_draws_no_case_hint(
+    tmp_path, monkeypatch, capsys
+):
+    # The hint costs a listing per level, so it must stay on the failure
+    # path — and must never fire for a name that is simply absent.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "Rename" not in err
+    assert "create one or pass -f" in err
+
+
 def test_missing_tasks_file_with_list_is_soft(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")

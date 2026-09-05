@@ -33,6 +33,28 @@ versions may include breaking changes.
   than a clock, so this cannot regress on a machine whose temp directory
   happens to be tidy.
 
+- **A wrong-case tasks file is now named instead of ignored in silence.**
+  There is one spelling, `tasks.py`, and a `Tasks.py` was passed over
+  without a word — on macOS and Windows because loading a file that opens
+  under either name ships a project that dies on the first Linux box, and
+  on Linux because it is simply a different file. Either way the report
+  was a bare "no tasks file found", which reads like a lie to someone
+  looking straight at the file, and named nothing to fix:
+
+  ```
+  fm: no tasks file found (looked for tasks.py). /w/Tasks.py is there, but
+  it is not tasks.py: the name is case-sensitive, so a project that relies
+  on the other spelling stops working the moment it moves to a filesystem
+  that tells the two apart. Rename it to tasks.py.
+  ```
+
+  The refusal drops its "create one or pass `-f`" tail when it says this,
+  because the fix is a rename and there is nothing to create. `--list`
+  and `--help` say it too — they are where someone goes to ask why their
+  file is not showing up. The check runs only once discovery has already
+  come up empty, and looks in two directories (the cwd and the cascade's
+  top), so no successful run pays for it.
+
 ## [0.50.0] - 2026-09-02
 
 ### Added
