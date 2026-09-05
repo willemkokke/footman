@@ -123,6 +123,37 @@ def test_project_markers_are_case_exact(tmp_path):
     assert _paths.find_project_root(right) == right.parent.resolve()
 
 
+def test_a_directory_without_markers_is_never_listed(tmp_path, monkeypatch):
+    """The walk must not scale with how much an ancestor happens to hold.
+
+    Listing came first for years — one `listdir` beats one `stat` per
+    marker while a directory is small, and inverts hard when it is not:
+    O(entries) against O(markers). A macOS `$TMPDIR` of 8,747 entries made
+    a bare-directory TAB take 1.5 s, ~0.3 s per level of the walk. Probing
+    first fixed it; this keeps it fixed, by mechanism rather than by
+    clock, so it cannot regress on a machine whose temp directory happens
+    to be tidy.
+    """
+    listed: list[Path] = []
+    real = _paths._entries
+    monkeypatch.setattr(
+        _paths,
+        "_entries",
+        lambda d: listed.append(d) or real(d),  # type: ignore[func-returns-value]
+    )
+
+    empty = tmp_path / "nothing" / "here"
+    empty.mkdir(parents=True)
+    _paths.find_repo_root(empty)
+    _paths.task_files(empty, empty)
+    assert listed == []  # nothing to find, so nothing was enumerated
+
+    # A hit still pays one listing — that is what proves the spelling.
+    (empty / "tasks.py").write_text("")
+    assert _paths.task_files(empty, empty) == [empty / "tasks.py"]
+    assert listed == [empty]
+
+
 def test_manifest_path_is_per_directory(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     assert _paths.manifest_path(a) != _paths.manifest_path(b)

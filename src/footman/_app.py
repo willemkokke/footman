@@ -214,6 +214,13 @@ class Discovery(NamedTuple):
     invents none where there is no project ("empty means global mode")."""
     user: Path | None
     """The user tasks file, when it joined `files`."""
+    ceiling: Path
+    """Where the walk stopped climbing — the cascade mode's top. Kept so a
+    refusal can re-walk exactly what was searched (and only then: the
+    wrong-case check that uses it costs a listing per level, which the
+    empty-and-fine global-mode result must not pay)."""
+    name: str
+    """The tasks filename this walk looked for, after config and brand."""
 
 
 def resolve_task_files(
@@ -263,7 +270,14 @@ def resolve_task_files(
         if not one.is_absolute():
             one = cwd / one  # identical to the plain relative read when cwd is the cwd
         files = [one] if one.is_file() else []
-        return Discovery(files, cfg, str(files[0].parent) if files else "", None)
+        return Discovery(
+            files,
+            cfg,
+            str(files[0].parent) if files else "",
+            None,
+            one.parent,
+            one.name,
+        )
     filename = cfg.get("tasks")
     if filename is not None and not isinstance(filename, str):
         # The option-backed keys refuse a wrong TOML type loudly; this
@@ -296,8 +310,8 @@ def resolve_task_files(
         # reading the cascade already has, extended one rung outward. A
         # project that wants a personal task's name owns it; `inherited()`
         # still reaches what it shadowed.
-        return Discovery([user, *files], cfg, root, user)
-    return Discovery(files, cfg, root, None)
+        return Discovery([user, *files], cfg, root, user, ceiling, name)
+    return Discovery(files, cfg, root, None, ceiling, name)
 
 
 def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
@@ -389,12 +403,35 @@ def _discover_files(
 
     cfg = found.cfg
     looked = g.get("tasks_file") or cfg.get("tasks") or _brand.tasks_file
+    # Nothing was found — so before saying so, check whether something is
+    # sitting right there under the wrong case. One spelling counts, and a
+    # `Tasks.py` is passed over on both kinds of filesystem: here because
+    # it is a different file, on macOS and Windows because loading what
+    # opens under either name ships a project that dies on the first Linux
+    # box. Passing over it *quietly* is the half that reads like a lie to
+    # someone looking straight at the file.
+    # A sentence of its own, so it reads right after the refusal's clause
+    # and after the soft states' full stop alike.
+    hint = ""
+    if not g.get("tasks_file"):
+        near = _paths.miscased_nearby(Path.cwd(), found.ceiling, found.name)
+        if near is not None:
+            where, spelling = near
+            hint = (
+                f"{where / spelling} is there, but it is not {found.name}: "
+                f"the name is case-sensitive, so a project that relies on the "
+                f"other spelling stops working the moment it moves to a "
+                f"filesystem that tells the two apart. Rename it to "
+                f"{found.name}."
+            )
     if wants_help:
         # A stuck newcomer asking for help should see the globals (-f/-C are the
         # way out) — not a bare one-liner. Global help over an empty tree, then
         # the "where did I look" note.
         _print_global_help(_manifest.build_manifest(registry.Group("root"))["tree"])
         print(f"\n(no tasks file found — looked for {looked})")
+        if hint:
+            print(f"\n{hint}")
         return 0
     if bare or g.get("list") or g.get("tree"):
         # A bare `fm` (like `--list`) is a warm empty state, not a hard error.
@@ -403,11 +440,14 @@ def _discover_files(
             print(json.dumps({"schema": 1, "tree": tree}, indent=2))
         else:
             print(f"No tasks file found (looked for {looked}).")
+            if hint:
+                print(hint)
         return 0
+    # With a hint there is nothing to create — the fix is a rename, and
+    # "create one or pass -f" would send someone the wrong way.
+    tail = f". {hint}" if hint else "; create one or pass -f/--tasks-file."
     return _refuse(
-        bool(g.get("json")),
-        f"no tasks file found (looked for {looked}); "
-        f"create one or pass -f/--tasks-file.",
+        bool(g.get("json")), f"no tasks file found (looked for {looked}){tail}"
     )
 
 

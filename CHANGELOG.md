@@ -7,6 +7,54 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Discovery no longer scales with how much an ancestor directory
+  happens to hold.** Every level of the upward walk *listed* the
+  directory to check for `tasks.py`, `pyproject.toml` and the rest —
+  one `listdir` beating one `stat` per marker, which holds while a
+  directory is small and inverts hard when it is not: the cost is
+  O(entries) against O(markers). An ancestor with a few thousand files
+  cost about 0.3 s **per level**, so a `TAB` in a directory under a
+  crowded parent could take over a second. (Found via macOS's per-user
+  `$TMPDIR`, which had reached 8,747 entries and made footman's own
+  bare-directory completion test fail.)
+
+  The walk now probes first and lists only to confirm a hit. A miss is
+  one `stat` whatever the directory holds; a hit — rare, and the only
+  place the spelling matters — pays one listing to prove itself. Measured
+  on that directory: `find_repo_root` 0.32 s → 0.1 ms, `task_files`
+  0.26 s → under 0.1 ms.
+
+  **The case-exactness guarantee is unchanged**: a `Tasks.py` is still
+  not a tasks file, on any platform, because a project accepted that way
+  stops working the day it reaches Linux. The probe finds the entry, the
+  confirmation rejects the spelling. A new test pins the mechanism rather
+  than a clock, so this cannot regress on a machine whose temp directory
+  happens to be tidy.
+
+- **A wrong-case tasks file is now named instead of ignored in silence.**
+  There is one spelling, `tasks.py`, and a `Tasks.py` was passed over
+  without a word — on macOS and Windows because loading a file that opens
+  under either name ships a project that dies on the first Linux box, and
+  on Linux because it is simply a different file. Either way the report
+  was a bare "no tasks file found", which reads like a lie to someone
+  looking straight at the file, and named nothing to fix:
+
+  ```
+  fm: no tasks file found (looked for tasks.py). /w/Tasks.py is there, but
+  it is not tasks.py: the name is case-sensitive, so a project that relies
+  on the other spelling stops working the moment it moves to a filesystem
+  that tells the two apart. Rename it to tasks.py.
+  ```
+
+  The refusal drops its "create one or pass `-f`" tail when it says this,
+  because the fix is a rename and there is nothing to create. `--list`
+  and `--help` say it too — they are where someone goes to ask why their
+  file is not showing up. The check runs only once discovery has already
+  come up empty, and looks in two directories (the cwd and the cascade's
+  top), so no successful run pays for it.
+
 ## [0.50.0] - 2026-09-02
 
 ### Added

@@ -19,6 +19,7 @@ import os
 # `test_a_warm_tab_pays_for_no_heavyweight_stdlib` pins the diet.
 TYPE_CHECKING = False
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 # Ancestor markers that identify the project root. The manifest cache is keyed
@@ -55,17 +56,47 @@ def project_markers() -> tuple[str, ...]:
 
 
 def _entries(directory: Path) -> set[str]:
-    """The directory's entry names, exactly as spelled on disk.
-
-    Membership here is the case-exact `exists()`: on a case-insensitive
-    filesystem `(d / "tasks.py").exists()` answers True for a file named
-    `Tasks.py`, and a project silently accepted that way stops working the
-    day it reaches a Linux box. One listing also asks the directory once
-    rather than once per marker."""
+    """The directory's entry names, exactly as spelled on disk."""
     try:
         return set(os.listdir(directory))
     except OSError:
         return set()
+
+
+def _named(directory: Path, name: str) -> bool:
+    """Whether *directory* holds an entry spelled exactly *name*.
+
+    Case-exact, because a case-insensitive filesystem answers
+    `(d / "tasks.py").exists()` True for a file named `Tasks.py`, and a
+    project silently accepted that way stops working the day it reaches a
+    Linux box.
+
+    Probe first, and list only to confirm a hit. The listing used to come
+    first — one `listdir` beats one `stat` per marker, which is true while
+    a directory is small and inverts hard when it is not: the cost is
+    O(entries) against O(markers), so an ancestor holding a few thousand
+    files cost ~0.3 s *per level* of the walk (a macOS `$TMPDIR` reached
+    8,747 entries here and made a bare-directory TAB take 1.5 s). A miss
+    is now one `stat` whatever the directory holds, and a hit — rare, and
+    the only place the spelling matters — pays the listing to prove
+    itself.
+    """
+    if not os.path.exists(os.path.join(directory, name)):
+        return False  # cheap and conclusive: no entry answers to that name
+    return name in _entries(directory)
+
+
+def _any_named(directory: Path, names: Sequence[str]) -> bool:
+    """Whether *directory* holds any of *names*, case-exactly.
+
+    One listing at most, however many names are asked about: the probes
+    are cheap, and the first that hits pays for the confirmation the rest
+    can share.
+    """
+    if not any(os.path.exists(os.path.join(directory, n)) for n in names):
+        return False
+    entries = _entries(directory)
+    return any(name in entries for name in names)
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -75,8 +106,7 @@ def find_project_root(start: Path | None = None) -> Path:
     start = (start or Path.cwd()).resolve()
     markers = project_markers()
     for directory in (start, *start.parents):
-        names = _entries(directory)
-        if any(marker in names for marker in markers):
+        if _any_named(directory, markers):
             return directory
     return start
 
@@ -97,8 +127,7 @@ def find_repo_root(start: Path | None = None) -> Path:
 
     start = (start or Path.cwd()).resolve()
     for directory in (start, *start.parents):
-        names = _entries(directory)
-        if any(marker in names for marker in REPO_MARKERS):
+        if _any_named(directory, REPO_MARKERS):
             return directory
     return find_project_root(start)
 
@@ -123,13 +152,60 @@ def task_files(
 ) -> list[Path]:
     """Existing task files from *ceiling* down to *cwd* (root first, cwd last).
 
-    Case-exact: a `Tasks.py` is not a tasks file, even where the filesystem
-    would happily open it under the documented name."""
+    One spelling, lowercase: a `Tasks.py` is not a tasks file, even where
+    the filesystem would happily open it under the documented name — it
+    would work on the machine that wrote it and vanish on the first Linux
+    box. Loading it is the mistake; being quiet about it is a second one,
+    so `miscased_in_chain` names it in the refusal."""
     return [
         f
         for d in dir_chain(cwd, ceiling)
-        if filename in _entries(d) and (f := d / filename).is_file()
+        if _named(d, filename) and (f := d / filename).is_file()
     ]
+
+
+def miscased(directory: Path, name: str) -> str | None:
+    """The on-disk spelling of *name* in *directory*, when it is not *name*.
+
+    `None` when the name is spelled right, or nothing resembling it is
+    there. No probe first, unlike `_named`: `os.path.exists(name)` hits
+    only where the filesystem folds case, and the machine that *needs*
+    telling is often the Linux one, where a `Tasks.py` pushed from a Mac
+    is simply a different file and the walk has no reason to mention it.
+    So this always lists — which is why its callers keep it off any path
+    someone is waiting on.
+    """
+    entries = _entries(directory)
+    if name in entries:
+        return None
+    lowered = name.lower()
+    return next((e for e in sorted(entries) if e.lower() == lowered), None)
+
+
+def miscased_nearby(
+    cwd: Path, ceiling: Path, filename: str = DEFAULT_TASKS_FILE
+) -> tuple[Path, str] | None:
+    """A wrong-case tasks file in the cwd or at the cascade's top.
+
+    `(directory, spelling)`, or `None`. Asked only once discovery has come
+    up empty and the answer is already a refusal, so a listing buys a
+    message that says what is wrong instead of one that reads like a lie.
+
+    Two directories, not the whole chain: a listing is O(entries), the
+    ancestors of a cwd can be arbitrarily fat (a macOS `$TMPDIR` reached
+    8,747 entries here), and a misspelled tasks file is in the directory
+    you are standing in or at the root of the project you are in. Walking
+    every level to be thorough would put the cost back that the probe-first
+    walk just took out, on the one path a confused person hits repeatedly.
+    """
+    seen: set[Path] = set()
+    for d in (cwd, ceiling):
+        if d in seen or not d.is_dir():
+            continue
+        seen.add(d)
+        if (found := miscased(d, filename)) is not None:
+            return d, found
+    return None
 
 
 # The brand's locations, set once by `App.run` before anything reads them —
