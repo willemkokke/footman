@@ -19,6 +19,7 @@ import os
 # `test_a_warm_tab_pays_for_no_heavyweight_stdlib` pins the diet.
 TYPE_CHECKING = False
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 # Ancestor markers that identify the project root. The manifest cache is keyed
@@ -55,17 +56,47 @@ def project_markers() -> tuple[str, ...]:
 
 
 def _entries(directory: Path) -> set[str]:
-    """The directory's entry names, exactly as spelled on disk.
-
-    Membership here is the case-exact `exists()`: on a case-insensitive
-    filesystem `(d / "tasks.py").exists()` answers True for a file named
-    `Tasks.py`, and a project silently accepted that way stops working the
-    day it reaches a Linux box. One listing also asks the directory once
-    rather than once per marker."""
+    """The directory's entry names, exactly as spelled on disk."""
     try:
         return set(os.listdir(directory))
     except OSError:
         return set()
+
+
+def _named(directory: Path, name: str) -> bool:
+    """Whether *directory* holds an entry spelled exactly *name*.
+
+    Case-exact, because a case-insensitive filesystem answers
+    `(d / "tasks.py").exists()` True for a file named `Tasks.py`, and a
+    project silently accepted that way stops working the day it reaches a
+    Linux box.
+
+    Probe first, and list only to confirm a hit. The listing used to come
+    first — one `listdir` beats one `stat` per marker, which is true while
+    a directory is small and inverts hard when it is not: the cost is
+    O(entries) against O(markers), so an ancestor holding a few thousand
+    files cost ~0.3 s *per level* of the walk (a macOS `$TMPDIR` reached
+    8,747 entries here and made a bare-directory TAB take 1.5 s). A miss
+    is now one `stat` whatever the directory holds, and a hit — rare, and
+    the only place the spelling matters — pays the listing to prove
+    itself.
+    """
+    if not os.path.exists(os.path.join(directory, name)):
+        return False  # cheap and conclusive: no entry answers to that name
+    return name in _entries(directory)
+
+
+def _any_named(directory: Path, names: Sequence[str]) -> bool:
+    """Whether *directory* holds any of *names*, case-exactly.
+
+    One listing at most, however many names are asked about: the probes
+    are cheap, and the first that hits pays for the confirmation the rest
+    can share.
+    """
+    if not any(os.path.exists(os.path.join(directory, n)) for n in names):
+        return False
+    entries = _entries(directory)
+    return any(name in entries for name in names)
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -75,8 +106,7 @@ def find_project_root(start: Path | None = None) -> Path:
     start = (start or Path.cwd()).resolve()
     markers = project_markers()
     for directory in (start, *start.parents):
-        names = _entries(directory)
-        if any(marker in names for marker in markers):
+        if _any_named(directory, markers):
             return directory
     return start
 
@@ -97,8 +127,7 @@ def find_repo_root(start: Path | None = None) -> Path:
 
     start = (start or Path.cwd()).resolve()
     for directory in (start, *start.parents):
-        names = _entries(directory)
-        if any(marker in names for marker in REPO_MARKERS):
+        if _any_named(directory, REPO_MARKERS):
             return directory
     return find_project_root(start)
 
@@ -128,7 +157,7 @@ def task_files(
     return [
         f
         for d in dir_chain(cwd, ceiling)
-        if filename in _entries(d) and (f := d / filename).is_file()
+        if _named(d, filename) and (f := d / filename).is_file()
     ]
 
 

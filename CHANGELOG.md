@@ -7,6 +7,32 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Discovery no longer scales with how much an ancestor directory
+  happens to hold.** Every level of the upward walk *listed* the
+  directory to check for `tasks.py`, `pyproject.toml` and the rest —
+  one `listdir` beating one `stat` per marker, which holds while a
+  directory is small and inverts hard when it is not: the cost is
+  O(entries) against O(markers). An ancestor with a few thousand files
+  cost about 0.3 s **per level**, so a `TAB` in a directory under a
+  crowded parent could take over a second. (Found via macOS's per-user
+  `$TMPDIR`, which had reached 8,747 entries and made footman's own
+  bare-directory completion test fail.)
+
+  The walk now probes first and lists only to confirm a hit. A miss is
+  one `stat` whatever the directory holds; a hit — rare, and the only
+  place the spelling matters — pays one listing to prove itself. Measured
+  on that directory: `find_repo_root` 0.32 s → 0.1 ms, `task_files`
+  0.26 s → under 0.1 ms.
+
+  **The case-exactness guarantee is unchanged**: a `Tasks.py` is still
+  not a tasks file, on any platform, because a project accepted that way
+  stops working the day it reaches Linux. The probe finds the entry, the
+  confirmation rejects the spelling. A new test pins the mechanism rather
+  than a clock, so this cannot regress on a machine whose temp directory
+  happens to be tidy.
+
 ## [0.50.0] - 2026-09-02
 
 ### Added
