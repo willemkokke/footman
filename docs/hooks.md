@@ -36,16 +36,18 @@ def gate_deploys(inv):
 
 The hook is handed the **`Invocation`**: what this `fm` line is doing, and the
 one object every lifecycle hook sees. `inv.tasks` is a `Tasks` view of the
-merged tree: iterate it for every task, or index it by command-line name
-(`inv.tasks["deploy-web"]`). Each task comes back as a `TaskView`:
+merged tree: iterate it for every task, or index it by **address** —
+`inv.tasks["deploy-web"]`, `inv.tasks["docs.build"]`. Each task comes back as
+a `TaskView`:
 
-- **wiring** — `t.name`, `t.group` (the owning group, or `None` at top level),
-  `t.pre`, `t.post`, `t.disabled`;
+- **wiring** — `t.address` (the whole dotted spelling), `t.path` (its
+  segments), `t.name` (the leaf alone), `t.group` (the owning group, or `None`
+  at top level), `t.pre`, `t.post`, `t.disabled`;
 - **policy flags** — `t.keep_going`, `t.atomic`, `t.infinite`, `t.interactive`,
   `t.timed`, `t.confirm`;
-- **cascade provenance** — `t.defining_dir` (the directory it was defined in),
-  `t.shadowed` (the task it overrides one level up), `t.shadow_chain`, and
-  `t.source_file`;
+- **provenance** — `t.mounted_from` (which provider it came from),
+  `t.defining_dir` (the directory it was defined in), `t.shadowed` (the task
+  it overrides one level up), `t.shadow_chain`, and `t.source_file`;
 - **edits** — `t.add_pre(…)`, `t.add_post(…)`, `t.disable("reason")`, and
   `t.set_opts(…)` (permanent, tree-wide policy, the discovery-time
   counterpart to a per-use `.opts()`).
@@ -63,6 +65,21 @@ def gate_infra(inv):
         if (t.defining_dir or "").endswith("infra"):
             t.add_pre(inv.tasks["audit"])
 ```
+
+To decide by *who* a task came from instead, read `t.mounted_from`: the
+`footman.tasks` entry-point identity for a [`plugin()`](plugins.md), the module
+name for an [`include()`](composing.md), and `None` for a task your own tasks
+file writes — the honest answer rather than a hole, since the project owns it.
+It names a provider, not a file, so it goes on answering for a task whose body
+is not Python.
+
+Provenance is exact on tasks, and stricter on groups. A group carries
+`mounted_from` only when a mount landed it whole, on a name nothing else
+claimed. The moment a mount composes into a group that already exists, that
+group is *shared* — some of its tasks are yours, some the provider's — so it
+answers `None`, while every task under it still names its own provider. Read
+ownership from the tasks; read a group's answer as "this entire subtree is
+theirs".
 
 Because the hook runs **at discovery**, its edits are part of the plan, not
 a runtime surprise: an added `pre` runs and shows in `fm <task> --dry-run`, and
