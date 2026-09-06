@@ -24,6 +24,40 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The discovered built-in list is keyed by the Python environment it
+  describes.** What it records — which `footman.builtin` entry points are
+  importable — is a property of one environment, not of the machine. Keyed
+  by brand alone, the record a `self.install` wrote from the *tool*
+  environment was then applied by every other runner on the machine: a
+  project's dev venv read it, could not import a package that was never
+  installed there, and refused to run. It now lives at
+  `builtins-<key>.json`, keyed the way completion manifests are keyed by
+  cwd — one shared store, each entry named for its subject. So a globally
+  installed plugin's tasks answer globally, and a project venv is
+  unaffected by them.
+
+  A record written before the key existed names no environment and is
+  simply not found, which already means "nothing discovered yet": run
+  `fm self.install` once to write the keyed one.
+
+  The record is kept rather than derived on the fly, and deliberately so:
+  discovering live on every run would be auto-activation, where any
+  installed package advertising `footman.builtin` mounts itself — so
+  `uv add` on a library would put its tasks in your CLI, free to collide
+  with your project's own names, with nothing recording when it happened.
+  The file is the consent boundary, and changes only when you run a
+  `self.*` command.
+
+- **A discovered built-in that no longer mounts is skipped, not refused.**
+  This list is a record footman writes and can always rebuild, which is
+  already why a missing or malformed one means "nothing discovered"
+  instead of an error — an entry that stopped resolving is the same thing
+  one entry at a time. Refusing also made the remedy unreachable: the
+  message says to run `self.add`, and `self.add` mounts the same built-in
+  base on its way in, so the way out refused too and the only fix left was
+  deleting the record by hand. A name *you* declared in `[builtins] user`
+  is a declaration and still refuses.
+
 - **A wrong-case tasks file is now complained about wherever it is, and
   whatever else the run finds.** v0.51.0 shipped this half-built: the
   complaint lived on the "no tasks file found" path, which the built-in
