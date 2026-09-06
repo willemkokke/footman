@@ -7,6 +7,49 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`TaskView.address` and `TaskView.path`** — a task's whole command-line
+  spelling from a hook. `address` is the dotted form (`forge.dev.up`), `path`
+  its segments (`("forge", "dev", "up")`), and `name` still spells the leaf
+  alone. `group` only ever named the immediate parent, so a nested task had
+  no public full spelling and consumers reconstructed one by walking
+  `Tasks._root`.
+
+- **`TaskView.mounted_from`** — which provider a task came from: the
+  `footman.tasks` entry-point identity for `plugin()`, the module name for
+  `include()`, and `None` for a task your own tasks file writes, which is the
+  honest answer rather than a hole (the project owns it). Already public as
+  `registry.mounted_from()`; it was missing from the view, so a hook reached
+  it through `t.fn`.
+
+- **Manifest task rows carry `mounted_from`**, so `fm --json --list` answers
+  ownership without a hook. A provider identity, not a source path: a path
+  answers only for a Python function, makes a reader infer ownership by
+  matching prefixes, and puts absolute home paths into output people paste
+  and commit. Group nodes carry the field too, where it answers something
+  stronger — this *whole* group is one provider's, true only when the mount
+  landed it on a free name. A mount composing into a group that already
+  exists leaves that group shared, so it claims nothing while every task
+  under it still answers exactly. Read ownership from the task rows.
+  Manifest schema 9 → 10; caches rebuild on first use.
+
+### Changed
+
+- **`Tasks.get`, `tasks[…]` and `in tasks` look tasks up by address, not by
+  leaf name.** `inv.tasks["build"]` finds a top-level `build`; a nested one is
+  `inv.tasks["docs.build"]`. Addresses are unique by construction — a name is
+  a task or a group at each level, never both — so a lookup now either finds
+  one task or finds none, where a bare leaf could match several and quietly
+  returned whichever the walk reached first. To search by leaf, iterate:
+  `[t for t in inv.tasks if t.name == "build"]`, where two answers are visible
+  rather than silently narrowed to one.
+
+  A runnable group answers at its bare address: `inv.tasks["lint"]` is
+  `inv.tasks["lint.default"]`, since the bare group name is that action's
+  other spelling on the command line, and lookup would otherwise be the one
+  place that was not true.
+
 ### Fixed
 
 - **Discovery no longer scales with how much an ancestor directory

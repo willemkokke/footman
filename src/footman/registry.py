@@ -2626,15 +2626,57 @@ class TaskView:
     its cascade provenance (where it was defined, what it overrode), and edit it
     here — never through the private `_footman_*` attributes."""
 
-    def __init__(self, fn: Task, name: str, group: Group | None = None) -> None:
+    def __init__(
+        self,
+        fn: Task,
+        name: str,
+        group: Group | None = None,
+        *,
+        path: tuple[str, ...] | None = None,
+    ) -> None:
         self.fn = fn
         """The task function itself — the escape hatch past the view."""
         self.name = name
-        """The task's command-line name, e.g. `deploy-web`."""
+        """The task's leaf name, e.g. `build`. The whole spelling is
+        `address` — two tasks in different groups share this one."""
         self.group = group
         """The group this task lives in, or `None` for a top-level task — its
-        `.name` is the group's command-line spelling (e.g. `docs`). Use it to
-        disambiguate two tasks that share a leaf name across groups."""
+        `.name` is the group's command-line spelling (e.g. `docs`)."""
+        # A group has no parent pointer, deliberately: `include()`/`plugin()`
+        # can mount one group object in more than one place, so an address
+        # belongs to the *view* the walk yields, not to the group or the
+        # function. The walk passes it; the fallback is for a hand-built view
+        # (a test), where the immediate group is all there is to go on.
+        self._path = path or ((group.name, name) if group else (name,))
+
+    @property
+    def path(self) -> tuple[str, ...]:
+        """Every segment of the task's address, leaf last — `("forge", "dev",
+        "up")`. `address` is the same thing as one string."""
+        return self._path
+
+    @property
+    def address(self) -> str:
+        """The task's full dotted address, exactly as the command line spells
+        it: `forge.dev.up`. Unique across the tree — a name is a task or a
+        group at each level, never both — so this is the key to hold a task
+        by, and what `Tasks.get` looks up."""
+        return ".".join(self._path)
+
+    @property
+    def mounted_from(self) -> str | None:
+        """Which provider this task came from — the `footman.tasks`
+        entry-point identity for `plugin()`, the module name for
+        `include()` — or `None` when the tasks file defines it itself,
+        which is the honest answer: the project owns it.
+
+        Language-neutral by construction: it names a provider, not a file,
+        so it keeps answering for a task that is one day not a Python
+        function. A group carries the same field only when it was grafted
+        whole; the moment a mount composes into a group that already
+        exists, the group is shared and answers `None` while every task
+        under it still answers exactly. Read ownership here."""
+        return mounted_from(self.fn)
 
     @property
     def pre(self) -> tuple[Task, ...]:
@@ -2766,7 +2808,7 @@ class TaskView:
 
 class Tasks:
     """A hook's view of the merged command tree: iterate every task, or
-    look one up by its command-line name, each as a `TaskView`."""
+    look one up by its address, each as a `TaskView`."""
 
     def __init__(self, root: Group) -> None:
         self._root = root
@@ -2775,8 +2817,25 @@ class Tasks:
         yield from _task_views(self._root)
 
     def get(self, name: str) -> TaskView | None:
-        """The task named *name* (command-line spelling), or `None`."""
-        return next((v for v in self if v.name == name), None)
+        """The task at *name* — its full dotted address — or `None`.
+
+        Addresses are unique by construction (a name is a task or a group
+        at each level, never both), so this either finds one task or finds
+        none: there is nothing here to be ambiguous about. A bare leaf is
+        not an address — `get("build")` finds a top-level `build`, never
+        `docs.build`. To search by leaf, iterate: two tasks may answer to
+        one, and picking between them is the caller's to make, not
+        footman's to guess.
+
+        A runnable group answers whatever its default answers, so
+        `get("lint")` is `get("lint.default")` — the bare group name is
+        that action's other spelling on the command line, and lookup would
+        otherwise be the one place that isn't true.
+        """
+        by_address = {v.address: v for v in self}
+        if (view := by_address.get(name)) is not None:
+            return view
+        return by_address.get(f"{name}.default")
 
     def __getitem__(self, name: str) -> TaskView:
         if (view := self.get(name)) is None:
@@ -2787,11 +2846,13 @@ class Tasks:
         return isinstance(name, str) and self.get(name) is not None
 
 
-def _task_views(g: Group, owner: Group | None = None) -> Iterator[TaskView]:
+def _task_views(
+    g: Group, owner: Group | None = None, prefix: tuple[str, ...] = ()
+) -> Iterator[TaskView]:
     for name, fn in g.tasks.items():
-        yield TaskView(fn, name, owner)
+        yield TaskView(fn, name, owner, path=(*prefix, name))
     for sub in g.groups.values():
-        yield from _task_views(sub, sub)
+        yield from _task_views(sub, sub, (*prefix, sub.name))
 
 
 @contextlib.contextmanager

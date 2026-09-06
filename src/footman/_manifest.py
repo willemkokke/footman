@@ -41,7 +41,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 _warned: set[str] = set()
 
@@ -945,6 +945,19 @@ def _task_node(
             f"unknown parameter(s): {', '.join(unknown)}"
         )
     node: dict[str, Any] = {"help": parsed.summary, "params": params}
+    if (provider := registry.mounted_from(fn)) is not None:
+        # Additive: which provider this task came from — the entry-point
+        # identity for `plugin()`, the module name for `include()`. Omitted
+        # for a task the tasks file defines itself, which is the honest
+        # answer rather than a hole: the project owns it.
+        #
+        # A provider, not a file. A source path would answer only for a
+        # Python function (`__code__`), and would make a reader infer
+        # ownership by matching path prefixes; this names the owner
+        # outright, and keeps naming it if a task is one day implemented
+        # over something that is not Python. It also keeps absolute home
+        # paths out of `--json --list` output people paste and commit.
+        node["mounted_from"] = provider
     used = registry.task_uses(fn)
     if used:
         # The globals this task declares it reads — help, the catalog and
@@ -1077,6 +1090,15 @@ def _node(
     }
     if mine:
         node["hidden"] = True  # additive: listings skip it, the address still runs
+    if g.mounted_from is not None:
+        # The same field, answering a *stronger* question here: this whole
+        # group is one provider's, which is true only when the mount landed
+        # on a free name and grafted the stamped group whole. Compose into a
+        # group that already exists and the destination group survives
+        # unstamped — shared, so no single owner — while every task under it
+        # still answers exactly. Read ownership off the task rows; this is
+        # for "is this entire subtree theirs".
+        node["mounted_from"] = g.mounted_from
     # A runnable group (one with `@group.default`) carries the default's option
     # surface — the same `{help, params}` shape a task node has — so the splitter
     # parses a bare `fm <group> [flags]` against it and completion/help render it.

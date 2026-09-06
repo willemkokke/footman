@@ -9,7 +9,7 @@ from typing import Annotated, Any
 
 import pytest
 
-from footman import _discover, _executor, _manifest, registry
+from footman import _discover, _executor, _manifest, compose, registry
 from footman.params import between, check, env
 from footman.registry import Group, RegistrationError
 from footman.testing import Runner
@@ -256,6 +256,106 @@ def test_task_view_infinite_is_untimed(tmp_path):
     assert view["serve"].timed is False  # infinite implies no timing history
 
 
+def test_task_view_address_is_the_whole_spelling(tmp_path):
+    # The address is what the command line types, at any depth. `group`
+    # only ever named the immediate parent, so a doubly-nested task had no
+    # public full spelling at all — the gap that had a consumer walking
+    # `Tasks._root` to reconstruct one.
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        from footman import task, group
+
+        @task
+        def top(): ...
+
+        forge = group("forge")
+        dev = forge.group("dev")
+
+        @dev.task
+        def up(): ...
+        """,
+    )
+    view = registry.Tasks(_discover.load_tree([src]))
+    deep = view["forge.dev.up"]
+    assert deep.path == ("forge", "dev", "up")
+    assert deep.address == "forge.dev.up"
+    assert deep.name == "up"  # the leaf still spells itself
+    assert view["top"].path == ("top",)
+    assert view["top"].address == "top"
+
+
+def test_lookup_is_by_address_not_leaf(tmp_path):
+    # Two tasks share a leaf; each address is unique, so lookup either finds
+    # one task or finds none — there is nothing to be ambiguous about, and
+    # nothing for footman to guess between.
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        from footman import task, group
+
+        docs = group("docs")
+        web = group("web")
+
+        @docs.task
+        def build(): ...
+
+        @web.task
+        def build(): ...
+        """,
+    )
+    view = registry.Tasks(_discover.load_tree([src]))
+    assert view["docs.build"].address == "docs.build"
+    assert view["web.build"].address == "web.build"
+    assert view.get("build") is None  # a leaf is not an address
+    assert "build" not in view
+    with pytest.raises(KeyError):
+        view["build"]
+    # Searching by leaf is the caller's, and iteration already does it.
+    assert sorted(v.address for v in view if v.name == "build") == [
+        "docs.build",
+        "web.build",
+    ]
+
+
+def test_a_runnable_group_answers_at_its_bare_address(tmp_path):
+    # `fm lint` runs `lint.default`, so the bare group name is that action's
+    # other spelling. Lookup honours it, rather than being the one place it
+    # is not true.
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        from footman import group
+
+        lint = group("lint")
+
+        @lint.default
+        def _all(): ...
+
+        @lint.task
+        def python(): ...
+        """,
+    )
+    view = registry.Tasks(_discover.load_tree([src]))
+    assert view["lint"].address == "lint.default"  # the same task, either way
+    assert view["lint"].fn is view["lint.default"].fn
+    assert "lint" in view
+    # A group with no default has no bare action, so it answers nothing.
+    src2 = _write(
+        tmp_path / "plain" / "tasks.py",
+        """
+        from footman import group
+
+        docs = group("docs")
+
+        @docs.task
+        def build(): ...
+        """,
+    )
+    plain = registry.Tasks(_discover.load_tree([src2]))
+    assert plain.get("docs") is None
+
+
 def test_task_view_owning_group(tmp_path):
     src = _write(
         tmp_path / "tasks.py",
@@ -273,8 +373,11 @@ def test_task_view_owning_group(tmp_path):
     )
     view = registry.Tasks(_discover.load_tree([src]))
     assert view["top"].group is None  # top-level task is in no named group
-    assert view["build"].group is not None
-    assert view["build"].group.name == "docs"
+    assert view["docs.build"].group is not None
+    assert view["docs.build"].group.name == "docs"
+    # The leaf is not an address, and the address is what holds a task.
+    assert view.get("build") is None
+    assert view["docs.build"].address == "docs.build"
 
 
 def test_task_view_provenance_single_file(tmp_path):
@@ -293,6 +396,42 @@ def test_task_view_provenance_single_file(tmp_path):
     assert x.source_file is not None and x.source_file.endswith("tasks.py")
     assert x.shadowed is None
     assert x.shadow_chain == (x.fn,)
+
+
+def test_task_view_mounted_from_names_the_provider(tmp_path, monkeypatch):
+    # Ownership, as a provider identity rather than a file path: it answers
+    # for a task whose body is not Python, and it keeps absolute home paths
+    # out of anything a consumer renders or commits.
+    (tmp_path / "devkit.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task, group
+
+            lint = group("lint")
+
+            @lint.task
+            def strict(): ...
+            """
+        )
+    )
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        from footman import task, include
+
+        include("devkit")
+
+        @task
+        def mine(): ...
+        """,
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    view = registry.Tasks(_discover.load_tree([src]))
+    assert view["lint.strict"].mounted_from == "devkit"
+    # A task the tasks file writes itself has no provider — the honest
+    # answer, not a hole: the project owns it.
+    assert view["mine"].mounted_from is None
 
 
 def test_task_view_shadow_chain_across_cascade(tmp_path):

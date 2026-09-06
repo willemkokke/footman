@@ -9,7 +9,7 @@ from typing import Annotated, Literal, Optional
 
 import pytest
 
-from footman import _manifest, _paths
+from footman import _manifest, _paths, compose, registry
 from footman.params import doc
 
 
@@ -298,6 +298,62 @@ def test_footman_cache_dir_overrides_every_cache_path(tmp_path, monkeypatch):
     assert _paths.manifest_path(tmp_path).parent == tmp_path / "elsewhere"
     assert _paths.times_path(tmp_path).parent == tmp_path / "elsewhere"
     assert _paths.times_path(tmp_path).name.endswith(".times.json")
+
+
+def _provider() -> registry.Group:
+    g = registry.Group("lint")
+
+    def strict() -> None:
+        """Be strict."""
+
+    def _default() -> None:
+        """Lint everything."""
+
+    g.tasks["strict"] = registry.task(strict)
+    g.tasks["default"] = registry.task(_default)
+    return g
+
+
+def test_manifest_task_rows_carry_the_provider():
+    # Ownership as a provider identity, not a source path: a path answers
+    # only for a Python function and makes the reader infer ownership from
+    # prefixes. This names the owner outright.
+    with registry.capture() as root:
+        compose.include(_provider())
+        tree = _manifest.build_manifest(root)["tree"]
+    lint = tree["groups"]["lint"]
+    assert lint["tasks"]["strict"]["mounted_from"] == "lint"
+    # The default is a task named `default`, so it carries it like any other
+    # — through both spellings the manifest emits it under.
+    assert lint["tasks"]["default"]["mounted_from"] == "lint"
+    assert lint["default"]["mounted_from"] == "lint"
+    # Grafted onto a free name, so the whole group is the provider's.
+    assert lint["mounted_from"] == "lint"
+
+
+def test_a_shared_group_claims_no_provider_while_its_tasks_still_do():
+    # The asymmetry a consumer will otherwise misread. A mount composing
+    # into a group that already exists leaves the *destination* group in
+    # place — shared, so it has no single owner and says so — while every
+    # task under it still answers exactly. Ownership is read off task rows.
+    with registry.capture() as root:
+        local = registry.group("lint")
+
+        @local.task
+        def fast() -> None:
+            """Quick pass."""
+
+        compose.include(_provider())
+        tree = _manifest.build_manifest(root)["tree"]
+    lint = tree["groups"]["lint"]
+    assert "mounted_from" not in lint  # mixed provenance: no single owner
+    assert lint["tasks"]["strict"]["mounted_from"] == "lint"  # exact, per task
+    assert "mounted_from" not in lint["tasks"]["fast"]  # locally written
+
+
+def test_a_task_the_project_writes_claims_no_provider(tree):
+    # Omitted, not null: the project owns what its own tasks file defines.
+    assert all("mounted_from" not in t for t in tree["tasks"].values())
 
 
 def test_write_load_roundtrip(root, tmp_path):

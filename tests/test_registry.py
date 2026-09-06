@@ -248,7 +248,7 @@ def test_source_reading_survives_the_handle():
     default = lint.default_task
     assert default is not None
     assert registry.fans_out(default)  # the source read still works
-    view = registry.Tasks(reg)["default"]
+    view = registry.Tasks(reg)["lint.default"]
     assert view.source_file is not None and view.source_file.endswith(".py")
 
 
