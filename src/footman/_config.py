@@ -538,11 +538,20 @@ def discovered_path(prefix: str | None = None) -> Path:
     return _paths.footman_data_dir() / f"builtins-{key}.json"
 
 
-def write_discovered(names: Sequence[str]) -> None:
-    """Replace the discovered list. The only writer is `fm self.*`."""
+def write_discovered(names: Sequence[str], prefix: str) -> None:
+    """Replace the discovered list for the environment at *prefix*.
+
+    *prefix* is required, and names the environment the list **describes**
+    — never the one doing the writing. `fm self.*` is the only writer, and
+    it discovers by asking the *tool* environment's own interpreter, which
+    is a different world from the process that typed the command. Defaulted
+    to `sys.prefix` this would file the tool environment's answer under
+    whichever venv the person happened to be standing in, which is the bug
+    the key exists to prevent.
+    """
     import json
 
-    path = discovered_path()
+    path = discovered_path(prefix)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"schema": 1, "builtin": sorted(set(names))}, indent=2) + "\n",

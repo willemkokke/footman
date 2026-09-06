@@ -138,13 +138,15 @@ def _rediscover() -> tuple[str, ...] | None:
     """
     if _config.discovery_mode() != "auto":
         return None
-    names = _candidates_in(_tool_dir() / _dist())
-    _config.write_discovered(names)
+    names, prefix = _candidates_in(_tool_dir() / _dist())
+    if prefix is None:
+        return None  # nothing answered, so there is nothing to record
+    _config.write_discovered(names, prefix)
     return names
 
 
-def _candidates_in(env: Path) -> tuple[str, ...]:
-    """Every `footman.builtin` entry point installed in *env*.
+def _candidates_in(env: Path) -> tuple[tuple[str, ...], str | None]:
+    """Every `footman.builtin` entry point in *env*, and *env*'s own prefix.
 
     A provider declares itself a *candidate* by advertising in that group —
     "I am meant to be mounted as a built-in, not merely mountable". Whether
@@ -152,23 +154,34 @@ def _candidates_in(env: Path) -> tuple[str, ...]:
     `builtins.discovery_mode`: a package cannot mount itself just by being
     installed, which matters because in a project environment every
     dependency shares one metadata space.
+
+    The prefix comes back with the names because the record is keyed by the
+    environment it *describes*, and that is never this process: the probe
+    runs in the tool environment precisely because its entry points are
+    only knowable by asking its own interpreter. Keying by the writer's
+    `sys.prefix` instead files the answer under whoever happened to type
+    the command — the very bug the key was added to fix, wearing a
+    different hat. So the interpreter that answers also says who it is,
+    rather than this side inferring a prefix from the directory it spawned.
     """
     python = env / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if not python.is_file():
-        return ()
+        return (), None
     probe = (
-        "import json;from importlib.metadata import entry_points;"
-        "print(json.dumps(sorted({e.name for e in "
-        "entry_points(group='footman.builtin')})))"
+        "import json,sys;from importlib.metadata import entry_points;"
+        "print(json.dumps([sys.prefix, sorted({e.name for e in "
+        "entry_points(group='footman.builtin')})]))"
     )
     done = run([str(python), "-c", probe], capture=True, nofail=True, recorded=False)
     if done.code != 0:
-        return ()
+        return (), None
     try:
-        found = json.loads(done.stdout)
-    except ValueError:
-        return ()
-    return tuple(n for n in found if isinstance(n, str))
+        prefix, found = json.loads(done.stdout)
+    except (ValueError, TypeError):
+        return (), None
+    if not isinstance(prefix, str) or not isinstance(found, list):
+        return (), None
+    return tuple(n for n in found if isinstance(n, str)), prefix
 
 
 @tasks.task(expose="always")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -115,14 +116,43 @@ def test_add_and_remove_want_a_name(tool_env, spawned):
 
 
 def test_auto_records_what_the_installed_env_advertises(tool_env, spawned, monkeypatch):
-    monkeypatch.setattr(self_, "_candidates_in", lambda env: ("acme_devkit",))
+    monkeypatch.setattr(
+        self_, "_candidates_in", lambda env: (("acme_devkit",), sys.prefix)
+    )
     self_.add("acme-devkit")
     assert _config.discovered_builtin() == ("acme_devkit",)
 
 
+def test_the_record_is_keyed_by_the_env_it_describes_not_the_writer(
+    tool_env, spawned, monkeypatch, tmp_path
+):
+    """v0.52.0 shipped this backwards, and it reproduced the bug the key
+    was added to fix.
+
+    Discovery asks the *tool* environment's own interpreter, because that
+    is the only thing that knows its entry points — so the answer is never
+    about the process that typed the command. Keyed by the writer's
+    `sys.prefix`, `fm self.install` run from a project's venv filed the
+    tool environment's packages under that venv, which then warned about
+    every name it could not import. Exactly the leak, one hop over.
+    """
+    described = str(tmp_path / "some-other-env")
+    monkeypatch.setattr(
+        self_, "_candidates_in", lambda env: (("acme_devkit",), described)
+    )
+    self_.add("acme-devkit")
+    # Filed under the environment it describes...
+    assert _config.discovered_path(described).is_file()
+    # ...and not under the one that wrote it, which reads nothing.
+    assert not _config.discovered_path(sys.prefix).exists()
+    assert _config.discovered_builtin() == ()
+
+
 def test_the_other_modes_leave_the_list_alone(tool_env, spawned, monkeypatch):
-    monkeypatch.setattr(self_, "_candidates_in", lambda env: ("acme_devkit",))
-    _config.write_discovered(["kept_by_hand"])
+    monkeypatch.setattr(
+        self_, "_candidates_in", lambda env: (("acme_devkit",), sys.prefix)
+    )
+    _config.write_discovered(["kept_by_hand"], sys.prefix)
     config = _paths.footman_config_file()
     config.parent.mkdir(parents=True, exist_ok=True)
     for mode in ("manual", "internal", "none"):
@@ -135,7 +165,7 @@ def test_candidates_come_from_the_installed_interpreter(tmp_path):
     # A tool environment is a different world from the process installing
     # into it, so its entry points are only knowable by asking its python.
     # No interpreter there yet: nothing advertised, never a crash.
-    assert self_._candidates_in(tmp_path / "nothing") == ()
+    assert self_._candidates_in(tmp_path / "nothing") == ((), None)
 
 
 # --- uninstall ----------------------------------------------------------------
