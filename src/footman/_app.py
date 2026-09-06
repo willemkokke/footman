@@ -339,13 +339,21 @@ def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
                 if name not in _brand.builtin:
                     # Discovery put it there, and discovery can be wrong
                     # about a package that has since been removed by hand.
-                    # Name the way back rather than the brand's install.
-                    return _refuse(
-                        json_mode,
+                    # A note and carry on, never a refusal: this list is a
+                    # record footman writes and can always rebuild, which
+                    # is already why a missing or malformed one means
+                    # "nothing discovered" instead of an error. An entry
+                    # that no longer resolves is the same thing one entry
+                    # at a time. Refusing also made the remedy the message
+                    # names unreachable — `self.add` mounts this same base
+                    # on its way in, so the way out refused too.
+                    _error(
                         f"a discovered built-in, {name!r}, did not mount: "
-                        f"{exc} — run {_brand.prog} self.add to bring the "
-                        f"discovered list back in step with what is installed",
+                        f"{exc} — skipping it; run {_brand.prog} self.add to "
+                        f"bring the discovered list back in step with what "
+                        f"is installed"
                     )
+                    continue
                 return _refuse(
                     json_mode,
                     f"{_brand.name} declares built-in tasks from {name!r}, "

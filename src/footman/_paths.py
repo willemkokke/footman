@@ -560,6 +560,17 @@ def _dir_key_str(key_dir: str) -> str:
     return hashlib.sha256(os.path.realpath(key_dir).encode("utf-8")).hexdigest()[:16]
 
 
+def env_key(prefix: str) -> str:
+    """A stable short key for one Python environment.
+
+    `sys.prefix` names it: a venv, a uv tool environment, the system
+    interpreter. Hashed like a directory key, and for the same reason —
+    the store holds one entry per subject and the subject's own name is
+    not a filename.
+    """
+    return _dir_key_str(prefix)
+
+
 def _manifest_file(key_dir: str) -> str:
     """`manifest_path`, as a string — the warm path's spelling."""
     return os.path.join(_footman_cache_dir_str(), f"{_dir_key_str(key_dir)}.json")

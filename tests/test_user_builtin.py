@@ -138,6 +138,36 @@ def test_an_unreadable_discovered_list_is_simply_empty(tmp_path, monkeypatch):
     assert _config.discovered_builtin() == ()
 
 
+def test_the_discovered_list_is_keyed_by_environment(tmp_path, monkeypatch):
+    # What it records — which entry points are importable — is a property
+    # of one Python environment, not of the machine. Keyed by brand alone,
+    # the record a `self.install` wrote from the *tool* environment was
+    # applied by every other footman on the machine: a project venv read
+    # it, could not import a package never installed there, and refused.
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path / "data"))
+    _discovered(["acme_tasks"])
+    assert _config.discovered_builtin() == ("acme_tasks",)
+
+    # The same data directory, a different environment: a different entry,
+    # so one environment's record can never answer for another's.
+    other = _config.discovered_path("/somewhere/else/venv")
+    assert other != _config.discovered_path()
+    assert other.parent == _config.discovered_path().parent
+    monkeypatch.setattr(_config.sys, "prefix", "/somewhere/else/venv")
+    assert _config.discovered_builtin() == ()
+
+
+def test_an_unkeyed_legacy_record_is_simply_not_found(tmp_path, monkeypatch):
+    # A record written before the key existed names no environment, and
+    # applying it to every environment is the bug. Not-found already means
+    # "nothing discovered yet", so one `self.install` writes the keyed one.
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path / "data"))
+    legacy = _paths.footman_data_dir() / "builtins.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(json.dumps({"schema": 1, "builtin": ["stale"]}), encoding="utf-8")
+    assert _config.discovered_builtin() == ()
+
+
 def test_discovery_mode_defaults_to_auto_and_refuses_a_typo(user_config):
     assert _config.discovery_mode() == "auto"
     user_config.write_text('[builtins]\ndiscovery_mode = "manual"\n', encoding="utf-8")
@@ -247,6 +277,34 @@ def test_a_name_that_will_not_mount_blames_the_config(user_config, provider, bar
     assert not result.ok
     assert "builtins.user" in result.stderr
     assert "not_installed_anywhere" in result.stderr
+
+
+def test_a_discovered_name_that_will_not_mount_is_skipped_not_refused(
+    user_config, provider, bare
+):
+    # Discovery writes this list and can rebuild it, which is already why a
+    # missing or malformed one means "nothing discovered" rather than an
+    # error. An entry that no longer resolves is the same thing, one entry
+    # at a time — so the runner says so and carries on.
+    _discovered(["gone_from_this_environment"])
+    result = stock_runner().invoke("--list", cwd=bare)
+    assert result.ok  # the runner still runs
+    assert "gone_from_this_environment" in result.stderr
+    assert "skipping it" in result.stderr
+
+
+def test_one_stale_discovered_name_does_not_take_the_others_with_it(
+    user_config, provider, bare
+):
+    # Skipping is per name. Refusing was all-or-nothing, and it took the
+    # remedy with it: the message says to run `self.add`, and `self.add`
+    # mounts this same base on its way in — so the way out refused too,
+    # and the only fix left was deleting the record by hand.
+    _discovered(["gone_from_this_environment", "acme_tasks"])
+    result = stock_runner().invoke("--list", cwd=bare)
+    assert result.ok
+    assert "gone_from_this_environment" in result.stderr  # named, and skipped
+    assert "login" in result.stdout  # the one that does resolve still mounts
 
 
 def test_a_broken_key_is_refused_before_anything_runs(user_config, provider, bare):

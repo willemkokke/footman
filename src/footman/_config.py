@@ -17,6 +17,7 @@ footman.
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -498,9 +499,29 @@ def discovered_builtin() -> tuple[str, ...]:
     return tuple(n for n in names if isinstance(n, str))
 
 
-def discovered_path() -> Path:
-    """Where the discovered list lives: this brand's data directory."""
-    return _paths.footman_data_dir() / "builtins.json"
+def discovered_path(prefix: str | None = None) -> Path:
+    """Where the discovered list lives: this brand's data directory, keyed
+    by the **environment** the list describes.
+
+    What it records — which `footman.builtin` entry points are importable —
+    is a property of one Python environment, not of the machine. Keyed by
+    brand alone, the record a `self.install` wrote from the *tool*
+    environment was then applied by every other footman on the machine: a
+    project's dev venv read it, could not import a package that was never
+    installed there, and refused to run. The value varies by environment,
+    so the key does too.
+
+    Keyed the way manifests are keyed by cwd — one shared store, each entry
+    named for its subject — rather than written into the environment
+    itself, which a `uv tool upgrade` rebuilds and a read-only venv
+    forbids.
+
+    A record written before the key existed names no environment, so it is
+    simply not found, which already means "nothing discovered yet": one
+    `self.install` writes the keyed one.
+    """
+    key = _paths.env_key(prefix if prefix is not None else sys.prefix)
+    return _paths.footman_data_dir() / f"builtins-{key}.json"
 
 
 def write_discovered(names: Sequence[str]) -> None:
