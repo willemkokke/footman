@@ -5,6 +5,27 @@ All notable changes to footman are documented here. The format is based on
 [Semantic Versioning](https://semver.org/). While footman is pre-1.0, minor
 versions may include breaking changes.
 
+## [Unreleased]
+
+### Fixed
+
+- **The discovered built-in record is keyed by the environment it
+  describes, not the one that wrote it.** v0.52.0 keyed it by the writer's
+  `sys.prefix`, which reproduced the very leak the key was added to
+  prevent, one hop over: `fm self.*` discovers by asking the **tool**
+  environment's own interpreter — that is the only thing that knows its
+  entry points — so the answer is never about the process that typed the
+  command. Run from a project's venv, `fm self.install` filed the tool
+  environment's packages under that venv, which then warned about every
+  name it could not import.
+
+  The probe now reports its own `sys.prefix` alongside the names, and
+  `write_discovered` requires the prefix rather than defaulting to the
+  writer's. If you ran `fm self.install` on 0.52.0 from anywhere other
+  than a shell where `fm` resolved to the tool installation, run it once
+  more; the misfiled record names an environment that never had those
+  packages and is otherwise inert.
+
 ## [0.52.0] - 2026-09-06
 
 ### Added

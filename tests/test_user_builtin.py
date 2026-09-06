@@ -98,8 +98,8 @@ def user_config(tmp_path, monkeypatch):
 
 
 def _discovered(names):
-    """Stand in for what `fm self.*` writes into the data directory."""
-    _config.write_discovered(names)
+    """Stand in for what `fm self.*` writes for *this* environment."""
+    _config.write_discovered(names, sys.prefix)
 
 
 def test_the_user_list_is_yours_alone(user_config, provider):
