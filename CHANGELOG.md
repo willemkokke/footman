@@ -5,7 +5,7 @@ All notable changes to footman are documented here. The format is based on
 [Semantic Versioning](https://semver.org/). While footman is pre-1.0, minor
 versions may include breaking changes.
 
-## [Unreleased]
+## [0.52.0] - 2026-09-06
 
 ### Added
 
@@ -6364,7 +6364,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.51.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.52.0...HEAD
+[0.52.0]: https://github.com/willemkokke/footman/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/willemkokke/footman/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/willemkokke/footman/compare/v0.49.1...v0.50.0
 [0.49.1]: https://github.com/willemkokke/footman/compare/v0.49.0...v0.49.1
