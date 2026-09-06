@@ -169,6 +169,29 @@ refresh workflow names its branch for the date, and a leftover one made
 head look like an open one. Leave `git branch -a` showing `main` and nothing
 else.
 
+**Merging from inside a worktree: never pass `--delete-branch`.** `gh pr
+merge --delete-branch` merges through the API and *then* runs local git to
+tidy up, which starts by checking out the base branch — and `main` is
+already checked out in the maintainer's own worktree, so git refuses:
+
+```
+failed to run git: fatal: 'main' is already used by worktree at '…/footman'
+```
+
+**The merge has already happened when you see this.** Re-running it, or
+reading it as a failed merge, is the trap. Check with `gh pr view <n>
+--json state` before doing anything else. Merge bare (`gh pr merge <n>
+--merge`), then delete the remote branch over the API — which needs no
+local checkout and no SSH, so it also survives a 1Password prompt:
+
+```sh
+gh api -X DELETE repos/willemkokke/footman/git/refs/heads/<branch>
+```
+
+The *local* branch goes after `ExitWorktree`, from the main checkout,
+along with any stale tracking ref (`git update-ref -d
+refs/remotes/origin/<branch>` — `git remote prune` needs SSH).
+
 ## Commits & identity
 
 - **Author/committer email is the maintainer's personal `mail@willem.net`, and
@@ -211,10 +234,12 @@ PR, and only the merged commit is tagged. Don't tag before the bump is on
 `main`, or the tag points at a commit that never reached the branch.
 
 1. Branch `release/vX.Y.Z` off an up-to-date `main`.
-2. Bump both version files to `X.Y.Z`, and the doc version references the
-   drift test guards: the `footman~=X.Y.0` pin in `README.md` and
-   `docs/index.md`, and the `--version` example in `docs/json.md`
-   (`tests/test_docs_drift.py` fails the gate if these go stale).
+2. Bump both version files to `X.Y.Z`, and the **four** doc version
+   references the drift tests guard: the `footman~=X.Y.0` pin in
+   `README.md`, `docs/index.md` **and `docs/stability.md`**, and the
+   `--version` example in `docs/json.md` (`tests/test_docs_drift.py` fails
+   the gate if any go stale — its pin list is the authority, so count the
+   parametrised cases there rather than trusting this line).
 3. Move CHANGELOG `[Unreleased]` → `[X.Y.Z]` with today's date; add the
    `[X.Y.Z]: …/compare/vPREV...vX.Y.Z` link and repoint `[Unreleased]` to
    `…/compare/vX.Y.Z...HEAD`.
