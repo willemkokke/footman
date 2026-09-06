@@ -214,13 +214,6 @@ class Discovery(NamedTuple):
     invents none where there is no project ("empty means global mode")."""
     user: Path | None
     """The user tasks file, when it joined `files`."""
-    ceiling: Path
-    """Where the walk stopped climbing — the cascade mode's top. Kept so a
-    refusal can re-walk exactly what was searched (and only then: the
-    wrong-case check that uses it costs a listing per level, which the
-    empty-and-fine global-mode result must not pay)."""
-    name: str
-    """The tasks filename this walk looked for, after config and brand."""
 
 
 def resolve_task_files(
@@ -270,14 +263,7 @@ def resolve_task_files(
         if not one.is_absolute():
             one = cwd / one  # identical to the plain relative read when cwd is the cwd
         files = [one] if one.is_file() else []
-        return Discovery(
-            files,
-            cfg,
-            str(files[0].parent) if files else "",
-            None,
-            one.parent,
-            one.name,
-        )
+        return Discovery(files, cfg, str(files[0].parent) if files else "", None)
     filename = cfg.get("tasks")
     if filename is not None and not isinstance(filename, str):
         # The option-backed keys refuse a wrong TOML type loudly; this
@@ -288,7 +274,20 @@ def resolve_task_files(
             f"config key 'tasks' expects a filename string (got {filename!r})"
         )
     name = filename if isinstance(filename, str) else _brand.tasks_file
-    files = _paths.task_files(cwd, ceiling, name)
+    miscased: list[tuple[Path, str]] = []
+    files = _paths.task_files(cwd, ceiling, name, miscased)
+    if on_warning is not None:
+        for directory, actual in miscased:
+            # Unconditional: a wrong-case file is worth saying whether or not
+            # the walk found a real one elsewhere. The person wrote a tasks
+            # file and footman is not loading it — silence is the bug, and
+            # the builtin base answering in its place is exactly when the
+            # silence is most convincing.
+            on_warning(
+                f"{directory / actual} is not {name} — the name is "
+                f"case-sensitive, so this file is not being loaded. "
+                f"Rename it to {name}."
+            )
     root = str(files[0].parent) if files else ""
     if _config_arg(g):
         # An explicit --config is total control, the user rung included:
@@ -310,8 +309,8 @@ def resolve_task_files(
         # reading the cascade already has, extended one rung outward. A
         # project that wants a personal task's name owns it; `inherited()`
         # still reaches what it shadowed.
-        return Discovery([user, *files], cfg, root, user, ceiling, name)
-    return Discovery(files, cfg, root, None, ceiling, name)
+        return Discovery([user, *files], cfg, root, user)
+    return Discovery(files, cfg, root, None)
 
 
 def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
@@ -403,35 +402,19 @@ def _discover_files(
 
     cfg = found.cfg
     looked = g.get("tasks_file") or cfg.get("tasks") or _brand.tasks_file
-    # Nothing was found — so before saying so, check whether something is
-    # sitting right there under the wrong case. One spelling counts, and a
-    # `Tasks.py` is passed over on both kinds of filesystem: here because
-    # it is a different file, on macOS and Windows because loading what
-    # opens under either name ships a project that dies on the first Linux
-    # box. Passing over it *quietly* is the half that reads like a lie to
-    # someone looking straight at the file.
-    # A sentence of its own, so it reads right after the refusal's clause
-    # and after the soft states' full stop alike.
-    hint = ""
-    if not g.get("tasks_file"):
-        near = _paths.miscased_nearby(Path.cwd(), found.ceiling, found.name)
-        if near is not None:
-            where, spelling = near
-            hint = (
-                f"{where / spelling} is there, but it is not {found.name}: "
-                f"the name is case-sensitive, so a project that relies on the "
-                f"other spelling stops working the moment it moves to a "
-                f"filesystem that tells the two apart. Rename it to "
-                f"{found.name}."
-            )
+    # Name the file exactly, and say the name is case-sensitive. That is
+    # the whole of what a `Tasks.py` owner needs and it costs nothing to
+    # say always: on a filesystem that folds case the walk already
+    # complained by name (it had the listing in hand), and on one that does
+    # not, this is the only affordable way to teach the rule — finding the
+    # variant there would mean listing every level of the chain.
+    looked_at = f"{looked} (exactly — the name is case-sensitive)"
     if wants_help:
         # A stuck newcomer asking for help should see the globals (-f/-C are the
         # way out) — not a bare one-liner. Global help over an empty tree, then
         # the "where did I look" note.
         _print_global_help(_manifest.build_manifest(registry.Group("root"))["tree"])
-        print(f"\n(no tasks file found — looked for {looked})")
-        if hint:
-            print(f"\n{hint}")
+        print(f"\n(no tasks file found — looked for {looked_at})")
         return 0
     if bare or g.get("list") or g.get("tree"):
         # A bare `fm` (like `--list`) is a warm empty state, not a hard error.
@@ -439,15 +422,12 @@ def _discover_files(
             tree = _manifest.build_manifest(registry.Group("root"))["tree"]
             print(json.dumps({"schema": 1, "tree": tree}, indent=2))
         else:
-            print(f"No tasks file found (looked for {looked}).")
-            if hint:
-                print(hint)
+            print(f"No tasks file found (looked for {looked_at}).")
         return 0
-    # With a hint there is nothing to create — the fix is a rename, and
-    # "create one or pass -f" would send someone the wrong way.
-    tail = f". {hint}" if hint else "; create one or pass -f/--tasks-file."
     return _refuse(
-        bool(g.get("json")), f"no tasks file found (looked for {looked}){tail}"
+        bool(g.get("json")),
+        f"no tasks file found (looked for {looked_at}); "
+        f"create one or pass -f/--tasks-file.",
     )
 
 
@@ -514,23 +494,95 @@ def _address_band(rows: list[tuple[str, str]]) -> list[tuple[str, int, str]]:
     ]
 
 
+def _sifted(node: dict[str, Any], want_global: bool) -> dict[str, Any] | None:
+    """*node* keeping only tasks from one side of the cascade, or `None`.
+
+    `None` when nothing on that side survives, so an empty section is not
+    a heading over blank space. Groups are kept only for what they still
+    hold: a group can straddle the split — a personal `docs.notes` beside
+    a project's `docs.build` — so the same group name can head a branch in
+    both sections, each carrying its own children.
+    """
+    tasks = {
+        name: t
+        for name, t in node.get("tasks", {}).items()
+        if bool(t.get("global")) is want_global
+    }
+    groups = {}
+    for name, sub in node.get("groups", {}).items():
+        if (kept := _sifted(sub, want_global)) is not None:
+            groups[name] = kept
+    if not tasks and not groups:
+        return None
+    sifted = {**node, "tasks": tasks, "groups": groups}
+    # A group's default is one of its tasks, so it goes when that task does.
+    if "default" in sifted and "default" not in tasks:
+        sifted.pop("default", None)
+        sifted.pop("default_fanout", None)
+    return sifted
+
+
+def _sections(tree: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """The listing's sections, project first, each omitted when empty.
+
+    Project first because it is what the person came for: their own tasks,
+    in the directory they are standing in. The global rung — built-ins and
+    the personal tasks file — rides everywhere and is the backdrop.
+    Outside a project there is only one section, and outside a project
+    with no built-ins there are none, which the callers report as before.
+    """
+    found = [
+        (heading, kept)
+        for heading, want_global in (("Tasks:", False), ("Global tasks:", True))
+        if (kept := _sifted(tree, want_global)) is not None
+    ]
+    # One section needs no label saying which of two it is.
+    if len(found) == 1 and found[0][0] == "Global tasks:":
+        return [("Tasks:", found[0][1])]
+    return found
+
+
 def _print_list(tree: dict[str, Any], show_hidden: bool = False) -> None:
-    rows = list(
-        _describe.iter_tasks(tree, show_hidden=show_hidden, dedupe_defaults=True)
-    )
-    if not rows:
+    sections = [
+        (heading, rows)
+        for heading, node in _sections(tree)
+        if (
+            rows := list(
+                _describe.iter_tasks(
+                    node, show_hidden=show_hidden, dedupe_defaults=True
+                )
+            )
+        )
+    ]
+    if not sections:
         print("No tasks defined.")
         return
-    print(_describe.bold("Tasks:", _color_out))
-    _print_two_band(_address_band(rows))
+    for i, (heading, rows) in enumerate(sections):
+        if i:
+            print()
+        print(_describe.bold(heading, _color_out))
+        _print_two_band(_address_band(rows))
 
 
-def _print_tree(node: dict[str, Any], show_hidden: bool = False) -> None:
-    rows = list(_describe.walk(node, show_hidden=show_hidden, dedupe_defaults=True))
-    if not rows:
+def _print_tree(tree: dict[str, Any], show_hidden: bool = False) -> None:
+    sections = [
+        (heading, node)
+        for heading, node in _sections(tree)
+        if list(_describe.walk(node, show_hidden=show_hidden, dedupe_defaults=True))
+    ]
+    if not sections:
         # Mirror _print_list rather than printing zero bytes and exiting 0.
         print("No tasks defined.")
         return
+    for i, (heading, node) in enumerate(sections):
+        if i:
+            print()
+        print(_describe.bold(heading, _color_out))
+        _print_branch(node, show_hidden)
+
+
+def _print_branch(node: dict[str, Any], show_hidden: bool = False) -> None:
+    rows = list(_describe.walk(node, show_hidden=show_hidden, dedupe_defaults=True))
     last = _last_of_each_branch(rows)
     # Leaf names under a drawn branch, not repeated dotted addresses:
     # `--list` is the flat, copy-paste view, and a `--tree` that only
@@ -2254,6 +2306,10 @@ def _execute(
     for orphan in registry.orphan_global_options(reg):
         _error(f"warning: {orphan}")
 
+    # The personal rung's own directory: what tells a user task from a
+    # project one when the listings split the two. `None` when the cascade
+    # mounted no user file, which simply means nothing can match it.
+    user_dir = str(found.user.parent) if found.user is not None else None
     try:
         if g.get("tasks_file"):
             # -f loads one arbitrary file, not the cwd's cascade. Cache its
@@ -2265,6 +2321,7 @@ def _execute(
             tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
+                user_dir=user_dir,
                 completion_max_age=0,
                 tasks_file=override,
                 path=_paths.source_manifest_path(Path.cwd(), Path(override)),
@@ -2279,6 +2336,7 @@ def _execute(
             tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
+                user_dir=user_dir,
                 completion_max_age=0,
                 tasks_file=cfg_tasks
                 if isinstance(cfg_tasks, str)
@@ -2295,6 +2353,7 @@ def _execute(
             tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
+                user_dir=user_dir,
                 completion_max_age=_config.completion_max_age(cfg, strict=True),
                 tasks_file=cfg_tasks
                 if isinstance(cfg_tasks, str)
@@ -2311,6 +2370,7 @@ def _execute(
             tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
+                user_dir=user_dir,
                 completion_max_age=_config.completion_max_age(cfg, strict=True),
                 tasks_file=cfg_tasks
                 if isinstance(cfg_tasks, str)

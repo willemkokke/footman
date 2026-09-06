@@ -5,6 +5,63 @@ All notable changes to footman are documented here. The format is based on
 [Semantic Versioning](https://semver.org/). While footman is pre-1.0, minor
 versions may include breaking changes.
 
+## [Unreleased]
+
+### Added
+
+- **`--list` and `--tree` split into two sections: project tasks, then
+  global ones.** Project first, because your own tasks in the directory
+  you are standing in are what you came for; the global rung — the
+  built-ins and your personal tasks file — is the backdrop that rides
+  everywhere. A section with nothing in it is not printed, and when only
+  one side exists the heading stays plain `Tasks:` rather than announcing
+  a split that is not there. A group can straddle the two (a personal
+  `docs.notes` beside a project's `docs.build`), so it heads a branch in
+  each section carrying only that section's children.
+
+  Manifest schema 10 → 11: task rows carry `global` where they come from
+  the built-in base or the user tasks file. Caches rebuild on first use.
+
+### Fixed
+
+- **A wrong-case tasks file is now complained about wherever it is, and
+  whatever else the run finds.** v0.51.0 shipped this half-built: the
+  complaint lived on the "no tasks file found" path, which the built-in
+  base returns before ever reaching — so with stock `fm`, a directory
+  holding a `Tasks.py` listed `self.*` and said nothing at all. It also
+  looked only in the cwd and the cascade top, missing the monorepo case
+  where the file that will not load is a package's own, several levels
+  from either.
+
+  The complaint now rides the walk itself, at no cost: on a filesystem
+  that folds case, the probe hits and the listing that confirms the
+  spelling is already in hand at the moment the mismatch is known. So
+  every level is covered, no extra directory is ever read, and the
+  complaint reaches every exit — including the one where the built-ins
+  answer:
+
+  ```
+  fm: /w/packages/api/Tasks.py is not tasks.py — the name is case-sensitive,
+  so this file is not being loaded. Rename it to tasks.py.
+  ```
+
+  It fires even when the walk found a real tasks file elsewhere: you wrote
+  a tasks file and footman is not loading it, which is worth saying either
+  way.
+
+- **"No tasks file found" now names the case rule.** Where the filesystem
+  tells `Tasks.py` and `tasks.py` apart there is no variant for the walk
+  to notice, and finding one would mean listing every level of the
+  cascade. So the message teaches the rule instead — `looked for tasks.py
+  (exactly — the name is case-sensitive)` — which costs nothing and is the
+  whole of what a `Tasks.py` owner needs to hear.
+
+- **The test suite no longer reads the developer's own data directory.**
+  `builtins.json` lives there, so a maintainer whose *global* `fm` had a
+  plugin installed beside it got that plugin's entry point demanded by
+  footman's own suite, where it is not installed — five tests red locally,
+  green in CI. Tests now run against an isolated `FOOTMAN_DATA_DIR`.
+
 ## [0.51.0] - 2026-09-06
 
 ### Added

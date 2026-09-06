@@ -110,6 +110,37 @@ def test_task_files_are_case_exact(tmp_path):
     assert _paths.task_files(right, right) == [right / "tasks.py"]
 
 
+def test_the_wrong_case_sighting_is_what_the_filesystem_reports(tmp_path):
+    """`_named` records a sighting only where the probe hits.
+
+    Both halves, driven directly, so the contract is pinned wherever the
+    suite happens to run — a case-folding filesystem answers `exists()`
+    for the wrong spelling, which is what makes the confirming listing
+    (and therefore the free sighting) happen at all; a case-sensitive one
+    answers no, the walk never lists, and there is nothing to report. That
+    asymmetry is the design, not a platform accident: it is why the
+    not-found message teaches the case rule in words.
+    """
+    wrong = tmp_path / "wrong"
+    wrong.mkdir()
+    (wrong / "Tasks.py").write_text("")
+
+    seen: list[tuple[Path, str]] = []
+    assert _paths._named(wrong, "tasks.py", seen) is False  # never loaded, either way
+    if seen:  # the filesystem folded case: the probe hit, so we know the name
+        assert seen == [(wrong, "Tasks.py")]
+    else:  # it did not: no listing happened, so there is nothing to have seen
+        assert not (wrong / "tasks.py").exists()
+
+    # A right-cased file is never a sighting, on any filesystem.
+    right = tmp_path / "right"
+    right.mkdir()
+    (right / "tasks.py").write_text("")
+    seen.clear()
+    assert _paths._named(right, "tasks.py", seen) is True
+    assert seen == []
+
+
 def test_project_markers_are_case_exact(tmp_path):
     # Separate trees for the two spellings — see the note above about
     # case-insensitive filesystems collapsing them into one file.
