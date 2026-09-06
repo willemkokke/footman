@@ -402,7 +402,7 @@ def test_task_view_mounted_from_names_the_provider(tmp_path, monkeypatch):
     # Ownership, as a provider identity rather than a file path: it answers
     # for a task whose body is not Python, and it keeps absolute home paths
     # out of anything a consumer renders or commits.
-    (tmp_path / "devkit.py").write_text(
+    (tmp_path / "provkit.py").write_text(
         textwrap.dedent(
             """
             from footman import task, group
@@ -419,7 +419,7 @@ def test_task_view_mounted_from_names_the_provider(tmp_path, monkeypatch):
         """
         from footman import task, include
 
-        include("devkit")
+        include("provkit")
 
         @task
         def mine(): ...
@@ -428,7 +428,7 @@ def test_task_view_mounted_from_names_the_provider(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(compose, "_module_trees", {})
     view = registry.Tasks(_discover.load_tree([src]))
-    assert view["lint.strict"].mounted_from == "devkit"
+    assert view["lint.strict"].mounted_from == "provkit"
     # A task the tasks file writes itself has no provider — the honest
     # answer, not a hole: the project owns it.
     assert view["mine"].mounted_from is None
