@@ -105,6 +105,24 @@ def tree(root: registry.Group) -> dict[str, Any]:
 
 
 @pytest.fixture(autouse=True)
+def _isolated_data_home(tmp_path_factory, monkeypatch):
+    """No test reads the developer's own data directory.
+
+    `builtins.json` lives there — the discovered built-in list `fm
+    self.install` writes — and `_builtin()` reads it on every run that
+    reaches global mode. So a maintainer whose *global* `fm` has a plugin
+    installed beside it gets that plugin's entry point demanded by this
+    repo's test suite, where it is not installed, and `_app.run(["--help"])`
+    exits 64 with "a discovered built-in did not mount". Green or red
+    depending on what is installed on the machine, which is the one thing
+    a test must never be. (Seen for real: a `self.install` after a release
+    recorded `livery.workshop` and turned five tests red locally while CI —
+    which has no such file — stayed green.)
+    """
+    monkeypatch.setenv("FOOTMAN_DATA_DIR", str(tmp_path_factory.mktemp("data-home")))
+
+
+@pytest.fixture(autouse=True)
 def _stock_brand_locations():
     """Every test starts reading stock footman's locations.
 

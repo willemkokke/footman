@@ -442,11 +442,12 @@ def test_missing_tasks_file(tmp_path, monkeypatch, capsys):
     assert "no tasks file found" in capsys.readouterr().err
 
 
-def test_a_wrong_case_tasks_file_is_named_not_ignored(tmp_path, monkeypatch, capsys):
+def test_a_wrong_case_tasks_file_is_complained_about(tmp_path, monkeypatch, capsys):
     # The walk declines to load `Tasks.py` — it opens here and vanishes on
-    # the first Linux box. Declining quietly is the other half of the bug:
-    # "no tasks file found" reads as a lie to someone looking straight at
-    # the file, with nothing to say the spelling is what's wrong.
+    # the first Linux box. Declining *quietly* was the other half of the
+    # bug. The complaint costs nothing: the walk probes, the probe hits
+    # (this filesystem folds case), so the listing that confirms the
+    # spelling is already in hand at the moment the mismatch is known.
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "Tasks.py").write_text("")
     monkeypatch.chdir(tmp_path)
@@ -454,30 +455,49 @@ def test_a_wrong_case_tasks_file_is_named_not_ignored(tmp_path, monkeypatch, cap
     assert _app.run(["hi"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "Tasks.py" in err  # the spelling that is actually on disk
-    assert "Rename it to tasks.py" in err  # and what to do about it
-    # Nothing to create — that tail would send someone the wrong way.
-    assert "create one" not in err
+    assert "case-sensitive" in err
+    assert "Rename it to tasks.py" in err
 
 
-def test_a_wrong_case_tasks_file_is_named_in_the_soft_states(
+def test_the_complaint_survives_the_builtin_base_answering(
     tmp_path, monkeypatch, capsys
 ):
-    # The listing and help states are warm empties, not errors — but they
-    # are exactly where someone goes to ask "why is my file not showing up".
+    # The case the first attempt missed entirely: with built-ins mounted,
+    # discovery *succeeds* — global mode answers — and the early return
+    # skipped every not-found message. Someone running `fm --list` beside
+    # their `Tasks.py` saw the built-ins and not one word about their file.
+    # The complaint rides the walk, so it reaches every exit.
     (tmp_path / "Tasks.py").write_text("")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     assert _app.run(["--list"]) == 0
-    assert "Tasks.py" in capsys.readouterr().out
-    assert _app.run(["--help"]) == 0
-    assert "Tasks.py" in capsys.readouterr().out
+    assert "Tasks.py" in capsys.readouterr().err
 
 
-def test_a_correctly_spelled_tasks_file_draws_no_case_hint(
+def test_a_wrong_case_file_mid_cascade_is_complained_about(
     tmp_path, monkeypatch, capsys
 ):
-    # The hint costs a listing per level, so it must stay on the failure
-    # path — and must never fire for a name that is simply absent.
+    # Not just the ends of the walk: checking only the cwd and the cascade
+    # top missed exactly the monorepo case, where the file that is not
+    # loading is a package's own, several levels down from either.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text("from footman import task\n")
+    middle = tmp_path / "packages" / "web"
+    deep = middle / "src"
+    deep.mkdir(parents=True)
+    (middle / "Tasks.py").write_text("")  # the one that will not load
+    monkeypatch.chdir(deep)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--list"]) == 0  # the root's tasks.py still loads
+    err = capsys.readouterr().err
+    assert str(middle / "Tasks.py") in err
+
+
+def test_a_correctly_spelled_tasks_file_draws_no_complaint(
+    tmp_path, monkeypatch, capsys
+):
+    # A name that is simply absent is not a case mistake, and a right-cased
+    # file beside nothing else must stay silent.
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
@@ -485,6 +505,18 @@ def test_a_correctly_spelled_tasks_file_draws_no_case_hint(
     err = capsys.readouterr().err
     assert "Rename" not in err
     assert "create one or pass -f" in err
+
+
+def test_the_not_found_message_names_the_case_rule(tmp_path, monkeypatch, capsys):
+    # What a case-sensitive filesystem gets: the walk cannot see a variant
+    # there without listing every level, so the message teaches the rule
+    # instead — the exact name, and that the name is case-sensitive.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "tasks.py (exactly — the name is case-sensitive)" in err
 
 
 def test_missing_tasks_file_with_list_is_soft(tmp_path, monkeypatch, capsys):
@@ -510,6 +542,82 @@ def test_tree_output(project, capsys):
     out = capsys.readouterr().out
     assert "tools." in out
     assert "echo" in out
+
+
+def test_listings_split_project_from_global(tmp_path, monkeypatch, capsys):
+    # Two sections, project first: a person's own tasks are what they came
+    # for, and the global rung — built-ins and the personal tasks file —
+    # is the backdrop that rides everywhere.
+    config = tmp_path / "config" / "footman"
+    config.mkdir(parents=True)
+    (config / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef scratch():\n    'Mine, everywhere.'\n"
+    )
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(config))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (proj / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef build():\n    'Build it.'\n"
+    )
+    monkeypatch.chdir(proj)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert "Tasks:" in out and "Global tasks:" in out
+    assert out.index("Tasks:") < out.index("Global tasks:")  # project leads
+    project_half, global_half = out.split("Global tasks:")
+    assert "build" in project_half and "build" not in global_half
+    assert "scratch" in global_half and "scratch" not in project_half
+    # --tree splits the same way, from the same sifting.
+    assert _app.run(["--tree"]) == 0
+    tree_out = capsys.readouterr().out
+    assert tree_out.index("Tasks:") < tree_out.index("Global tasks:")
+
+
+def test_one_section_is_not_labelled_as_one_of_two(tmp_path, monkeypatch, capsys):
+    # With nothing on the global rung there is nothing to contrast with, so
+    # the listing says `Tasks:` rather than announcing a split that is not
+    # there — and never prints a heading over blank space.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef build():\n    'Build it.'\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert "Tasks:" in out and "build" in out
+    assert "Global tasks:" not in out
+
+
+def test_a_group_straddling_the_split_heads_both_sections(
+    tmp_path, monkeypatch, capsys
+):
+    # A group is not owned by one side: a personal `docs.notes` and a
+    # project's `docs.build` share the name, so the group heads a branch in
+    # each section carrying only its own children.
+    config = tmp_path / "config"
+    (config / "footman").mkdir(parents=True)
+    (config / "footman" / "tasks.py").write_text(
+        "from footman import group\n\n"
+        "docs = group('docs')\n\n"
+        "@docs.task\ndef notes():\n    'Personal notes.'\n"
+    )
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(config / "footman"))
+    (tmp_path / "proj").mkdir()
+    (tmp_path / "proj" / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "proj" / "tasks.py").write_text(
+        "from footman import group\n\n"
+        "docs = group('docs')\n\n"
+        "@docs.task\ndef build():\n    'Build the docs.'\n"
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--list"]) == 0
+    project_half, global_half = capsys.readouterr().out.split("Global tasks:")
+    assert "docs.build" in project_half and "docs.notes" not in project_half
+    assert "docs.notes" in global_half and "docs.build" not in global_half
 
 
 def test_timings(project, capsys):

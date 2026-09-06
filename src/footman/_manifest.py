@@ -41,7 +41,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 _warned: set[str] = set()
 
@@ -876,7 +876,11 @@ def _source_of(fn: Any) -> str:
 
 
 def _task_node(
-    fn: Any, memo: dict[int, list[str]], *, bake: bool = False
+    fn: Any,
+    memo: dict[int, list[str]],
+    *,
+    bake: bool = False,
+    user_dir: str | None = None,
 ) -> dict[str, Any]:
     sig = resolved_signature(fn)
     infinite = registry.is_infinite(fn)
@@ -945,6 +949,16 @@ def _task_node(
             f"unknown parameter(s): {', '.join(unknown)}"
         )
     node: dict[str, Any] = {"help": parsed.summary, "params": params}
+    # Where this task comes from, as the listings group it: a built-in
+    # carries no defining directory (the cascade never tagged it), and the
+    # personal rung's directory is the user tasks file's own. Everything
+    # else is the project's cascade — including a plugin the project chose
+    # to mount, which is the project's decision and reads as its own task.
+    # Marked only when global: the project's tasks are the common case and
+    # a per-row field for them would be bytes on the completion hot path.
+    defined_in = _discover.defining_dir(fn)
+    if defined_in is None or (user_dir is not None and defined_in == user_dir):
+        node["global"] = True
     if (provider := registry.mounted_from(fn)) is not None:
         # Additive: which provider this task came from — the entry-point
         # identity for `plugin()`, the module name for `include()`. Omitted
@@ -1057,6 +1071,7 @@ def _node(
     bake: bool = False,
     expose: str | None = None,
     project: bool = True,
+    user_dir: str | None = None,
 ) -> dict[str, Any]:
     # `hidden` is resolved here, where the tree structure is: a node that never
     # declared one inherits its group's answer, so hiding a subtree is said once
@@ -1075,7 +1090,9 @@ def _node(
         "tasks": {
             name: _scoped(
                 _hide(
-                    _task_node(fn, memo, bake=bake), registry.declared_hidden(fn), mine
+                    _task_node(fn, memo, bake=bake, user_dir=user_dir),
+                    registry.declared_hidden(fn),
+                    mine,
                 ),
                 fn,
                 here,
@@ -1084,7 +1101,15 @@ def _node(
             for name, fn in g.tasks.items()
         },
         "groups": {
-            name: _node(sub, memo, mine, bake=bake, expose=here, project=project)
+            name: _node(
+                sub,
+                memo,
+                mine,
+                bake=bake,
+                expose=here,
+                project=project,
+                user_dir=user_dir,
+            )
             for name, sub in g.groups.items()
         },
     }
@@ -1108,7 +1133,7 @@ def _node(
     if g.default_task is not None:
         node["default"] = _scoped(
             _hide(
-                _task_node(g.default_task, memo, bake=bake),
+                _task_node(g.default_task, memo, bake=bake, user_dir=user_dir),
                 registry.declared_hidden(g.default_task),
                 mine,
             ),
@@ -1139,6 +1164,7 @@ def build_manifest(
     completion_max_age: int | None = None,
     bake_completers: bool = False,
     project: bool = True,
+    user_dir: str | None = None,
 ) -> dict[str, Any]:
     """Introspect *root* into a serialisable manifest dict.
 
@@ -1160,7 +1186,7 @@ def build_manifest(
     docs exporter, which renders every parameter it can find into a page.
     """
     memo: dict[int, list[str]] = {}
-    tree = _node(root, memo, bake=bake_completers, project=project)
+    tree = _node(root, memo, bake=bake_completers, project=project, user_dir=user_dir)
     tree["globals"] = [
         _global_spec(opt, memo, bake=bake_completers) for opt in _unique_globals(root)
     ]
@@ -1281,6 +1307,7 @@ def sync_manifest(
     bake_cwd: bool = True,
     builtin: tuple[str, ...] = (),
     project: bool = True,
+    user_dir: str | None = None,
 ) -> dict[str, Any]:
     """Build the fresh manifest and rewrite the cache only on a hash change.
 
@@ -1298,7 +1325,12 @@ def sync_manifest(
     every command, so an `OSError` here is swallowed the way `_progress`
     swallows the timing history's.
     """
-    fresh = build_manifest(root, completion_max_age=completion_max_age, project=project)
+    fresh = build_manifest(
+        root,
+        completion_max_age=completion_max_age,
+        project=project,
+        user_dir=user_dir,
+    )
     if bake_cwd:
         # The directory this manifest describes, baked in (additive) so the
         # cache collector can tell a deleted project's leftovers from a
