@@ -442,7 +442,29 @@ def test_missing_tasks_file(tmp_path, monkeypatch, capsys):
     assert "no tasks file found" in capsys.readouterr().err
 
 
+def _folds_case(directory: Path) -> bool:
+    """Whether *directory*'s filesystem opens one name under another case.
+
+    Asked of the filesystem, not the platform: macOS can be formatted
+    case-sensitive and Linux can mount case-insensitive volumes, so
+    `sys.platform` would be a proxy for the thing itself. The wrong-case
+    *complaint* only exists where the answer is yes — that is where the
+    probe hits, where the confirming listing is already in hand, and where
+    the mistake is invisible enough to be worth a warning. Where the two
+    names are simply different files, the not-found message teaches the
+    rule instead (see the case-rule test).
+    """
+    probe = directory / "FootmanCaseProbe"
+    probe.write_text("")
+    try:
+        return (directory / "footmancaseprobe").exists()
+    finally:
+        probe.unlink()
+
+
 def test_a_wrong_case_tasks_file_is_complained_about(tmp_path, monkeypatch, capsys):
+    if not _folds_case(tmp_path):
+        pytest.skip("the complaint needs a filesystem that folds case")
     # The walk declines to load `Tasks.py` — it opens here and vanishes on
     # the first Linux box. Declining *quietly* was the other half of the
     # bug. The complaint costs nothing: the walk probes, the probe hits
@@ -462,6 +484,8 @@ def test_a_wrong_case_tasks_file_is_complained_about(tmp_path, monkeypatch, caps
 def test_the_complaint_survives_the_builtin_base_answering(
     tmp_path, monkeypatch, capsys
 ):
+    if not _folds_case(tmp_path):
+        pytest.skip("the complaint needs a filesystem that folds case")
     # The case the first attempt missed entirely: with built-ins mounted,
     # discovery *succeeds* — global mode answers — and the early return
     # skipped every not-found message. Someone running `fm --list` beside
@@ -477,6 +501,8 @@ def test_the_complaint_survives_the_builtin_base_answering(
 def test_a_wrong_case_file_mid_cascade_is_complained_about(
     tmp_path, monkeypatch, capsys
 ):
+    if not _folds_case(tmp_path):
+        pytest.skip("the complaint needs a filesystem that folds case")
     # Not just the ends of the walk: checking only the cwd and the cascade
     # top missed exactly the monorepo case, where the file that is not
     # loading is a package's own, several levels down from either.
