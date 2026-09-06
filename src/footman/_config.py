@@ -516,6 +516,20 @@ def discovered_path(prefix: str | None = None) -> Path:
     itself, which a `uv tool upgrade` rebuilds and a read-only venv
     forbids.
 
+    **Why the record exists at all**, since the query behind it is cheap:
+    mounting already calls `entry_points`, so asking a second time for the
+    `footman.builtin` group costs about 1.6 ms, and a passing reading of
+    this file as a cache concludes it could be replaced by discovering
+    live on every run. It could not. Live discovery is *auto-activation*:
+    any package in the environment advertising that group would mount
+    itself, so `uv add` on a library would put its tasks in your CLI —
+    free to collide with your project's own names — with nothing recording
+    when it happened, and a transitive dependency could change the command
+    surface. This file is the consent boundary. It changes only when
+    someone runs a `self.*` command, which is the act of saying "mount
+    this beside my runner". That is why it is a record and not a cache,
+    and why it is kept rather than derived.
+
     A record written before the key existed names no environment, so it is
     simply not found, which already means "nothing discovered yet": one
     `self.install` writes the keyed one.

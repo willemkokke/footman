@@ -40,6 +40,14 @@ versions may include breaking changes.
   simply not found, which already means "nothing discovered yet": run
   `fm self.install` once to write the keyed one.
 
+  The record is kept rather than derived on the fly, and deliberately so:
+  discovering live on every run would be auto-activation, where any
+  installed package advertising `footman.builtin` mounts itself — so
+  `uv add` on a library would put its tasks in your CLI, free to collide
+  with your project's own names, with nothing recording when it happened.
+  The file is the consent boundary, and changes only when you run a
+  `self.*` command.
+
 - **A discovered built-in that no longer mounts is skipped, not refused.**
   This list is a record footman writes and can always rebuild, which is
   already why a missing or malformed one means "nothing discovered"
